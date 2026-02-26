@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#111827" media="(prefers-color-scheme: dark)">
+    <meta name="description" content="AI-powered intelligence briefing for enterprise technology leaders">
+    <title>The Signal Today</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>📡 The Signal Today</h1>
+                <div class="header-actions">
+                    <span id="reading-time" class="reading-badge">0/15 min</span>
+                    <button id="refresh-btn" class="btn btn-primary" title="Refresh">
+                        <span class="refresh-icon">↻</span> Refresh
+                    </button>
+                    <button id="settings-btn" class="btn btn-secondary" title="Settings">⚙️</button>
+                </div>
+            </div>
+            <div class="header-meta">
+                <span id="current-date"></span>
+                <span id="last-updated"></span>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Loading State -->
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p id="loading-status">Fetching articles...</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="error" class="error-state hidden">
+                <p id="error-message"></p>
+                <button class="btn btn-primary" onclick="app.refresh()">Try Again</button>
+            </div>
+
+            <!-- Digest Content -->
+            <div id="digest-content" class="digest-content hidden">
+                <!-- Trending Topics -->
+                <section id="trending-section" class="card trending-card hidden">
+                    <div class="card-header" onclick="toggleSection('trending')">
+                        <h2>📈 Trending Topics</h2>
+                        <span id="trending-count" class="badge">0</span>
+                        <span class="chevron">▼</span>
+                    </div>
+                    <div id="trending-content" class="card-body">
+                        <p class="card-description">Topics mentioned by multiple sources</p>
+                        <div id="trending-list"></div>
+                    </div>
+                </section>
+
+                <!-- Industry Matches -->
+                <section id="industry-section" class="card industry-card hidden">
+                    <div class="card-header" onclick="toggleSection('industry')">
+                        <h2>🏢 Industry Relevant</h2>
+                        <span id="industry-count" class="badge badge-green">0</span>
+                        <span class="chevron">▼</span>
+                    </div>
+                    <div id="industry-content" class="card-body">
+                        <p class="card-description">Articles matching your priority industries</p>
+                        <div id="industry-list"></div>
+                    </div>
+                </section>
+
+                <!-- Client Mentions -->
+                <section id="clients-section" class="card clients-card hidden">
+                    <div class="card-header" onclick="toggleSection('clients')">
+                        <h2>👤 Client Mentions</h2>
+                        <span id="clients-count" class="badge badge-purple">0</span>
+                        <span class="chevron">▼</span>
+                    </div>
+                    <div id="clients-content" class="card-body">
+                        <p class="card-description">Articles mentioning your watchlist accounts</p>
+                        <div id="clients-list"></div>
+                    </div>
+                </section>
+
+                <!-- Action Brief -->
+                <section id="summary-section" class="card summary-card">
+                    <div class="card-header">
+                        <h2>⚡ Action Brief</h2>
+                    </div>
+                    <div id="summary-content" class="card-body">
+                        <p id="executive-summary">Pull to refresh to generate your daily digest.</p>
+                    </div>
+                </section>
+
+                <!-- Digest Sections -->
+                <div id="digest-sections"></div>
+
+                <!-- Conversation Starters -->
+                <section id="starters-section" class="card starters-card hidden">
+                    <div class="card-header">
+                        <h2>💬 Conversation Openers</h2>
+                    </div>
+                    <div id="starters-content" class="card-body">
+                        <div id="starters-list"></div>
+                    </div>
+                </section>
+
+                <!-- All Articles -->
+                <section id="articles-section" class="card">
+                    <div class="card-header" onclick="toggleSection('articles')">
+                        <h2>📰 All Articles</h2>
+                        <span id="articles-count" class="badge">0</span>
+                        <span class="chevron">▼</span>
+                    </div>
+                    <div id="articles-content" class="card-body">
+                        <div id="articles-list"></div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="empty-state">
+                <div class="empty-icon">📡</div>
+                <h2>Welcome to The Signal Today</h2>
+                <p>Your AI-powered intelligence briefing for enterprise technology.</p>
+                <button class="btn btn-primary btn-large" onclick="app.refresh()">
+                    Generate Your First Digest
+                </button>
+                <p class="empty-hint">Configure your Claude API key in Settings for AI summaries.</p>
+            </div>
+        </main>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal hidden">
+            <div class="modal-backdrop" onclick="closeSettings()"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>⚙️ Settings</h2>
+                    <button class="modal-close" onclick="closeSettings()">×</button>
+                </div>
+                <div class="modal-body">
+                    <!-- API Key -->
+                    <section class="settings-section">
+                        <h3>🤖 Claude AI</h3>
+                        <div class="form-group">
+                            <label for="api-key">API Key</label>
+                            <input type="password" id="api-key" placeholder="sk-ant-...">
+                            <p class="form-hint">Get your API key from <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></p>
+                        </div>
+                    </section>
+
+                    <!-- Time Budget -->
+                    <section class="settings-section">
+                        <h3>⏱️ Time Budget</h3>
+                        <div class="form-group">
+                            <label for="daily-minutes">Daily Reading Minutes</label>
+                            <input type="number" id="daily-minutes" min="5" max="60" value="15">
+                        </div>
+                        <div class="form-group">
+                            <label for="weekly-articles">Weekly Article Count</label>
+                            <input type="number" id="weekly-articles" min="3" max="20" value="5">
+                        </div>
+                    </section>
+
+                    <!-- Industry Priorities -->
+                    <section class="settings-section">
+                        <h3>🏢 Industry Priorities</h3>
+                        <p class="form-hint">Select your priority industries (Tier 1 = +30%, Tier 2 = +20%, Tier 3 = +10%)</p>
+                        <div id="industry-settings"></div>
+                    </section>
+
+                    <!-- Client Watchlist -->
+                    <section class="settings-section">
+                        <h3>👤 Client Watchlist</h3>
+                        <p class="form-hint">Companies to monitor (+25% boost when mentioned)</p>
+                        <div id="client-settings">
+                            <textarea id="clients-input" rows="4" placeholder="DBS, Singtel, Telstra, OCBC, UOB..."></textarea>
+                        </div>
+                    </section>
+
+                    <!-- Source Management -->
+                    <section class="settings-section">
+                        <h3>📰 News Sources</h3>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="sources-enabled" checked>
+                                Enable RSS Feeds
+                            </label>
+                        </div>
+                        <button class="btn btn-secondary" onclick="resetSources()">Reset to Default Sources</button>
+                        <p class="form-hint" id="sources-count">52 sources configured</p>
+                    </section>
+
+                    <!-- Data Management -->
+                    <section class="settings-section">
+                        <h3>🗑️ Data Management</h3>
+                        <button class="btn btn-danger" onclick="clearAllData()">Clear All Data</button>
+                        <p class="form-hint">This will reset all settings and cached articles.</p>
+                    </section>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Article Modal -->
+        <div id="article-modal" class="modal hidden">
+            <div class="modal-backdrop" onclick="closeArticle()"></div>
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h2 id="article-title">Article Title</h2>
+                    <button class="modal-close" onclick="closeArticle()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="article-meta">
+                        <span id="article-source" class="article-source"></span>
+                        <span id="article-date" class="article-date"></span>
+                        <span id="article-score" class="article-score"></span>
+                    </div>
+                    <div id="article-summary" class="article-summary"></div>
+                    <div class="article-actions">
+                        <a id="article-link" href="#" target="_blank" class="btn btn-primary">Read Full Article →</a>
+                        <button class="btn btn-secondary" onclick="copyArticleLink()">📋 Copy Link</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="sources.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
