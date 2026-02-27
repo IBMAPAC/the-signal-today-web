@@ -102,13 +102,26 @@ class SignalApp {
         const weeklyCutoff = new Date(now.getTime() - this.settings.weeklyCurrencyDays * 24 * 60 * 60 * 1000);
         
         // Daily articles: from daily or both sources, within 24 hours
-        this.dailyArticles = this.articles
+        // Apply source diversity: max 3 per source for daily
+        const dailyFiltered = this.articles
             .filter(a => {
                 const pubDate = new Date(a.publishedDate);
                 const isDaily = a.digestType === 'daily' || a.digestType === 'both';
                 return pubDate >= dailyCutoff && isDaily;
             })
             .sort((a, b) => b.relevanceScore - a.relevanceScore);
+        
+        // Apply max 3 per source for daily diversity
+        const dailySourceCount = {};
+        this.dailyArticles = [];
+        
+        for (const article of dailyFiltered) {
+            const count = dailySourceCount[article.sourceName] || 0;
+            if (count < 3) {
+                this.dailyArticles.push(article);
+                dailySourceCount[article.sourceName] = count + 1;
+            }
+        }
         
         // Weekly articles: from weekly or both sources, within week, max 2 per source
         const weeklyFiltered = this.articles
@@ -118,19 +131,20 @@ class SignalApp {
                 return pubDate >= weeklyCutoff && isWeekly;
             })
             .sort((a, b) => {
+                // Sort by priority first, then by relevance
                 if (a.priority !== b.priority) return a.priority - b.priority;
                 return b.relevanceScore - a.relevanceScore;
             });
         
         // Apply max 2 per source for weekly
-        const sourceCount = {};
+        const weeklySourceCount = {};
         this.weeklyArticles = [];
         
         for (const article of weeklyFiltered) {
-            const count = sourceCount[article.sourceName] || 0;
+            const count = weeklySourceCount[article.sourceName] || 0;
             if (count < 2) {
                 this.weeklyArticles.push(article);
-                sourceCount[article.sourceName] = count + 1;
+                weeklySourceCount[article.sourceName] = count + 1;
             }
             if (this.weeklyArticles.length >= this.settings.weeklyArticles) break;
         }
@@ -383,30 +397,44 @@ class SignalApp {
             const clientMatch = this.detectClient(text);
             const crossRefBoost = this.getCrossRefBoost(article, crossRefs);
             
-            // Base scores
-            let score = 0.3; // Base relevance
+            // Enhanced scoring formula
+            let score = 0.20; // Lower base score
             
-            // Priority boost
-            if (article.priority === 1) score += 0.2;
-            else if (article.priority === 2) score += 0.1;
+            // Priority boost (unchanged)
+            if (article.priority === 1) score += 0.20;
+            else if (article.priority === 2) score += 0.10;
             
-            // Credibility
-            score += (article.credibilityScore - 0.7) * 0.3;
+            // Credibility (increased weight, wider range)
+            // Old: (credibility - 0.7) * 0.3 = max +0.075
+            // New: (credibility - 0.5) * 0.4 = max +0.18
+            score += (article.credibilityScore - 0.5) * 0.4;
             
-            // Industry match
+            // Category weight (NEW)
+            const categoryWeight = CATEGORIES[article.category]?.weight || 1.0;
+            score *= categoryWeight;
+            
+            // Recency boost (NEW)
+            const hoursOld = (Date.now() - new Date(article.publishedDate).getTime()) / 3600000;
+            if (hoursOld < 4) score += 0.12;        // Breaking news (< 4 hours)
+            else if (hoursOld < 8) score += 0.08;   // Very recent (< 8 hours)
+            else if (hoursOld < 12) score += 0.05;  // Same day morning/afternoon
+            else if (hoursOld < 24) score += 0.02;  // Within 24 hours
+            // No boost for older articles
+            
+            // Industry match (unchanged)
             if (industryMatch) {
-                const tierBoost = { 1: 0.3, 2: 0.2, 3: 0.1 };
+                const tierBoost = { 1: 0.30, 2: 0.20, 3: 0.10 };
                 score += tierBoost[industryMatch.tier] || 0;
                 article.matchedIndustry = industryMatch.name;
             }
             
-            // Client match
+            // Client match (unchanged)
             if (clientMatch) {
                 score += 0.25;
                 article.matchedClient = clientMatch;
             }
             
-            // Cross-reference boost
+            // Cross-reference boost (unchanged)
             score += crossRefBoost;
             
             // Estimate reading time
@@ -442,17 +470,19 @@ class SignalApp {
     }
 
     detectCrossReferences(articles) {
-        // Enhanced topic detection with themes
-        const themes = {
-            'AI Governance': ['ai governance', 'ai regulation', 'ai act', 'ai safety', 'responsible ai', 'ai ethics'],
-            'Cloud Competition': ['azure', 'aws', 'google cloud', 'cloud pricing', 'multi-cloud', 'hybrid cloud'],
-            'Data Sovereignty': ['data sovereignty', 'data localization', 'gdpr', 'data residency', 'cross-border data'],
-            'Agentic AI': ['ai agent', 'agentic', 'autonomous agent', 'multi-agent', 'agent framework'],
-            'Generative AI': ['generative ai', 'genai', 'llm', 'large language model', 'chatgpt', 'claude', 'gemini'],
-            'Cybersecurity': ['ransomware', 'cyber attack', 'data breach', 'zero trust', 'security vulnerability'],
-            'Digital Banking': ['digital bank', 'neobank', 'open banking', 'banking api', 'fintech'],
-            'Enterprise AI Adoption': ['ai adoption', 'ai transformation', 'enterprise ai', 'ai strategy', 'ai implementation']
-        };
+        // Use the expanded themes from sources.js
+        const themes = typeof CROSS_REFERENCE_THEMES !== 'undefined' 
+            ? CROSS_REFERENCE_THEMES 
+            : {
+                'AI Governance': ['ai governance', 'ai regulation', 'ai act', 'ai safety', 'responsible ai', 'ai ethics'],
+                'Cloud Competition': ['azure', 'aws', 'google cloud', 'cloud pricing', 'multi-cloud', 'hybrid cloud'],
+                'Data Sovereignty': ['data sovereignty', 'data localization', 'gdpr', 'data residency', 'cross-border data'],
+                'Agentic AI': ['ai agent', 'agentic', 'autonomous agent', 'multi-agent', 'agent framework'],
+                'Generative AI': ['generative ai', 'genai', 'llm', 'large language model', 'chatgpt', 'claude', 'gemini'],
+                'Cybersecurity': ['ransomware', 'cyber attack', 'data breach', 'zero trust', 'security vulnerability'],
+                'Digital Banking': ['digital bank', 'neobank', 'open banking', 'banking api', 'fintech'],
+                'Enterprise AI Adoption': ['ai adoption', 'ai transformation', 'enterprise ai', 'ai strategy', 'ai implementation']
+            };
         
         const topicGroups = [];
         
