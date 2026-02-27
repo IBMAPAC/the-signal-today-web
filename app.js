@@ -756,19 +756,23 @@ ${articleList}`;
         count.textContent = crossRefs.length;
         
         list.innerHTML = crossRefs.slice(0, 5).map(ref => {
-            const context = ref.articles.slice(0, 2).map(a => a.title).join('; ');
+            // Build a summary of what the theme covers
+            const uniqueTitles = [...new Set(ref.articles.slice(0, 3).map(a => a.title))];
+            const context = uniqueTitles.map(t => t.substring(0, 60) + (t.length > 60 ? '...' : '')).join('; ');
             
             return `
                 <div class="signal-item">
                     <div class="signal-header">
-                        <span class="signal-theme">${ref.theme}</span>
+                        <span class="signal-theme">${this.escapeHtml(ref.theme)}</span>
                         <span class="signal-sources">📰 ${ref.sourceCount} sources</span>
                     </div>
-                    <div class="signal-context">${context.substring(0, 150)}${context.length > 150 ? '...' : ''}</div>
+                    <div class="signal-context">${this.escapeHtml(context.substring(0, 180))}${context.length > 180 ? '...' : ''}</div>
                     <div class="signal-articles">
-                        ${ref.articles.slice(0, 3).map(a => 
-                            `<a class="signal-article-link" href="${a.url}" target="_blank">${a.sourceName}</a>`
-                        ).join('')}
+                        ${ref.articles.slice(0, 3).map(a => {
+                            const safeId = this.escapeAttr(a.id);
+                            const shortTitle = a.title.substring(0, 40) + (a.title.length > 40 ? '...' : '');
+                            return `<a class="signal-article-link" href="javascript:void(0)" onclick="app.openArticle('${safeId}')" title="${this.escapeAttr(a.title)}">${this.escapeHtml(a.sourceName)}: ${this.escapeHtml(shortTitle)}</a>`;
+                        }).join('')}
                     </div>
                 </div>
             `;
@@ -812,16 +816,18 @@ ${articleList}`;
                 <div class="industry-group">
                     <div class="industry-group-header">
                         <span>${industryInfo.emoji || '🏢'}</span>
-                        <span class="industry-group-name">${industry}</span>
+                        <span class="industry-group-name">${this.escapeHtml(industry)}</span>
                         <span class="industry-group-count">${articles.length} articles</span>
                     </div>
                     ${themes.map(theme => `
                         <div class="industry-theme">
-                            <div class="industry-theme-name">${theme.name} (${theme.articles.length})</div>
+                            <div class="industry-theme-name">${this.escapeHtml(theme.name)} (${theme.articles.length})</div>
                             <div class="industry-theme-articles">
-                                ${theme.articles.slice(0, 3).map(a => 
-                                    `<a href="javascript:void(0)" onclick="app.openArticle('${a.id}')">${a.title.substring(0, 60)}${a.title.length > 60 ? '...' : ''}</a>`
-                                ).join(' • ')}
+                                ${theme.articles.slice(0, 3).map(a => {
+                                    const safeId = this.escapeAttr(a.id);
+                                    const shortTitle = a.title.substring(0, 50) + (a.title.length > 50 ? '...' : '');
+                                    return `<a href="javascript:void(0)" onclick="app.openArticle('${safeId}')" title="${this.escapeAttr(a.title)}">${this.escapeHtml(shortTitle)}</a>`;
+                                }).join(' • ')}
                             </div>
                         </div>
                     `).join('')}
@@ -904,15 +910,18 @@ ${articleList}`;
             
             return `
                 <div class="client-group">
-                    <div class="client-name">${client}</div>
+                    <div class="client-name">${this.escapeHtml(client)}</div>
                     <div class="client-context">${contextHint}</div>
                     <div class="client-articles">
-                        ${articles.slice(0, 3).map(a => `
+                        ${articles.slice(0, 3).map(a => {
+                            const safeId = this.escapeAttr(a.id);
+                            const shortTitle = a.title.substring(0, 70) + (a.title.length > 70 ? '...' : '');
+                            return `
                             <div class="client-article">
-                                <span class="client-article-source">${a.sourceName}</span>
-                                <span class="client-article-title" onclick="app.openArticle('${a.id}')">${a.title.substring(0, 80)}${a.title.length > 80 ? '...' : ''}</span>
+                                <span class="client-article-source">${this.escapeHtml(a.sourceName)}</span>
+                                <span class="client-article-title" onclick="app.openArticle('${safeId}')" title="${this.escapeAttr(a.title)}">${this.escapeHtml(shortTitle)}</span>
                             </div>
-                        `).join('')}
+                        `}).join('')}
                     </div>
                 </div>
             `;
@@ -964,11 +973,12 @@ ${articleList}`;
 
     renderArticleItem(article) {
         const scoreClass = article.relevanceScore >= 0.7 ? 'high' : article.relevanceScore >= 0.5 ? 'medium' : '';
+        const safeId = this.escapeAttr(article.id);
         
         return `
-            <div class="article-item" onclick="app.openArticle('${article.id}')">
+            <div class="article-item" onclick="app.openArticle('${safeId}')">
                 <div class="article-item-header">
-                    <span class="article-item-source">${article.sourceName}</span>
+                    <span class="article-item-source">${this.escapeHtml(article.sourceName)}</span>
                     <span class="article-item-score ${scoreClass}">${Math.round(article.relevanceScore * 100)}%</span>
                 </div>
                 <div class="article-item-title">${this.escapeHtml(article.title)}</div>
@@ -1072,6 +1082,16 @@ ${articleList}`;
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    escapeAttr(text) {
+        if (!text) return '';
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/'/g, '&#39;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
     }
 
     capitalizeFirst(str) {

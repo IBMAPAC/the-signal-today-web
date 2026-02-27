@@ -489,11 +489,17 @@ a:hover {
 .signal-article-link {
     font-size: 0.75rem;
     background: var(--bg-secondary);
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-radius: 4px;
     color: var(--color-primary);
     text-decoration: none;
     transition: background var(--transition-fast);
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
 }
 
 .signal-article-link:hover {
@@ -1525,6 +1531,15 @@ input[type="range"]::-moz-range-thumb {
     
     .signal-sources {
         align-self: flex-start;
+    }
+    
+    .signal-articles {
+        flex-direction: column;
+    }
+    
+    .signal-article-link {
+        white-space: normal;
+        max-width: 100%;
     }
     
     /* Industry Groups - Mobile */
