@@ -52,79 +52,139 @@
 
             <!-- Digest Content -->
             <div id="digest-content" class="digest-content hidden">
-                <!-- Trending Topics -->
-                <section id="trending-section" class="card trending-card hidden">
-                    <div class="card-header" onclick="toggleSection('trending')">
-                        <h2>📈 Trending Topics</h2>
-                        <span id="trending-count" class="badge">0</span>
-                        <span class="chevron">▼</span>
-                    </div>
-                    <div id="trending-content" class="card-body">
-                        <p class="card-description">Topics mentioned by multiple sources</p>
-                        <div id="trending-list"></div>
-                    </div>
-                </section>
+                
+                <!-- Digest Tabs -->
+                <div class="digest-tabs">
+                    <button class="digest-tab active" data-tab="daily" onclick="switchDigestTab('daily')">
+                        📰 Daily Brief
+                        <span id="daily-count-badge" class="tab-badge">0</span>
+                    </button>
+                    <button class="digest-tab" data-tab="weekly" onclick="switchDigestTab('weekly')">
+                        📚 Weekly Deep Reads
+                        <span id="weekly-count-badge" class="tab-badge">0</span>
+                    </button>
+                </div>
 
-                <!-- Industry Matches -->
-                <section id="industry-section" class="card industry-card hidden">
-                    <div class="card-header" onclick="toggleSection('industry')">
-                        <h2>🏢 Industry Relevant</h2>
-                        <span id="industry-count" class="badge badge-green">0</span>
-                        <span class="chevron">▼</span>
-                    </div>
-                    <div id="industry-content" class="card-body">
-                        <p class="card-description">Articles matching your priority industries</p>
-                        <div id="industry-list"></div>
-                    </div>
-                </section>
+                <!-- Daily Digest Tab -->
+                <div id="daily-tab" class="digest-tab-content">
+                    
+                    <!-- Cross-Source Signals (formerly Trending Topics) -->
+                    <section id="signals-section" class="card signals-card hidden">
+                        <div class="card-header" onclick="toggleSection('signals')">
+                            <h2>🔥 Cross-Source Signals</h2>
+                            <span id="signals-count" class="badge">0</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="signals-content" class="card-body">
+                            <p class="card-description">Topics covered by multiple independent sources - higher signal, lower noise</p>
+                            <div id="signals-list"></div>
+                        </div>
+                    </section>
 
-                <!-- Client Mentions -->
-                <section id="clients-section" class="card clients-card hidden">
-                    <div class="card-header" onclick="toggleSection('clients')">
-                        <h2>👤 Client Mentions</h2>
-                        <span id="clients-count" class="badge badge-purple">0</span>
-                        <span class="chevron">▼</span>
-                    </div>
-                    <div id="clients-content" class="card-body">
-                        <p class="card-description">Articles mentioning your watchlist accounts</p>
-                        <div id="clients-list"></div>
-                    </div>
-                </section>
+                    <!-- Industry Intelligence (improved) -->
+                    <section id="industry-section" class="card industry-card hidden">
+                        <div class="card-header" onclick="toggleSection('industry')">
+                            <h2>🏢 Industry Intelligence</h2>
+                            <span id="industry-count" class="badge badge-green">0</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="industry-content" class="card-body">
+                            <p class="card-description">Key themes emerging in your priority industries</p>
+                            <div id="industry-list"></div>
+                        </div>
+                    </section>
 
-                <!-- Action Brief -->
-                <section id="summary-section" class="card summary-card">
-                    <div class="card-header">
-                        <h2>⚡ Action Brief</h2>
-                    </div>
-                    <div id="summary-content" class="card-body">
-                        <p id="executive-summary">Pull to refresh to generate your daily digest.</p>
-                    </div>
-                </section>
+                    <!-- Client Watch (improved) -->
+                    <section id="clients-section" class="card clients-card hidden">
+                        <div class="card-header" onclick="toggleSection('clients')">
+                            <h2>👁️ Client Watch</h2>
+                            <span id="clients-count" class="badge badge-purple">0</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="clients-content" class="card-body">
+                            <p class="card-description">Recent coverage of your watchlist accounts - useful for meeting prep and competitive intel</p>
+                            <div id="clients-list"></div>
+                        </div>
+                    </section>
 
-                <!-- Digest Sections -->
-                <div id="digest-sections"></div>
+                    <!-- Action Brief -->
+                    <section id="summary-section" class="card summary-card">
+                        <div class="card-header">
+                            <h2>⚡ Action Brief</h2>
+                        </div>
+                        <div id="summary-content" class="card-body">
+                            <p id="executive-summary">Pull to refresh to generate your daily digest.</p>
+                        </div>
+                    </section>
 
-                <!-- Conversation Starters -->
-                <section id="starters-section" class="card starters-card hidden">
-                    <div class="card-header">
-                        <h2>💬 Conversation Openers</h2>
-                    </div>
-                    <div id="starters-content" class="card-body">
-                        <div id="starters-list"></div>
-                    </div>
-                </section>
+                    <!-- Digest Sections -->
+                    <div id="digest-sections"></div>
 
-                <!-- All Articles -->
-                <section id="articles-section" class="card">
-                    <div class="card-header" onclick="toggleSection('articles')">
-                        <h2>📰 All Articles</h2>
-                        <span id="articles-count" class="badge">0</span>
-                        <span class="chevron">▼</span>
-                    </div>
-                    <div id="articles-content" class="card-body">
-                        <div id="articles-list"></div>
-                    </div>
-                </section>
+                    <!-- Conversation Starters -->
+                    <section id="starters-section" class="card starters-card hidden">
+                        <div class="card-header">
+                            <h2>💬 Conversation Openers</h2>
+                        </div>
+                        <div id="starters-content" class="card-body">
+                            <div id="starters-list"></div>
+                        </div>
+                    </section>
+
+                    <!-- All Daily Articles -->
+                    <section id="articles-section" class="card">
+                        <div class="card-header" onclick="toggleSection('articles')">
+                            <h2>📰 All Daily Articles</h2>
+                            <span id="articles-count" class="badge">0</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="articles-content" class="card-body">
+                            <div id="articles-list"></div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Weekly Digest Tab -->
+                <div id="weekly-tab" class="digest-tab-content hidden">
+                    
+                    <!-- Weekly Overview -->
+                    <section class="card weekly-overview-card">
+                        <div class="card-header">
+                            <h2>📚 This Week's Deep Reads</h2>
+                        </div>
+                        <div class="card-body">
+                            <p id="weekly-summary" class="weekly-summary">Strategic content and analyst insights worth your extended attention. Max 2 articles per source for diversity.</p>
+                            <div class="weekly-stats">
+                                <div class="weekly-stat">
+                                    <span class="weekly-stat-value" id="weekly-article-count">0</span>
+                                    <span class="weekly-stat-label">Articles</span>
+                                </div>
+                                <div class="weekly-stat">
+                                    <span class="weekly-stat-value" id="weekly-reading-time">0</span>
+                                    <span class="weekly-stat-label">Minutes</span>
+                                </div>
+                                <div class="weekly-stat">
+                                    <span class="weekly-stat-value" id="weekly-source-count">0</span>
+                                    <span class="weekly-stat-label">Sources</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Weekly Articles by Category -->
+                    <div id="weekly-categories"></div>
+
+                    <!-- All Weekly Articles -->
+                    <section id="weekly-articles-section" class="card">
+                        <div class="card-header" onclick="toggleSection('weekly-articles')">
+                            <h2>📖 All Weekly Articles</h2>
+                            <span id="weekly-articles-count" class="badge">0</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="weekly-articles-content" class="card-body">
+                            <div id="weekly-articles-list"></div>
+                        </div>
+                    </section>
+                </div>
             </div>
 
             <!-- Empty State -->
@@ -190,14 +250,26 @@
                     <!-- Source Management -->
                     <section class="settings-section">
                         <h3>📰 News Sources</h3>
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="sources-enabled" checked>
-                                Enable RSS Feeds
-                            </label>
+                        <div class="sources-header">
+                            <span id="sources-count">52 sources</span>
+                            <div class="sources-actions">
+                                <button class="btn btn-secondary btn-sm" onclick="addNewSource()">+ Add Source</button>
+                                <button class="btn btn-secondary btn-sm" onclick="resetSources()">Reset Defaults</button>
+                            </div>
                         </div>
-                        <button class="btn btn-secondary" onclick="resetSources()">Reset to Default Sources</button>
-                        <p class="form-hint" id="sources-count">52 sources configured</p>
+                        <div class="sources-filter">
+                            <select id="sources-category-filter" onchange="filterSources()">
+                                <option value="all">All Categories</option>
+                                <option value="AI & Agentic">🤖 AI & Agentic</option>
+                                <option value="Sovereignty & Regulation">🛡️ Sovereignty & Regulation</option>
+                                <option value="APAC Enterprise">🌏 APAC Enterprise</option>
+                                <option value="China & Geopolitics">🇨🇳 China & Geopolitics</option>
+                                <option value="Competitive Landscape">⚔️ Competitive Landscape</option>
+                                <option value="Architecture & Platform">🏗️ Architecture & Platform</option>
+                                <option value="Strategic Perspectives">💭 Strategic Perspectives</option>
+                            </select>
+                        </div>
+                        <div id="sources-list" class="sources-list"></div>
                     </section>
 
                     <!-- Data Management -->
@@ -233,6 +305,64 @@
                         <a id="article-link" href="#" target="_blank" class="btn btn-primary">Read Full Article →</a>
                         <button class="btn btn-secondary" onclick="copyArticleLink()">📋 Copy Link</button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Source Editor Modal -->
+        <div id="source-modal" class="modal hidden">
+            <div class="modal-backdrop" onclick="closeSourceEditor()"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="source-modal-title">Add Source</h2>
+                    <button class="modal-close" onclick="closeSourceEditor()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="source-name">Source Name</label>
+                        <input type="text" id="source-name" placeholder="e.g., TechCrunch">
+                    </div>
+                    <div class="form-group">
+                        <label for="source-url">RSS Feed URL</label>
+                        <input type="text" id="source-url" placeholder="https://example.com/feed.xml">
+                    </div>
+                    <div class="form-group">
+                        <label for="source-category">Category</label>
+                        <select id="source-category">
+                            <option value="AI & Agentic">🤖 AI & Agentic</option>
+                            <option value="Sovereignty & Regulation">🛡️ Sovereignty & Regulation</option>
+                            <option value="APAC Enterprise">🌏 APAC Enterprise</option>
+                            <option value="China & Geopolitics">🇨🇳 China & Geopolitics</option>
+                            <option value="Competitive Landscape">⚔️ Competitive Landscape</option>
+                            <option value="Architecture & Platform">🏗️ Architecture & Platform</option>
+                            <option value="Strategic Perspectives">💭 Strategic Perspectives</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Priority</label>
+                        <div class="priority-selector">
+                            <button type="button" class="priority-btn priority-1" data-priority="1" onclick="selectPriority(1)">🔴 P1 - Must Read</button>
+                            <button type="button" class="priority-btn priority-2 active" data-priority="2" onclick="selectPriority(2)">🟠 P2 - Important</button>
+                            <button type="button" class="priority-btn priority-3" data-priority="3" onclick="selectPriority(3)">⚪ P3 - Nice to Have</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="source-credibility">Credibility Score: <span id="credibility-value">80%</span></label>
+                        <input type="range" id="source-credibility" min="50" max="100" value="80" oninput="updateCredibilityDisplay()">
+                    </div>
+                    <div class="form-group">
+                        <label>Include In</label>
+                        <div class="digest-type-selector">
+                            <button type="button" class="digest-btn active" data-type="daily" onclick="selectDigestType('daily')">Daily</button>
+                            <button type="button" class="digest-btn" data-type="weekly" onclick="selectDigestType('weekly')">Weekly</button>
+                            <button type="button" class="digest-btn" data-type="both" onclick="selectDigestType('both')">Both</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-danger" id="delete-source-btn" onclick="deleteCurrentSource()" style="margin-right: auto; display: none;">Delete</button>
+                    <button class="btn btn-secondary" onclick="closeSourceEditor()">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveSource()">Save Source</button>
                 </div>
             </div>
         </div>

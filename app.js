@@ -17,15 +17,19 @@ const STORAGE_KEYS = {
 class SignalApp {
     constructor() {
         this.articles = [];
+        this.dailyArticles = [];
+        this.weeklyArticles = [];
         this.digest = null;
         this.sources = [];
         this.industries = [];
         this.clients = [];
         this.settings = {
             dailyMinutes: 15,
-            weeklyArticles: 5
+            weeklyArticles: 10,
+            weeklyCurrencyDays: 7
         };
         this.isLoading = false;
+        this.currentTab = 'daily';
         
         this.init();
     }
@@ -37,7 +41,8 @@ class SignalApp {
         this.updateDate();
         
         // Show cached content if available
-        if (this.digest) {
+        if (this.digest || this.articles.length > 0) {
+            this.categorizeArticles();
             this.renderDigest();
         }
         
@@ -88,6 +93,50 @@ class SignalApp {
     }
 
     // ==========================================
+    // Article Categorization
+    // ==========================================
+
+    categorizeArticles() {
+        const now = new Date();
+        const dailyCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const weeklyCutoff = new Date(now.getTime() - this.settings.weeklyCurrencyDays * 24 * 60 * 60 * 1000);
+        
+        // Daily articles: from daily or both sources, within 24 hours
+        this.dailyArticles = this.articles
+            .filter(a => {
+                const pubDate = new Date(a.publishedDate);
+                const isDaily = a.digestType === 'daily' || a.digestType === 'both';
+                return pubDate >= dailyCutoff && isDaily;
+            })
+            .sort((a, b) => b.relevanceScore - a.relevanceScore);
+        
+        // Weekly articles: from weekly or both sources, within week, max 2 per source
+        const weeklyFiltered = this.articles
+            .filter(a => {
+                const pubDate = new Date(a.publishedDate);
+                const isWeekly = a.digestType === 'weekly' || a.digestType === 'both';
+                return pubDate >= weeklyCutoff && isWeekly;
+            })
+            .sort((a, b) => {
+                if (a.priority !== b.priority) return a.priority - b.priority;
+                return b.relevanceScore - a.relevanceScore;
+            });
+        
+        // Apply max 2 per source for weekly
+        const sourceCount = {};
+        this.weeklyArticles = [];
+        
+        for (const article of weeklyFiltered) {
+            const count = sourceCount[article.sourceName] || 0;
+            if (count < 2) {
+                this.weeklyArticles.push(article);
+                sourceCount[article.sourceName] = count + 1;
+            }
+            if (this.weeklyArticles.length >= this.settings.weeklyArticles) break;
+        }
+    }
+
+    // ==========================================
     // Event Binding
     // ==========================================
 
@@ -112,7 +161,7 @@ class SignalApp {
     }
 
     updateReadingTime() {
-        const totalMinutes = this.articles
+        const totalMinutes = this.dailyArticles
             .filter(a => !a.isRead)
             .reduce((sum, a) => sum + (a.estimatedReadingMinutes || 2), 0);
         
@@ -190,9 +239,12 @@ class SignalApp {
             this.articles = scoredArticles
                 .filter(a => a.relevanceScore >= 0.1)
                 .sort((a, b) => b.relevanceScore - a.relevanceScore)
-                .slice(0, 100); // Keep top 100
+                .slice(0, 200); // Keep top 200
             
             console.log(`🎯 ${this.articles.length} relevant articles`);
+            
+            // Categorize into daily/weekly
+            this.categorizeArticles();
             
             // Generate AI digest if API key available
             const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
@@ -390,32 +442,48 @@ class SignalApp {
     }
 
     detectCrossReferences(articles) {
-        const topicGroups = {};
-        const keywords = ['openai', 'anthropic', 'google', 'microsoft', 'aws', 'ai governance', 'data sovereignty'];
+        // Enhanced topic detection with themes
+        const themes = {
+            'AI Governance': ['ai governance', 'ai regulation', 'ai act', 'ai safety', 'responsible ai', 'ai ethics'],
+            'Cloud Competition': ['azure', 'aws', 'google cloud', 'cloud pricing', 'multi-cloud', 'hybrid cloud'],
+            'Data Sovereignty': ['data sovereignty', 'data localization', 'gdpr', 'data residency', 'cross-border data'],
+            'Agentic AI': ['ai agent', 'agentic', 'autonomous agent', 'multi-agent', 'agent framework'],
+            'Generative AI': ['generative ai', 'genai', 'llm', 'large language model', 'chatgpt', 'claude', 'gemini'],
+            'Cybersecurity': ['ransomware', 'cyber attack', 'data breach', 'zero trust', 'security vulnerability'],
+            'Digital Banking': ['digital bank', 'neobank', 'open banking', 'banking api', 'fintech'],
+            'Enterprise AI Adoption': ['ai adoption', 'ai transformation', 'enterprise ai', 'ai strategy', 'ai implementation']
+        };
         
-        for (const keyword of keywords) {
-            const matches = articles.filter(a => 
-                `${a.title} ${a.summary}`.toLowerCase().includes(keyword)
-            );
+        const topicGroups = [];
+        
+        for (const [theme, keywords] of Object.entries(themes)) {
+            const matchingArticles = articles.filter(a => {
+                const text = `${a.title} ${a.summary}`.toLowerCase();
+                return keywords.some(kw => text.includes(kw));
+            });
             
-            const uniqueSources = new Set(matches.map(m => m.sourceName));
-            if (uniqueSources.size >= 2) {
-                topicGroups[keyword] = {
-                    topic: keyword,
-                    count: uniqueSources.size,
-                    articleIds: matches.map(m => m.id)
-                };
+            const uniqueSources = [...new Set(matchingArticles.map(m => m.sourceName))];
+            
+            if (uniqueSources.length >= 2) {
+                topicGroups.push({
+                    theme: theme,
+                    keywords: keywords,
+                    sourceCount: uniqueSources.length,
+                    sources: uniqueSources.slice(0, 4),
+                    articles: matchingArticles.slice(0, 5),
+                    articleIds: matchingArticles.map(m => m.id)
+                });
             }
         }
         
-        return Object.values(topicGroups).sort((a, b) => b.count - a.count);
+        return topicGroups.sort((a, b) => b.sourceCount - a.sourceCount);
     }
 
     getCrossRefBoost(article, crossRefs) {
         let boost = 0;
         for (const ref of crossRefs) {
             if (ref.articleIds.includes(article.id)) {
-                boost += Math.min(0.15, ref.count * 0.05);
+                boost += Math.min(0.15, ref.sourceCount * 0.05);
             }
         }
         return Math.min(0.3, boost);
@@ -426,7 +494,7 @@ class SignalApp {
     // ==========================================
 
     async generateAIDigest(apiKey) {
-        const topArticles = this.articles.slice(0, 20);
+        const topArticles = this.dailyArticles.slice(0, 20);
         
         const articleList = topArticles.map((a, i) => 
             `[${i + 1}] Source: ${a.sourceName} | URL: ${a.url}\nTitle: ${a.title}\nSummary: ${a.summary?.substring(0, 200) || 'No summary'}`
@@ -533,17 +601,17 @@ ${articleList}`;
     }
 
     createBasicDigest() {
-        const industryArticles = this.articles.filter(a => a.matchedIndustry);
-        const clientArticles = this.articles.filter(a => a.matchedClient);
+        const industryArticles = this.dailyArticles.filter(a => a.matchedIndustry);
+        const clientArticles = this.dailyArticles.filter(a => a.matchedClient);
         
         return {
-            executiveSummary: `Today's digest: ${this.articles.length} articles. Configure your Claude API key in Settings for AI-powered action briefs.`,
+            executiveSummary: `Today's digest: ${this.dailyArticles.length} daily articles, ${this.weeklyArticles.length} weekly deep reads. Configure your Claude API key in Settings for AI-powered action briefs.`,
             sections: [
                 {
                     title: "Top Stories",
                     emoji: "📰",
-                    summary: `${this.articles.length} articles from ${this.sources.filter(s => s.enabled).length} sources.`,
-                    readingTimeMinutes: Math.ceil(this.articles.slice(0, 10).reduce((sum, a) => sum + a.estimatedReadingMinutes, 0))
+                    summary: `${this.dailyArticles.length} articles from ${this.sources.filter(s => s.enabled).length} sources.`,
+                    readingTimeMinutes: Math.ceil(this.dailyArticles.slice(0, 10).reduce((sum, a) => sum + a.estimatedReadingMinutes, 0))
                 }
             ],
             conversationStarters: [
@@ -561,17 +629,29 @@ ${articleList}`;
         document.getElementById('empty-state').classList.add('hidden');
         document.getElementById('digest-content').classList.remove('hidden');
         
-        // Render trending topics
+        // Update tab badges
+        document.getElementById('daily-count-badge').textContent = this.dailyArticles.length;
+        document.getElementById('weekly-count-badge').textContent = this.weeklyArticles.length;
+        
+        // Render Daily Tab
+        this.renderDailyTab();
+        
+        // Render Weekly Tab
+        this.renderWeeklyTab();
+        
+        this.updateReadingTime();
+    }
+
+    renderDailyTab() {
+        // Render cross-source signals
         const crossRefs = this.detectCrossReferences(this.articles);
-        this.renderTrending(crossRefs);
+        this.renderCrossSourceSignals(crossRefs);
         
-        // Render industry matches
-        const industryArticles = this.articles.filter(a => a.matchedIndustry);
-        this.renderIndustryMatches(industryArticles);
+        // Render industry intelligence
+        this.renderIndustryIntelligence();
         
-        // Render client mentions
-        const clientArticles = this.articles.filter(a => a.matchedClient);
-        this.renderClientMentions(clientArticles);
+        // Render client watch
+        this.renderClientWatch();
         
         // Render executive summary
         if (this.digest) {
@@ -584,16 +664,58 @@ ${articleList}`;
             this.renderStarters(this.digest.conversationStarters || []);
         }
         
-        // Render all articles
-        this.renderArticles();
-        
-        this.updateReadingTime();
+        // Render daily articles
+        this.renderDailyArticles();
     }
 
-    renderTrending(crossRefs) {
-        const section = document.getElementById('trending-section');
-        const list = document.getElementById('trending-list');
-        const count = document.getElementById('trending-count');
+    renderWeeklyTab() {
+        // Weekly stats
+        const totalReadingTime = this.weeklyArticles.reduce((sum, a) => sum + (a.estimatedReadingMinutes || 3), 0);
+        const uniqueSources = [...new Set(this.weeklyArticles.map(a => a.sourceName))].length;
+        
+        document.getElementById('weekly-article-count').textContent = this.weeklyArticles.length;
+        document.getElementById('weekly-reading-time').textContent = totalReadingTime;
+        document.getElementById('weekly-source-count').textContent = uniqueSources;
+        
+        // Group by category
+        const byCategory = {};
+        for (const article of this.weeklyArticles) {
+            if (!byCategory[article.category]) {
+                byCategory[article.category] = [];
+            }
+            byCategory[article.category].push(article);
+        }
+        
+        // Render categories
+        const categoriesHtml = Object.entries(byCategory).map(([category, articles]) => {
+            const categoryInfo = CATEGORIES[category] || { emoji: '📰' };
+            
+            return `
+                <div class="weekly-category">
+                    <div class="weekly-category-header">
+                        <span>${categoryInfo.emoji}</span>
+                        <span>${category}</span>
+                        <span class="badge">${articles.length}</span>
+                    </div>
+                    <div class="weekly-category-articles">
+                        ${articles.map(a => this.renderArticleItem(a)).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        document.getElementById('weekly-categories').innerHTML = categoriesHtml;
+        
+        // All weekly articles
+        document.getElementById('weekly-articles-count').textContent = this.weeklyArticles.length;
+        document.getElementById('weekly-articles-list').innerHTML = 
+            this.weeklyArticles.map(a => this.renderArticleItem(a)).join('');
+    }
+
+    renderCrossSourceSignals(crossRefs) {
+        const section = document.getElementById('signals-section');
+        const list = document.getElementById('signals-list');
+        const count = document.getElementById('signals-count');
         
         if (crossRefs.length === 0) {
             section.classList.add('hidden');
@@ -603,47 +725,168 @@ ${articleList}`;
         section.classList.remove('hidden');
         count.textContent = crossRefs.length;
         
-        list.innerHTML = crossRefs.slice(0, 5).map(ref => `
-            <div class="trending-item">
-                <span class="trending-topic">${this.capitalizeFirst(ref.topic)}</span>
-                <div class="trending-meta">
-                    <span>📰 ${ref.count} sources</span>
-                    <span class="trending-boost">+${Math.round(ref.count * 5)}%</span>
+        list.innerHTML = crossRefs.slice(0, 5).map(ref => {
+            const context = ref.articles.slice(0, 2).map(a => a.title).join('; ');
+            
+            return `
+                <div class="signal-item">
+                    <div class="signal-header">
+                        <span class="signal-theme">${ref.theme}</span>
+                        <span class="signal-sources">📰 ${ref.sourceCount} sources</span>
+                    </div>
+                    <div class="signal-context">${context.substring(0, 150)}${context.length > 150 ? '...' : ''}</div>
+                    <div class="signal-articles">
+                        ${ref.articles.slice(0, 3).map(a => 
+                            `<a class="signal-article-link" href="${a.url}" target="_blank">${a.sourceName}</a>`
+                        ).join('')}
+                    </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
-    renderIndustryMatches(articles) {
+    renderIndustryIntelligence() {
         const section = document.getElementById('industry-section');
         const list = document.getElementById('industry-list');
         const count = document.getElementById('industry-count');
         
-        if (articles.length === 0) {
+        // Group articles by industry
+        const industryArticles = this.dailyArticles.filter(a => a.matchedIndustry);
+        
+        if (industryArticles.length === 0) {
             section.classList.add('hidden');
             return;
         }
         
         section.classList.remove('hidden');
-        count.textContent = articles.length;
+        count.textContent = industryArticles.length;
         
-        list.innerHTML = articles.slice(0, 5).map(article => this.renderArticleItem(article)).join('');
+        // Group by industry
+        const byIndustry = {};
+        for (const article of industryArticles) {
+            const ind = article.matchedIndustry;
+            if (!byIndustry[ind]) {
+                byIndustry[ind] = [];
+            }
+            byIndustry[ind].push(article);
+        }
+        
+        // For each industry, cluster by theme
+        list.innerHTML = Object.entries(byIndustry).map(([industry, articles]) => {
+            const industryInfo = this.industries.find(i => i.name === industry) || { emoji: '🏢' };
+            
+            // Simple theme clustering based on keywords
+            const themes = this.clusterByTheme(articles);
+            
+            return `
+                <div class="industry-group">
+                    <div class="industry-group-header">
+                        <span>${industryInfo.emoji || '🏢'}</span>
+                        <span class="industry-group-name">${industry}</span>
+                        <span class="industry-group-count">${articles.length} articles</span>
+                    </div>
+                    ${themes.map(theme => `
+                        <div class="industry-theme">
+                            <div class="industry-theme-name">${theme.name} (${theme.articles.length})</div>
+                            <div class="industry-theme-articles">
+                                ${theme.articles.slice(0, 3).map(a => 
+                                    `<a href="javascript:void(0)" onclick="app.openArticle('${a.id}')">${a.title.substring(0, 60)}${a.title.length > 60 ? '...' : ''}</a>`
+                                ).join(' • ')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }).join('');
     }
 
-    renderClientMentions(articles) {
+    clusterByTheme(articles) {
+        // Simple keyword-based clustering
+        const themeKeywords = {
+            'AI & Automation': ['ai', 'automation', 'machine learning', 'llm', 'genai'],
+            'Digital Transformation': ['digital', 'transformation', 'modernization', 'cloud'],
+            'Regulatory & Compliance': ['regulation', 'compliance', 'governance', 'policy'],
+            'Security & Risk': ['security', 'cyber', 'risk', 'threat', 'vulnerability'],
+            'Strategy & Leadership': ['strategy', 'ceo', 'cio', 'leadership', 'investment'],
+            'Innovation': ['innovation', 'startup', 'disrupt', 'emerging']
+        };
+        
+        const themes = [];
+        const assigned = new Set();
+        
+        for (const [themeName, keywords] of Object.entries(themeKeywords)) {
+            const matching = articles.filter(a => {
+                if (assigned.has(a.id)) return false;
+                const text = `${a.title} ${a.summary}`.toLowerCase();
+                return keywords.some(kw => text.includes(kw));
+            });
+            
+            if (matching.length > 0) {
+                themes.push({ name: themeName, articles: matching });
+                matching.forEach(a => assigned.add(a.id));
+            }
+        }
+        
+        // Add remaining as "Other"
+        const remaining = articles.filter(a => !assigned.has(a.id));
+        if (remaining.length > 0) {
+            themes.push({ name: 'Other News', articles: remaining });
+        }
+        
+        return themes.filter(t => t.articles.length > 0);
+    }
+
+    renderClientWatch() {
         const section = document.getElementById('clients-section');
         const list = document.getElementById('clients-list');
         const count = document.getElementById('clients-count');
         
-        if (articles.length === 0) {
+        const clientArticles = this.dailyArticles.filter(a => a.matchedClient);
+        
+        if (clientArticles.length === 0) {
             section.classList.add('hidden');
             return;
         }
         
         section.classList.remove('hidden');
-        count.textContent = articles.length;
+        count.textContent = clientArticles.length;
         
-        list.innerHTML = articles.slice(0, 5).map(article => this.renderArticleItem(article)).join('');
+        // Group by client
+        const byClient = {};
+        for (const article of clientArticles) {
+            const client = article.matchedClient;
+            if (!byClient[client]) {
+                byClient[client] = [];
+            }
+            byClient[client].push(article);
+        }
+        
+        list.innerHTML = Object.entries(byClient).map(([client, articles]) => {
+            // Determine context hint
+            const hasCompetitor = articles.some(a => 
+                ['Microsoft', 'AWS', 'Google', 'Accenture', 'Deloitte'].some(c => 
+                    `${a.title} ${a.summary}`.toLowerCase().includes(c.toLowerCase())
+                )
+            );
+            const contextHint = hasCompetitor 
+                ? '⚠️ Competitor activity detected - review before client meeting'
+                : '💡 Recent coverage - potential conversation starter';
+            
+            return `
+                <div class="client-group">
+                    <div class="client-name">${client}</div>
+                    <div class="client-context">${contextHint}</div>
+                    <div class="client-articles">
+                        ${articles.slice(0, 3).map(a => `
+                            <div class="client-article">
+                                <span class="client-article-source">${a.sourceName}</span>
+                                <span class="client-article-title" onclick="app.openArticle('${a.id}')">${a.title.substring(0, 80)}${a.title.length > 80 ? '...' : ''}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
     }
 
     renderSections(sections) {
@@ -680,13 +923,13 @@ ${articleList}`;
         `).join('');
     }
 
-    renderArticles() {
+    renderDailyArticles() {
         const list = document.getElementById('articles-list');
         const count = document.getElementById('articles-count');
         
-        count.textContent = this.articles.length;
+        count.textContent = this.dailyArticles.length;
         
-        list.innerHTML = this.articles.slice(0, 30).map(article => this.renderArticleItem(article)).join('');
+        list.innerHTML = this.dailyArticles.slice(0, 30).map(article => this.renderArticleItem(article)).join('');
     }
 
     renderArticleItem(article) {
@@ -749,10 +992,15 @@ ${articleList}`;
         document.getElementById('daily-minutes').value = this.settings.dailyMinutes;
         document.getElementById('weekly-articles').value = this.settings.weeklyArticles;
         document.getElementById('clients-input').value = this.clients.join(', ');
-        document.getElementById('sources-count').textContent = `${this.sources.length} sources configured`;
         
         // Render industry settings
         this.renderIndustrySettings();
+        
+        // Render sources list
+        currentSourceFilter = 'all';
+        document.getElementById('sources-category-filter').value = 'all';
+        renderSourcesList();
+        updateSourcesCount();
         
         document.getElementById('settings-modal').classList.remove('hidden');
     }
@@ -805,6 +1053,24 @@ ${articleList}`;
 // Global Functions
 // ==========================================
 
+let currentEditingSourceIndex = null;
+let currentSourceFilter = 'all';
+let selectedPriority = 2;
+let selectedDigestType = 'daily';
+
+function switchDigestTab(tab) {
+    // Update tab buttons
+    document.querySelectorAll('.digest-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    
+    // Update tab content
+    document.getElementById('daily-tab').classList.toggle('hidden', tab !== 'daily');
+    document.getElementById('weekly-tab').classList.toggle('hidden', tab !== 'weekly');
+    
+    app.currentTab = tab;
+}
+
 function toggleSection(sectionId) {
     const content = document.getElementById(`${sectionId}-content`);
     const chevron = document.querySelector(`#${sectionId}-section .chevron`);
@@ -847,10 +1113,11 @@ function saveSettings() {
 }
 
 function resetSources() {
-    if (confirm('Reset all sources to defaults?')) {
+    if (confirm('Reset all sources to defaults? This will remove any custom sources you added.')) {
         app.sources = [...DEFAULT_SOURCES];
         app.saveToStorage();
-        document.getElementById('sources-count').textContent = `${app.sources.length} sources configured`;
+        renderSourcesList();
+        updateSourcesCount();
         alert('Sources reset to defaults.');
     }
 }
@@ -872,6 +1139,202 @@ function copyArticleLink() {
     if (article) {
         navigator.clipboard.writeText(article.url);
         alert('Link copied!');
+    }
+}
+
+// ==========================================
+// Source Management Functions
+// ==========================================
+
+function renderSourcesList() {
+    const list = document.getElementById('sources-list');
+    const filter = currentSourceFilter;
+    
+    const filteredSources = filter === 'all' 
+        ? app.sources 
+        : app.sources.filter(s => s.category === filter);
+    
+    if (filteredSources.length === 0) {
+        list.innerHTML = '<div class="source-item" style="justify-content: center; color: var(--text-tertiary);">No sources in this category</div>';
+        return;
+    }
+    
+    list.innerHTML = filteredSources.map((source, index) => {
+        const actualIndex = app.sources.indexOf(source);
+        const categoryEmoji = CATEGORIES[source.category]?.emoji || '📰';
+        
+        return `
+            <div class="source-item">
+                <div class="source-item-toggle">
+                    <input type="checkbox" ${source.enabled ? 'checked' : ''} 
+                           onclick="event.stopPropagation(); toggleSource(${actualIndex})"
+                           title="Enable/Disable">
+                </div>
+                <div class="source-item-info" onclick="editSource(${actualIndex})">
+                    <div class="source-item-name">${source.name}</div>
+                    <div class="source-item-meta">
+                        <span class="source-item-category">${categoryEmoji} ${source.category}</span>
+                        <span class="source-item-priority p${source.priority}">P${source.priority}</span>
+                        <span>${source.digestType}</span>
+                    </div>
+                </div>
+                <button class="source-item-edit" onclick="editSource(${actualIndex})" title="Edit">✏️</button>
+            </div>
+        `;
+    }).join('');
+}
+
+function filterSources() {
+    currentSourceFilter = document.getElementById('sources-category-filter').value;
+    renderSourcesList();
+}
+
+function updateSourcesCount() {
+    const enabledCount = app.sources.filter(s => s.enabled).length;
+    const totalCount = app.sources.length;
+    document.getElementById('sources-count').textContent = `${enabledCount}/${totalCount} sources enabled`;
+}
+
+function toggleSource(index) {
+    app.sources[index].enabled = !app.sources[index].enabled;
+    app.saveToStorage();
+    updateSourcesCount();
+}
+
+function addNewSource() {
+    currentEditingSourceIndex = null;
+    
+    // Reset form
+    document.getElementById('source-modal-title').textContent = 'Add Source';
+    document.getElementById('source-name').value = '';
+    document.getElementById('source-url').value = '';
+    document.getElementById('source-category').value = 'AI & Agentic';
+    document.getElementById('source-credibility').value = 80;
+    document.getElementById('credibility-value').textContent = '80%';
+    document.getElementById('delete-source-btn').style.display = 'none';
+    
+    // Reset selectors
+    selectedPriority = 2;
+    selectedDigestType = 'daily';
+    updatePriorityButtons();
+    updateDigestTypeButtons();
+    
+    document.getElementById('source-modal').classList.remove('hidden');
+}
+
+function editSource(index) {
+    currentEditingSourceIndex = index;
+    const source = app.sources[index];
+    
+    document.getElementById('source-modal-title').textContent = 'Edit Source';
+    document.getElementById('source-name').value = source.name;
+    document.getElementById('source-url').value = source.url;
+    document.getElementById('source-category').value = source.category;
+    document.getElementById('source-credibility').value = Math.round(source.credibilityScore * 100);
+    document.getElementById('credibility-value').textContent = `${Math.round(source.credibilityScore * 100)}%`;
+    document.getElementById('delete-source-btn').style.display = 'block';
+    
+    selectedPriority = source.priority;
+    selectedDigestType = source.digestType;
+    updatePriorityButtons();
+    updateDigestTypeButtons();
+    
+    document.getElementById('source-modal').classList.remove('hidden');
+}
+
+function closeSourceEditor() {
+    document.getElementById('source-modal').classList.add('hidden');
+    currentEditingSourceIndex = null;
+}
+
+function selectPriority(priority) {
+    selectedPriority = priority;
+    updatePriorityButtons();
+}
+
+function updatePriorityButtons() {
+    document.querySelectorAll('.priority-btn').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.priority) === selectedPriority);
+    });
+}
+
+function selectDigestType(type) {
+    selectedDigestType = type;
+    updateDigestTypeButtons();
+}
+
+function updateDigestTypeButtons() {
+    document.querySelectorAll('.digest-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.type === selectedDigestType);
+    });
+}
+
+function updateCredibilityDisplay() {
+    const value = document.getElementById('source-credibility').value;
+    document.getElementById('credibility-value').textContent = `${value}%`;
+}
+
+function saveSource() {
+    const name = document.getElementById('source-name').value.trim();
+    const url = document.getElementById('source-url').value.trim();
+    const category = document.getElementById('source-category').value;
+    const credibility = parseInt(document.getElementById('source-credibility').value) / 100;
+    
+    // Validation
+    if (!name) {
+        alert('Please enter a source name');
+        return;
+    }
+    
+    if (!url) {
+        alert('Please enter a feed URL');
+        return;
+    }
+    
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        alert('Please enter a valid URL starting with http:// or https://');
+        return;
+    }
+    
+    const sourceData = {
+        name,
+        url,
+        category,
+        priority: selectedPriority,
+        credibilityScore: credibility,
+        digestType: selectedDigestType,
+        enabled: true
+    };
+    
+    if (currentEditingSourceIndex !== null) {
+        // Edit existing
+        app.sources[currentEditingSourceIndex] = sourceData;
+    } else {
+        // Check for duplicate URL
+        if (app.sources.some(s => s.url.toLowerCase() === url.toLowerCase())) {
+            alert('A source with this URL already exists');
+            return;
+        }
+        // Add new
+        app.sources.push(sourceData);
+    }
+    
+    app.saveToStorage();
+    renderSourcesList();
+    updateSourcesCount();
+    closeSourceEditor();
+}
+
+function deleteCurrentSource() {
+    if (currentEditingSourceIndex === null) return;
+    
+    const source = app.sources[currentEditingSourceIndex];
+    if (confirm(`Delete "${source.name}"?`)) {
+        app.sources.splice(currentEditingSourceIndex, 1);
+        app.saveToStorage();
+        renderSourcesList();
+        updateSourcesCount();
+        closeSourceEditor();
     }
 }
 
