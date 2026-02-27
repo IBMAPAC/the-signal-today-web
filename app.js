@@ -428,10 +428,12 @@ class SignalApp {
                 article.matchedIndustry = industryMatch.name;
             }
             
-            // Client match (unchanged)
+            // Client match (updated to capture all matches)
             if (clientMatch) {
                 score += 0.25;
                 article.matchedClient = clientMatch;
+                // Also store all matched clients
+                article.allMatchedClients = this.detectAllClients(text);
             }
             
             // Cross-reference boost (unchanged)
@@ -447,26 +449,107 @@ class SignalApp {
     }
 
     detectIndustry(text) {
+        // Score all industries and return the best match
+        // This prevents generic keywords from incorrectly matching
+        let bestMatch = null;
+        let bestScore = 0;
+        
         for (const industry of this.industries) {
             if (!industry.enabled) continue;
             
             const keywords = INDUSTRY_KEYWORDS[industry.name] || [];
+            let matchCount = 0;
+            let hasStrongMatch = false;
+            
             for (const keyword of keywords) {
                 if (text.includes(keyword.toLowerCase())) {
-                    return industry;
+                    matchCount++;
+                    // Strong match if keyword is 2+ words (more specific)
+                    if (keyword.includes(' ')) {
+                        hasStrongMatch = true;
+                        matchCount += 2; // Bonus for multi-word matches
+                    }
+                }
+            }
+            
+            if (matchCount > 0) {
+                // Calculate score: matches + tier bonus + strong match bonus
+                const tierBonus = (4 - industry.tier) * 2; // T1=6, T2=4, T3=2
+                const strongBonus = hasStrongMatch ? 3 : 0;
+                const score = matchCount + tierBonus + strongBonus;
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMatch = industry;
                 }
             }
         }
-        return null;
+        
+        return bestMatch;
     }
 
     detectClient(text) {
+        // Use word boundary matching to avoid false positives
+        // e.g., "SK" shouldn't match "risk", "ANZ" shouldn't match "organization"
+        const matches = [];
+        
         for (const client of this.clients) {
-            if (text.includes(client.toLowerCase())) {
-                return client;
+            // Create regex with word boundaries
+            // For short names (2-3 chars), require exact word match
+            // For longer names, allow some flexibility
+            const clientLower = client.toLowerCase();
+            const textLower = text.toLowerCase();
+            
+            let isMatch = false;
+            
+            if (client.length <= 3) {
+                // Short names: require word boundaries on both sides
+                // Match "DBS" but not "adbs" or "dbss"
+                const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}\\b`, 'i');
+                isMatch = regex.test(text);
+            } else {
+                // Longer names: check for word boundary at start
+                const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}`, 'i');
+                isMatch = regex.test(text);
+            }
+            
+            if (isMatch) {
+                matches.push(client);
             }
         }
-        return null;
+        
+        // Return the first match for backward compatibility with scoring
+        // But store all matches on the article
+        return matches.length > 0 ? matches[0] : null;
+    }
+    
+    detectAllClients(text) {
+        // Return all matched clients for an article
+        const matches = [];
+        
+        for (const client of this.clients) {
+            const clientLower = client.toLowerCase();
+            
+            let isMatch = false;
+            
+            if (client.length <= 3) {
+                const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}\\b`, 'i');
+                isMatch = regex.test(text);
+            } else {
+                const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}`, 'i');
+                isMatch = regex.test(text);
+            }
+            
+            if (isMatch) {
+                matches.push(client);
+            }
+        }
+        
+        return matches;
+    }
+    
+    escapeRegex(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     detectCrossReferences(articles) {
@@ -825,9 +908,9 @@ ${articleList}`;
                             <div class="industry-theme-articles">
                                 ${theme.articles.slice(0, 3).map(a => {
                                     const safeId = this.escapeAttr(a.id);
-                                    const shortTitle = a.title.substring(0, 50) + (a.title.length > 50 ? '...' : '');
-                                    return `<a href="javascript:void(0)" onclick="app.openArticle('${safeId}')" title="${this.escapeAttr(a.title)}">${this.escapeHtml(shortTitle)}</a>`;
-                                }).join(' • ')}
+                                    const shortTitle = a.title.substring(0, 60) + (a.title.length > 60 ? '...' : '');
+                                    return `<a href="javascript:void(0)" onclick="app.openArticle('${safeId}')" title="${this.escapeAttr(a.title)}"><strong>${this.escapeHtml(a.sourceName)}:</strong> ${this.escapeHtml(shortTitle)}</a>`;
+                                }).join('<br>')}
                             </div>
                         </div>
                     `).join('')}
@@ -932,7 +1015,18 @@ ${articleList}`;
         const list = document.getElementById('clients-list');
         const count = document.getElementById('clients-count');
         
-        const clientArticles = this.dailyArticles.filter(a => a.matchedClient);
+        // Get all articles with client matches and re-detect to ensure accuracy
+        const clientArticles = [];
+        for (const article of this.dailyArticles) {
+            const text = `${article.title} ${article.summary}`.toLowerCase();
+            const matchedClients = this.detectAllClients(text);
+            if (matchedClients.length > 0) {
+                clientArticles.push({
+                    ...article,
+                    matchedClients: matchedClients
+                });
+            }
+        }
         
         if (clientArticles.length === 0) {
             section.classList.add('hidden');
@@ -942,26 +1036,48 @@ ${articleList}`;
         section.classList.remove('hidden');
         count.textContent = clientArticles.length;
         
-        // Group by client
+        // Group by client - an article can appear under multiple clients
         const byClient = {};
         for (const article of clientArticles) {
-            const client = article.matchedClient;
-            if (!byClient[client]) {
-                byClient[client] = [];
+            for (const client of article.matchedClients) {
+                if (!byClient[client]) {
+                    byClient[client] = [];
+                }
+                // Avoid duplicates
+                if (!byClient[client].find(a => a.id === article.id)) {
+                    byClient[client].push(article);
+                }
             }
-            byClient[client].push(article);
         }
         
-        list.innerHTML = Object.entries(byClient).map(([client, articles]) => {
-            // Determine context hint
-            const hasCompetitor = articles.some(a => 
-                ['Microsoft', 'AWS', 'Google', 'Accenture', 'Deloitte'].some(c => 
-                    `${a.title} ${a.summary}`.toLowerCase().includes(c.toLowerCase())
-                )
-            );
-            const contextHint = hasCompetitor 
-                ? '⚠️ Competitor activity detected - review before client meeting'
-                : '💡 Recent coverage - potential conversation starter';
+        // Sort clients by number of articles (most coverage first)
+        const sortedClients = Object.entries(byClient)
+            .sort((a, b) => b[1].length - a[1].length);
+        
+        list.innerHTML = sortedClients.map(([client, articles]) => {
+            // Determine context hint based on article content
+            const hasCompetitor = articles.some(a => {
+                const text = `${a.title} ${a.summary}`.toLowerCase();
+                return ['microsoft', 'aws', 'amazon', 'google', 'accenture', 'deloitte', 'salesforce', 'sap'].some(c => 
+                    text.includes(c)
+                );
+            });
+            
+            const hasPartnership = articles.some(a => {
+                const text = `${a.title} ${a.summary}`.toLowerCase();
+                return ['partner', 'collaboration', 'alliance', 'joint venture', 'agreement'].some(kw => 
+                    text.includes(kw)
+                );
+            });
+            
+            let contextHint;
+            if (hasCompetitor) {
+                contextHint = '⚠️ Competitor activity detected - review before client meeting';
+            } else if (hasPartnership) {
+                contextHint = '🤝 Partnership/collaboration news - potential conversation topic';
+            } else {
+                contextHint = '💡 Recent coverage - potential conversation starter';
+            }
             
             return `
                 <div class="client-group">
@@ -971,16 +1087,24 @@ ${articleList}`;
                         ${articles.slice(0, 3).map(a => {
                             const safeId = this.escapeAttr(a.id);
                             const shortTitle = a.title.substring(0, 70) + (a.title.length > 70 ? '...' : '');
+                            // Highlight the client name in the title if present
+                            const highlightedTitle = this.highlightClient(shortTitle, client);
                             return `
                             <div class="client-article">
                                 <span class="client-article-source">${this.escapeHtml(a.sourceName)}</span>
-                                <span class="client-article-title" onclick="app.openArticle('${safeId}')" title="${this.escapeAttr(a.title)}">${this.escapeHtml(shortTitle)}</span>
+                                <span class="client-article-title" onclick="app.openArticle('${safeId}')" title="${this.escapeAttr(a.title)}">${highlightedTitle}</span>
                             </div>
                         `}).join('')}
                     </div>
                 </div>
             `;
         }).join('');
+    }
+    
+    highlightClient(text, client) {
+        // Highlight the client name in the text
+        const regex = new RegExp(`\\b(${this.escapeRegex(client)})\\b`, 'gi');
+        return this.escapeHtml(text).replace(regex, '<mark>$1</mark>');
     }
 
     renderSections(sections) {

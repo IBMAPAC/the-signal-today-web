@@ -483,28 +483,41 @@ a:hover {
 .signal-articles {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-xs);
+    gap: var(--spacing-sm);
 }
 
 .signal-article-link {
-    font-size: 0.75rem;
-    background: var(--bg-secondary);
-    padding: 6px 10px;
-    border-radius: 4px;
-    color: var(--color-primary);
+    font-size: 0.8rem;
+    background: var(--color-primary);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
     text-decoration: none;
-    transition: background var(--transition-fast);
+    transition: all var(--transition-fast);
     display: inline-block;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     cursor: pointer;
+    font-weight: 500;
 }
 
 .signal-article-link:hover {
-    background: var(--bg-tertiary);
+    background: var(--color-primary-dark);
     text-decoration: none;
+    transform: translateY(-1px);
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+    .signal-article-link {
+        background: #3b82f6;
+    }
+    
+    .signal-article-link:hover {
+        background: #2563eb;
+    }
 }
 
 /* =============================================
@@ -540,24 +553,54 @@ a:hover {
 
 .industry-theme {
     margin-bottom: var(--spacing-md);
-    padding-left: var(--spacing-md);
-    border-left: 2px solid var(--bg-tertiary);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-sm);
+    border-left: 3px solid var(--color-success);
+}
+
+.industry-theme:last-child {
+    margin-bottom: 0;
 }
 
 .industry-theme-name {
-    font-weight: 500;
+    font-weight: 600;
     font-size: 0.9rem;
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: var(--spacing-sm);
     color: var(--text-primary);
 }
 
 .industry-theme-articles {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    line-height: 1.6;
 }
 
 .industry-theme-articles a {
     color: var(--color-primary);
+    text-decoration: underline;
+    text-decoration-color: rgba(37, 99, 235, 0.4);
+    text-underline-offset: 2px;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+}
+
+.industry-theme-articles a:hover {
+    color: var(--color-primary-dark);
+    text-decoration-color: var(--color-primary-dark);
+}
+
+/* Dark mode link improvements */
+@media (prefers-color-scheme: dark) {
+    .industry-theme-articles a {
+        color: #60a5fa;
+        text-decoration-color: rgba(96, 165, 250, 0.4);
+    }
+    
+    .industry-theme-articles a:hover {
+        color: #93c5fd;
+        text-decoration-color: #93c5fd;
+    }
 }
 
 /* =============================================
@@ -613,10 +656,41 @@ a:hover {
 .client-article-title {
     color: var(--color-primary);
     cursor: pointer;
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-color: rgba(37, 99, 235, 0.4);
+    text-underline-offset: 2px;
 }
 
 .client-article-title:hover {
-    text-decoration: underline;
+    color: var(--color-primary-dark);
+    text-decoration-color: var(--color-primary-dark);
+}
+
+.client-article-title mark {
+    background: rgba(124, 58, 237, 0.2);
+    color: var(--color-purple);
+    padding: 0 2px;
+    border-radius: 2px;
+    font-weight: 600;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+    .client-article-title {
+        color: #60a5fa;
+        text-decoration-color: rgba(96, 165, 250, 0.4);
+    }
+    
+    .client-article-title:hover {
+        color: #93c5fd;
+        text-decoration-color: #93c5fd;
+    }
+    
+    .client-article-title mark {
+        background: rgba(124, 58, 237, 0.3);
+        color: #a78bfa;
+    }
 }
 
 /* Trending Items */
@@ -1536,16 +1610,23 @@ input[type="range"]::-moz-range-thumb {
     
     .signal-articles {
         flex-direction: column;
+        gap: var(--spacing-sm);
     }
     
     .signal-article-link {
         white-space: normal;
         max-width: 100%;
+        text-align: left;
     }
     
     /* Industry Groups - Mobile */
     .industry-theme {
-        padding-left: var(--spacing-sm);
+        padding: var(--spacing-sm);
+        margin-bottom: var(--spacing-sm);
+    }
+    
+    .industry-theme-articles {
+        font-size: 0.8rem;
     }
     
     /* Client Watch - Mobile */
