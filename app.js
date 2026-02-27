@@ -98,10 +98,10 @@ class SignalApp {
 
     categorizeArticles() {
         const now = new Date();
-        const dailyCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        const weeklyCutoff = new Date(now.getTime() - this.settings.weeklyCurrencyDays * 24 * 60 * 60 * 1000);
+        const dailyCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000); // 48 hours
+        const weeklyCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000); // 3 months (90 days)
         
-        // Daily articles: from daily or both sources, within 24 hours
+        // Daily articles: from daily or both sources, within 48 hours
         // Apply source diversity: max 3 per source for daily
         const dailyFiltered = this.articles
             .filter(a => {
@@ -123,7 +123,7 @@ class SignalApp {
             }
         }
         
-        // Weekly articles: from weekly or both sources, within week, max 2 per source
+        // Weekly articles: from weekly or both sources, within 3 months, max 2 per source
         const weeklyFiltered = this.articles
             .filter(a => {
                 const pubDate = new Date(a.publishedDate);
@@ -805,12 +805,12 @@ ${articleList}`;
             byIndustry[ind].push(article);
         }
         
-        // For each industry, cluster by theme
+        // For each industry, cluster by industry-specific themes
         list.innerHTML = Object.entries(byIndustry).map(([industry, articles]) => {
             const industryInfo = this.industries.find(i => i.name === industry) || { emoji: '🏢' };
             
-            // Simple theme clustering based on keywords
-            const themes = this.clusterByTheme(articles);
+            // Use industry-specific theme clustering
+            const themes = this.clusterByIndustryTheme(industry, articles);
             
             return `
                 <div class="industry-group">
@@ -836,21 +836,76 @@ ${articleList}`;
         }).join('');
     }
 
-    clusterByTheme(articles) {
-        // Simple keyword-based clustering
-        const themeKeywords = {
-            'AI & Automation': ['ai', 'automation', 'machine learning', 'llm', 'genai'],
-            'Digital Transformation': ['digital', 'transformation', 'modernization', 'cloud'],
-            'Regulatory & Compliance': ['regulation', 'compliance', 'governance', 'policy'],
-            'Security & Risk': ['security', 'cyber', 'risk', 'threat', 'vulnerability'],
-            'Strategy & Leadership': ['strategy', 'ceo', 'cio', 'leadership', 'investment'],
-            'Innovation': ['innovation', 'startup', 'disrupt', 'emerging']
+    clusterByIndustryTheme(industry, articles) {
+        // Industry-specific theme keywords
+        const industryThemes = {
+            "Financial Services": {
+                'Digital Banking & Payments': ['digital bank', 'neobank', 'payment', 'mobile banking', 'real-time', 'swift', 'cbdc'],
+                'Risk & Compliance': ['risk', 'compliance', 'regulation', 'kyc', 'aml', 'basel', 'audit'],
+                'Wealth & Investment': ['wealth', 'investment', 'trading', 'asset management', 'portfolio'],
+                'AI in Finance': ['ai', 'machine learning', 'fraud', 'credit scoring', 'automation'],
+                'Open Banking': ['open banking', 'api', 'fintech', 'embedded finance']
+            },
+            "Government": {
+                'Digital Services': ['digital government', 'e-government', 'citizen', 'portal', 'online services'],
+                'Smart City': ['smart city', 'urban', 'infrastructure', 'iot', 'sensors'],
+                'Security & Defense': ['security', 'defense', 'military', 'cyber', 'national security'],
+                'Public Cloud': ['cloud', 'data center', 'sovereign', 'migration'],
+                'AI in Government': ['ai', 'automation', 'analytics', 'decision support']
+            },
+            "Manufacturing": {
+                'Industry 4.0': ['industry 4.0', 'smart factory', 'automation', 'robotics', 'iot'],
+                'Supply Chain': ['supply chain', 'logistics', 'inventory', 'warehouse', 'distribution'],
+                'Quality & Maintenance': ['quality', 'predictive maintenance', 'inspection', 'defect'],
+                'Digital Twin': ['digital twin', 'simulation', 'modeling', '3d'],
+                'Sustainability': ['sustainability', 'carbon', 'emissions', 'green', 'circular']
+            },
+            "Energy": {
+                'Renewable Energy': ['renewable', 'solar', 'wind', 'clean energy', 'green'],
+                'Grid & Utilities': ['grid', 'smart grid', 'utility', 'distribution', 'transmission'],
+                'Oil & Gas': ['oil', 'gas', 'petroleum', 'lng', 'drilling', 'refinery'],
+                'Sustainability & ESG': ['sustainability', 'esg', 'carbon', 'net zero', 'emissions'],
+                'Energy Storage': ['battery', 'storage', 'ev charging', 'hydrogen']
+            },
+            "Retail": {
+                'E-commerce': ['ecommerce', 'e-commerce', 'online', 'marketplace', 'digital commerce'],
+                'Customer Experience': ['customer experience', 'personalization', 'loyalty', 'engagement'],
+                'Supply Chain & Fulfillment': ['supply chain', 'fulfillment', 'last mile', 'inventory', 'warehouse'],
+                'Omnichannel': ['omnichannel', 'store', 'pos', 'click and collect'],
+                'AI in Retail': ['ai', 'recommendation', 'demand forecasting', 'pricing']
+            },
+            "Telecommunications": {
+                '5G & Network': ['5g', 'network', 'spectrum', 'coverage', 'open ran'],
+                'Edge & Cloud': ['edge computing', 'cloud', 'data center', 'latency'],
+                'IoT & Connectivity': ['iot', 'connectivity', 'device', 'sensor', 'm2m'],
+                'Digital Services': ['digital services', 'streaming', 'content', 'platform'],
+                'Enterprise Solutions': ['enterprise', 'b2b', 'private 5g', 'managed services']
+            },
+            "Healthcare": {
+                'Digital Health': ['digital health', 'telehealth', 'telemedicine', 'remote', 'virtual care'],
+                'Clinical & Research': ['clinical', 'trial', 'research', 'drug discovery', 'genomics'],
+                'AI in Healthcare': ['ai', 'machine learning', 'diagnosis', 'imaging', 'radiology'],
+                'Patient Experience': ['patient', 'experience', 'engagement', 'portal', 'app'],
+                'Data & Interoperability': ['ehr', 'health record', 'interoperability', 'data exchange', 'fhir']
+            },
+            "Technology": {
+                'Cloud & Infrastructure': ['cloud', 'infrastructure', 'data center', 'saas', 'paas'],
+                'AI & ML': ['ai', 'machine learning', 'llm', 'genai', 'model'],
+                'Developer & Platform': ['developer', 'platform', 'api', 'devops', 'agile'],
+                'Security': ['security', 'cyber', 'threat', 'vulnerability', 'zero trust'],
+                'Startup & Investment': ['startup', 'funding', 'vc', 'investment', 'acquisition']
+            }
         };
         
-        const themes = [];
+        const themes = industryThemes[industry] || {
+            'General News': ['news', 'announcement', 'update']
+        };
+        
+        const result = [];
         const assigned = new Set();
         
-        for (const [themeName, keywords] of Object.entries(themeKeywords)) {
+        // Match articles to themes
+        for (const [themeName, keywords] of Object.entries(themes)) {
             const matching = articles.filter(a => {
                 if (assigned.has(a.id)) return false;
                 const text = `${a.title} ${a.summary}`.toLowerCase();
@@ -858,18 +913,18 @@ ${articleList}`;
             });
             
             if (matching.length > 0) {
-                themes.push({ name: themeName, articles: matching });
+                result.push({ name: themeName, articles: matching });
                 matching.forEach(a => assigned.add(a.id));
             }
         }
         
-        // Add remaining as "Other"
+        // Add remaining as "Other [Industry] News"
         const remaining = articles.filter(a => !assigned.has(a.id));
         if (remaining.length > 0) {
-            themes.push({ name: 'Other News', articles: remaining });
+            result.push({ name: `Other ${industry} News`, articles: remaining });
         }
         
-        return themes.filter(t => t.articles.length > 0);
+        return result.filter(t => t.articles.length > 0);
     }
 
     renderClientWatch() {
