@@ -19,7 +19,9 @@ const STORAGE_KEYS = {
     ARTICLES: 'signal_articles',
     DIGEST: 'signal_digest',
     SETTINGS: 'signal_settings',
-    LAST_REFRESH: 'signal_last_refresh'
+    LAST_REFRESH: 'signal_last_refresh',
+    INSTAPAPER_EMAIL: 'signal_instapaper_email',
+    INSTAPAPER_PASSWORD: 'signal_instapaper_password'
 };
 
 class SignalApp {
@@ -403,8 +405,10 @@ class SignalApp {
             
             try {
                 const title = item.querySelector('title')?.textContent?.trim();
-                const link = item.querySelector('link')?.textContent?.trim() || 
-                            item.querySelector('link')?.getAttribute('href');
+                
+                // Extract the best URL - prioritize canonical/original links
+                const link = this.extractBestLink(item);
+                
                 const description = item.querySelector('description')?.textContent?.trim() ||
                                    item.querySelector('summary')?.textContent?.trim() ||
                                    item.querySelector('content')?.textContent?.trim() || '';
@@ -436,6 +440,74 @@ class SignalApp {
         }
         
         return articles;
+    }
+    
+    extractBestLink(item) {
+        // Priority order for finding the canonical article URL:
+        
+        // 1. Check for link with rel="canonical" (Atom)
+        const canonicalLink = item.querySelector('link[rel="canonical"]');
+        if (canonicalLink) {
+            return canonicalLink.getAttribute('href') || canonicalLink.textContent?.trim();
+        }
+        
+        // 2. Check for link with rel="alternate" and type="text/html" (Atom standard)
+        const alternateLink = item.querySelector('link[rel="alternate"][type="text/html"]');
+        if (alternateLink) {
+            return alternateLink.getAttribute('href');
+        }
+        
+        // 3. Check for link with rel="alternate" (Atom)
+        const altLink = item.querySelector('link[rel="alternate"]');
+        if (altLink) {
+            return altLink.getAttribute('href');
+        }
+        
+        // 4. Check for origLink (some feeds use this for original source)
+        const origLink = item.querySelector('origLink');
+        if (origLink) {
+            return origLink.textContent?.trim();
+        }
+        
+        // 5. Check for feedburner:origLink
+        const fbOrigLink = item.getElementsByTagName('feedburner:origLink')[0];
+        if (fbOrigLink) {
+            return fbOrigLink.textContent?.trim();
+        }
+        
+        // 6. Check guid with isPermaLink="true" (RSS)
+        const guid = item.querySelector('guid[isPermaLink="true"]');
+        if (guid && guid.textContent?.trim().startsWith('http')) {
+            return guid.textContent.trim();
+        }
+        
+        // 7. Check guid that looks like a URL (RSS)
+        const guidAny = item.querySelector('guid');
+        if (guidAny && guidAny.textContent?.trim().startsWith('http')) {
+            return guidAny.textContent.trim();
+        }
+        
+        // 8. First link element (RSS standard)
+        const firstLink = item.querySelector('link');
+        if (firstLink) {
+            // Check if it has href attribute (Atom) or text content (RSS)
+            const href = firstLink.getAttribute('href');
+            if (href) return href;
+            
+            const text = firstLink.textContent?.trim();
+            if (text && text.startsWith('http')) return text;
+        }
+        
+        // 9. Check all link elements for one that looks like an article URL
+        const allLinks = item.querySelectorAll('link');
+        for (const link of allLinks) {
+            const href = link.getAttribute('href') || link.textContent?.trim();
+            if (href && href.startsWith('http') && !href.includes('#comments') && !href.includes('/feed')) {
+                return href;
+            }
+        }
+        
+        return null;
     }
 
     generateId(url) {
@@ -899,9 +971,16 @@ ${articleList}`;
         count.textContent = crossRefs.length;
         
         list.innerHTML = crossRefs.slice(0, 5).map(ref => {
-            // Build a summary of what the theme covers
-            const uniqueTitles = [...new Set(ref.articles.slice(0, 3).map(a => a.title))];
-            const context = uniqueTitles.map(t => t.substring(0, 60) + (t.length > 60 ? '...' : '')).join('; ');
+            // Generate a description of the signal theme
+            const themeDescription = this.generateThemeDescription(ref);
+            
+            // Group articles by source for cleaner display
+            const sourceArticles = {};
+            for (const article of ref.articles.slice(0, 5)) {
+                if (!sourceArticles[article.sourceName]) {
+                    sourceArticles[article.sourceName] = article;
+                }
+            }
             
             return `
                 <div class="signal-item">
@@ -909,17 +988,47 @@ ${articleList}`;
                         <span class="signal-theme">${this.escapeHtml(ref.theme)}</span>
                         <span class="signal-sources">📰 ${ref.sourceCount} sources</span>
                     </div>
-                    <div class="signal-context">${this.escapeHtml(context.substring(0, 180))}${context.length > 180 ? '...' : ''}</div>
-                    <div class="signal-articles">
-                        ${ref.articles.slice(0, 3).map(a => {
-                            const safeId = this.escapeAttr(a.id);
-                            const shortTitle = a.title.substring(0, 40) + (a.title.length > 40 ? '...' : '');
-                            return `<a class="signal-article-link" href="javascript:void(0)" onclick="app.openArticle('${safeId}')" title="${this.escapeAttr(a.title)}">${this.escapeHtml(a.sourceName)}: ${this.escapeHtml(shortTitle)}</a>`;
+                    <div class="signal-description">${themeDescription}</div>
+                    <div class="signal-source-list">
+                        <span class="signal-source-label">Sources:</span>
+                        ${Object.entries(sourceArticles).map(([sourceName, article]) => {
+                            return `<a class="signal-source-link" href="${this.escapeAttr(article.url)}" target="_blank" title="${this.escapeAttr(article.title)}">${this.escapeHtml(sourceName)}</a>`;
                         }).join('')}
                     </div>
                 </div>
             `;
         }).join('');
+    }
+    
+    generateThemeDescription(ref) {
+        // Generate a concise description of what this signal covers
+        const themeDescriptions = {
+            'AI Governance': 'Multiple sources reporting on AI regulation, safety frameworks, and governance initiatives.',
+            'Cloud Competition': 'Cross-source coverage of cloud provider competition, pricing changes, or market dynamics.',
+            'Data Sovereignty': 'Converging reports on data localization requirements, privacy regulations, or cross-border data issues.',
+            'Agentic AI': 'Multiple perspectives on autonomous AI agents, agent frameworks, or multi-agent systems.',
+            'Generative AI': 'Widespread coverage of generative AI developments, model releases, or enterprise adoption.',
+            'Cybersecurity': 'Cross-source reporting on security threats, breaches, or defensive measures.',
+            'Digital Banking': 'Multiple sources covering digital banking transformation, neobanks, or fintech disruption.',
+            'Enterprise AI Adoption': 'Converging coverage on enterprise AI implementation, ROI, or transformation strategies.',
+            'Hybrid Cloud': 'Multiple reports on hybrid/multi-cloud strategies, cloud repatriation, or sovereign cloud.',
+            'AI Infrastructure': 'Cross-source coverage of GPU supply, AI chips, or compute infrastructure.',
+            'Platform Engineering': 'Multiple perspectives on platform engineering, developer experience, or internal platforms.',
+            'API Economy': 'Converging reports on API strategy, API management, or API monetization.',
+            'Sustainability Tech': 'Multiple sources covering green IT, ESG reporting, or climate technology.',
+            'Talent & Skills': 'Cross-source coverage of tech talent, skills gaps, or workforce transformation.',
+            'M&A Activity': 'Multiple reports on acquisitions, mergers, or strategic investments in tech.',
+            'APAC Expansion': 'Converging coverage of Asia Pacific expansion, regional strategies, or market entry.'
+        };
+        
+        // Use predefined description or generate from article titles
+        if (themeDescriptions[ref.theme]) {
+            return themeDescriptions[ref.theme];
+        }
+        
+        // Fallback: extract key phrases from article titles
+        const titles = ref.articles.slice(0, 3).map(a => a.title);
+        return `Multiple sources reporting on related developments: ${titles[0]?.substring(0, 80)}...`;
     }
 
     renderIndustryIntelligence() {
@@ -1275,6 +1384,11 @@ ${articleList}`;
         document.getElementById('weekly-articles').value = this.settings.weeklyArticles;
         document.getElementById('clients-input').value = this.clients.join(', ');
         
+        // Load Instapaper settings
+        document.getElementById('instapaper-email').value = localStorage.getItem(STORAGE_KEYS.INSTAPAPER_EMAIL) || '';
+        document.getElementById('instapaper-password').value = localStorage.getItem(STORAGE_KEYS.INSTAPAPER_PASSWORD) || '';
+        document.getElementById('instapaper-status').textContent = '';
+        
         // Render industry settings
         this.renderIndustrySettings();
         
@@ -1388,6 +1502,18 @@ function saveSettings() {
         localStorage.removeItem(STORAGE_KEYS.API_KEY);
     }
     
+    // Save Instapaper credentials
+    const instapaperEmail = document.getElementById('instapaper-email').value.trim();
+    const instapaperPassword = document.getElementById('instapaper-password').value;
+    
+    if (instapaperEmail && instapaperPassword) {
+        localStorage.setItem(STORAGE_KEYS.INSTAPAPER_EMAIL, instapaperEmail);
+        localStorage.setItem(STORAGE_KEYS.INSTAPAPER_PASSWORD, instapaperPassword);
+    } else {
+        localStorage.removeItem(STORAGE_KEYS.INSTAPAPER_EMAIL);
+        localStorage.removeItem(STORAGE_KEYS.INSTAPAPER_PASSWORD);
+    }
+    
     // Save settings
     app.settings.dailyMinutes = dailyMinutes;
     app.settings.weeklyArticles = weeklyArticles;
@@ -1442,33 +1568,182 @@ function saveToInstapaper() {
     }
 }
 
-function saveArticleToInstapaper(url, title) {
-    // Instapaper's simple save URL
-    const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
-    window.open(instapaperUrl, '_blank', 'width=500,height=600');
+async function saveArticleToInstapaper(url, title) {
+    const email = localStorage.getItem(STORAGE_KEYS.INSTAPAPER_EMAIL);
+    const password = localStorage.getItem(STORAGE_KEYS.INSTAPAPER_PASSWORD);
+    
+    if (!email || !password) {
+        // Fall back to bookmarklet-style URL if no credentials
+        const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
+        window.open(instapaperUrl, '_blank', 'width=500,height=600');
+        return;
+    }
+    
+    try {
+        // Use Instapaper Simple API through CORS proxy
+        const apiUrl = 'https://www.instapaper.com/api/add';
+        const params = new URLSearchParams({
+            username: email,
+            password: password,
+            url: url,
+            title: title
+        });
+        
+        // Try multiple CORS proxies
+        const proxies = [
+            'https://corsproxy.io/?',
+            'https://api.allorigins.win/raw?url='
+        ];
+        
+        let success = false;
+        
+        for (const proxy of proxies) {
+            try {
+                const response = await fetch(proxy + encodeURIComponent(`${apiUrl}?${params.toString()}`), {
+                    method: 'GET'
+                });
+                
+                if (response.ok) {
+                    success = true;
+                    break;
+                }
+            } catch (e) {
+                continue;
+            }
+        }
+        
+        if (success) {
+            showToast('✓ Saved to Instapaper');
+        } else {
+            // Fall back to bookmarklet URL
+            const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
+            window.open(instapaperUrl, '_blank', 'width=500,height=600');
+        }
+    } catch (error) {
+        console.error('Instapaper save error:', error);
+        // Fall back to bookmarklet URL
+        const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
+        window.open(instapaperUrl, '_blank', 'width=500,height=600');
+    }
 }
 
-function quickSaveToInstapaper(articleId, event) {
+async function quickSaveToInstapaper(articleId, event) {
     // Prevent opening the article modal
     if (event) {
         event.stopPropagation();
     }
     
     const article = app.articles.find(a => a.id === articleId);
-    if (article) {
-        saveArticleToInstapaper(article.url, article.title);
+    if (!article) return;
+    
+    const btn = event?.target;
+    if (btn) {
+        btn.textContent = '⏳';
+        btn.disabled = true;
+    }
+    
+    try {
+        await saveArticleToInstapaper(article.url, article.title);
         
-        // Visual feedback
-        if (event && event.target) {
-            const btn = event.target;
+        if (btn) {
             btn.textContent = '✓';
             btn.classList.add('saved');
             setTimeout(() => {
                 btn.textContent = '📥';
                 btn.classList.remove('saved');
+                btn.disabled = false;
+            }, 2000);
+        }
+    } catch (error) {
+        if (btn) {
+            btn.textContent = '❌';
+            setTimeout(() => {
+                btn.textContent = '📥';
+                btn.disabled = false;
             }, 2000);
         }
     }
+}
+
+async function testInstapaperConnection() {
+    const email = document.getElementById('instapaper-email').value.trim();
+    const password = document.getElementById('instapaper-password').value;
+    const statusEl = document.getElementById('instapaper-status');
+    
+    if (!email || !password) {
+        statusEl.textContent = '⚠️ Please enter email and password';
+        statusEl.style.color = 'var(--color-warning)';
+        return;
+    }
+    
+    statusEl.textContent = '⏳ Testing...';
+    statusEl.style.color = 'var(--text-secondary)';
+    
+    try {
+        // Test with Instapaper's authenticate endpoint
+        const apiUrl = 'https://www.instapaper.com/api/authenticate';
+        const params = new URLSearchParams({
+            username: email,
+            password: password
+        });
+        
+        const proxies = [
+            'https://corsproxy.io/?',
+            'https://api.allorigins.win/raw?url='
+        ];
+        
+        let authenticated = false;
+        
+        for (const proxy of proxies) {
+            try {
+                const response = await fetch(proxy + encodeURIComponent(`${apiUrl}?${params.toString()}`));
+                
+                if (response.ok) {
+                    authenticated = true;
+                    break;
+                } else if (response.status === 403) {
+                    statusEl.textContent = '❌ Invalid credentials';
+                    statusEl.style.color = 'var(--color-danger)';
+                    return;
+                }
+            } catch (e) {
+                continue;
+            }
+        }
+        
+        if (authenticated) {
+            statusEl.textContent = '✓ Connection successful!';
+            statusEl.style.color = 'var(--color-success)';
+            
+            // Save credentials
+            localStorage.setItem(STORAGE_KEYS.INSTAPAPER_EMAIL, email);
+            localStorage.setItem(STORAGE_KEYS.INSTAPAPER_PASSWORD, password);
+        } else {
+            statusEl.textContent = '⚠️ Could not verify (will try when saving)';
+            statusEl.style.color = 'var(--color-warning)';
+        }
+    } catch (error) {
+        statusEl.textContent = '⚠️ Connection test failed';
+        statusEl.style.color = 'var(--color-warning)';
+    }
+}
+
+function showToast(message) {
+    // Create toast if doesn't exist
+    let toast = document.getElementById('toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast';
+        toast.className = 'toast';
+        document.body.appendChild(toast);
+    }
+    
+    toast.textContent = message;
+    toast.classList.add('show');
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 2000);
 }
 
 // ==========================================

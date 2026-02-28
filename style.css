@@ -473,37 +473,39 @@ a:hover {
     flex-shrink: 0;
 }
 
-.signal-context {
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    line-height: 1.5;
-    margin-bottom: var(--spacing-sm);
+.signal-description {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    line-height: 1.6;
+    margin-bottom: var(--spacing-md);
 }
 
-.signal-articles {
+.signal-source-list {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: var(--spacing-sm);
 }
 
-.signal-article-link {
+.signal-source-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.signal-source-link {
     font-size: 0.8rem;
     background: var(--color-primary);
     color: white;
-    padding: 8px 12px;
+    padding: 6px 12px;
     border-radius: 6px;
     text-decoration: none;
     transition: all var(--transition-fast);
     display: inline-block;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    cursor: pointer;
     font-weight: 500;
 }
 
-.signal-article-link:hover {
+.signal-source-link:hover {
     background: var(--color-primary-dark);
     text-decoration: none;
     transform: translateY(-1px);
@@ -511,11 +513,11 @@ a:hover {
 
 /* Dark mode */
 @media (prefers-color-scheme: dark) {
-    .signal-article-link {
+    .signal-source-link {
         background: #3b82f6;
     }
     
-    .signal-article-link:hover {
+    .signal-source-link:hover {
         background: #2563eb;
     }
 }
@@ -1647,15 +1649,15 @@ input[type="range"]::-moz-range-thumb {
         align-self: flex-start;
     }
     
-    .signal-articles {
+    .signal-source-list {
         flex-direction: column;
-        gap: var(--spacing-sm);
+        align-items: flex-start;
+        gap: var(--spacing-xs);
     }
     
-    .signal-article-link {
-        white-space: normal;
-        max-width: 100%;
-        text-align: left;
+    .signal-source-link {
+        width: 100%;
+        text-align: center;
     }
     
     /* Industry Groups - Mobile */
@@ -1815,4 +1817,26 @@ input[type="range"]::-moz-range-thumb {
         max-width: 100%;
         padding: 0;
     }
+}
+
+/* Toast notification */
+.toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--text-primary);
+    color: var(--bg-primary);
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 500;
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 10000;
+    box-shadow: var(--shadow-lg);
+}
+
+.toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
 }

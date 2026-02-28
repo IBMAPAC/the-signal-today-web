@@ -247,6 +247,24 @@
                         </div>
                     </section>
 
+                    <!-- Instapaper Integration -->
+                    <section class="settings-section">
+                        <h3>📥 Instapaper</h3>
+                        <p class="form-hint">Save articles directly to your Instapaper account</p>
+                        <div class="form-group">
+                            <label for="instapaper-email">Email or Username</label>
+                            <input type="text" id="instapaper-email" placeholder="you@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="instapaper-password">Password</label>
+                            <input type="password" id="instapaper-password" placeholder="Your Instapaper password">
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-secondary" onclick="testInstapaperConnection()">Test Connection</button>
+                            <span id="instapaper-status" class="form-hint"></span>
+                        </div>
+                    </section>
+
                     <!-- Source Management -->
                     <section class="settings-section">
                         <h3>📰 News Sources</h3>
