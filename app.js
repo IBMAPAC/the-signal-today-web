@@ -384,16 +384,29 @@ class SignalApp {
     }
 
     parseFeed(xmlText, source) {
-        const articles = [];
+        // Use regex-based parsing for all RSS feeds
+        // Browser DOMParser treats <link> as HTML void element, breaking RSS link extraction
+        // This mimics how iOS's XMLParser works with raw XML text
+        
+        // Check if it's RSS (has <item> elements) vs Atom (has <entry> elements)
+        const isRSS = /<item[\s>]/i.test(xmlText);
+        const isAtom = /<entry[\s>]/i.test(xmlText);
+        
+        if (isRSS) {
+            return this.parseFeedWithRegex(xmlText, source);
+        }
+        
+        // For Atom feeds, DOM parsing works fine since they use href attributes
         const parser = new DOMParser();
         const doc = parser.parseFromString(xmlText, 'text/xml');
+        const articles = [];
         
-        // Try RSS format
-        let items = doc.querySelectorAll('item');
+        // Atom format uses <entry> elements
+        const items = doc.querySelectorAll('entry');
         
-        // Try Atom format
         if (items.length === 0) {
-            items = doc.querySelectorAll('entry');
+            // Fallback: if no entries found, try regex parsing
+            return this.parseFeedWithRegex(xmlText, source);
         }
         
         // Process up to 20 items per source
@@ -409,13 +422,8 @@ class SignalApp {
             try {
                 let title = item.querySelector('title')?.textContent?.trim();
                 
-                // Extract the best URL for this specific article
+                // Extract the best URL for this specific article (Atom uses href attributes)
                 const link = this.extractBestLink(item);
-                
-                // Debug logging for link extraction issues
-                if (source.name === 'The New Stack' || source.name === 'MIT Tech Review') {
-                    console.log(`[${source.name}] Title: "${title?.substring(0, 50)}..." → Link: ${link}`);
-                }
                 
                 // Skip if we've already seen this URL (duplicate detection)
                 if (link && seenUrls.has(link)) {
@@ -503,6 +511,94 @@ class SignalApp {
         }
         
         return decoded;
+    }
+    
+    // Regex-based RSS parser that bypasses browser DOM quirks
+    // This mimics how iOS's XMLParser works with raw XML text
+    parseFeedWithRegex(xmlText, source) {
+        const articles = [];
+        const seenUrls = new Set();
+        const maxItems = 20;
+        
+        // Extract all <item> blocks using regex
+        const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi;
+        let itemMatch;
+        let count = 0;
+        
+        while ((itemMatch = itemRegex.exec(xmlText)) !== null && count < maxItems) {
+            const itemContent = itemMatch[1];
+            
+            // Extract title
+            const titleMatch = itemContent.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
+            let title = titleMatch ? titleMatch[1].trim() : '';
+            title = this.decodeHtmlEntities(title);
+            
+            // Extract link - FIXED: allow whitespace around URL
+            // Many RSS feeds have newlines/spaces around the URL
+            let link = '';
+            
+            // Try 1: Standard <link>URL</link> with possible whitespace
+            const linkMatch = itemContent.match(/<link[^>]*>\s*(?:<!\[CDATA\[)?\s*(https?:\/\/[^\s<>\[\]]+)\s*(?:\]\]>)?\s*<\/link>/i);
+            if (linkMatch) {
+                link = linkMatch[1].trim();
+            }
+            
+            // Try 2: If no link found, extract raw content and clean it
+            if (!link) {
+                const rawLinkMatch = itemContent.match(/<link[^>]*>([\s\S]*?)<\/link>/i);
+                if (rawLinkMatch) {
+                    const rawContent = rawLinkMatch[1].trim();
+                    // Extract URL from content (handles CDATA, whitespace, etc.)
+                    const urlExtract = rawContent.match(/https?:\/\/[^\s<>\[\]]+/);
+                    if (urlExtract) {
+                        link = urlExtract[0].trim();
+                    }
+                }
+            }
+            
+            // Try 3: guid as fallback
+            if (!link) {
+                const guidMatch = itemContent.match(/<guid[^>]*>\s*(?:<!\[CDATA\[)?\s*(https?:\/\/[^\s<>\[\]]+)\s*(?:\]\]>)?\s*<\/guid>/i);
+                if (guidMatch) {
+                    link = guidMatch[1].trim();
+                }
+            }
+            
+            // Extract pubDate
+            const dateMatch = itemContent.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i);
+            let pubDate = dateMatch ? dateMatch[1].trim() : '';
+            
+            // Extract description
+            const descMatch = itemContent.match(/<description[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i);
+            let description = descMatch ? descMatch[1].trim() : '';
+            description = description.replace(/<[^>]*>/g, '').substring(0, 500);
+            description = this.decodeHtmlEntities(description);
+            
+            // Skip duplicates
+            if (link && seenUrls.has(link)) {
+                continue;
+            }
+            
+            if (title && link) {
+                seenUrls.add(link);
+                articles.push({
+                    id: this.generateId(link),
+                    title: title,
+                    url: link,
+                    summary: description,
+                    sourceName: source.name,
+                    category: source.category,
+                    publishedDate: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+                    priority: source.priority,
+                    credibilityScore: source.credibilityScore,
+                    digestType: source.digestType
+                });
+                count++;
+            }
+        }
+        
+        console.log(`[${source.name}] Parsed ${articles.length} articles`);
+        return articles;
     }
     
     extractBestLink(item) {
