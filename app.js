@@ -396,7 +396,7 @@ class SignalApp {
             items = doc.querySelectorAll('entry');
         }
         
-        // Process up to 20 items per source (enough for comprehensive coverage)
+        // Process up to 20 items per source
         const maxItems = 20;
         let count = 0;
         
@@ -404,9 +404,9 @@ class SignalApp {
             if (count >= maxItems) break;
             
             try {
-                const title = item.querySelector('title')?.textContent?.trim();
+                let title = item.querySelector('title')?.textContent?.trim();
                 
-                // Extract the best URL - prioritize canonical/original links
+                // Extract the best URL for this specific article
                 const link = this.extractBestLink(item);
                 
                 const description = item.querySelector('description')?.textContent?.trim() ||
@@ -417,8 +417,12 @@ class SignalApp {
                                item.querySelector('updated')?.textContent;
                 
                 if (title && link) {
-                    // Clean HTML from description - keep full 500 chars for better context
-                    const cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 500);
+                    // Decode HTML entities in title
+                    title = this.decodeHtmlEntities(title);
+                    
+                    // Clean HTML from description and decode entities
+                    let cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 500);
+                    cleanDescription = this.decodeHtmlEntities(cleanDescription);
                     
                     articles.push({
                         id: this.generateId(link),
@@ -436,76 +440,96 @@ class SignalApp {
                 }
             } catch (e) {
                 // Skip malformed items
+                console.warn('Error parsing feed item:', e);
             }
         }
         
         return articles;
     }
     
+    decodeHtmlEntities(text) {
+        if (!text) return '';
+        
+        // Use textarea trick to decode HTML entities
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = text;
+        return textarea.value;
+    }
+    
     extractBestLink(item) {
-        // Priority order for finding the canonical article URL:
+        // For RSS feeds, guid is often the most reliable permalink
+        // Check guid FIRST as it's most commonly the article URL
         
-        // 1. Check for link with rel="canonical" (Atom)
-        const canonicalLink = item.querySelector('link[rel="canonical"]');
-        if (canonicalLink) {
-            return canonicalLink.getAttribute('href') || canonicalLink.textContent?.trim();
-        }
-        
-        // 2. Check for link with rel="alternate" and type="text/html" (Atom standard)
-        const alternateLink = item.querySelector('link[rel="alternate"][type="text/html"]');
-        if (alternateLink) {
-            return alternateLink.getAttribute('href');
-        }
-        
-        // 3. Check for link with rel="alternate" (Atom)
-        const altLink = item.querySelector('link[rel="alternate"]');
-        if (altLink) {
-            return altLink.getAttribute('href');
-        }
-        
-        // 4. Check for origLink (some feeds use this for original source)
-        const origLink = item.querySelector('origLink');
-        if (origLink) {
-            return origLink.textContent?.trim();
-        }
-        
-        // 5. Check for feedburner:origLink
-        const fbOrigLink = item.getElementsByTagName('feedburner:origLink')[0];
-        if (fbOrigLink) {
-            return fbOrigLink.textContent?.trim();
-        }
-        
-        // 6. Check guid with isPermaLink="true" (RSS)
-        const guid = item.querySelector('guid[isPermaLink="true"]');
-        if (guid && guid.textContent?.trim().startsWith('http')) {
-            return guid.textContent.trim();
-        }
-        
-        // 7. Check guid that looks like a URL (RSS)
-        const guidAny = item.querySelector('guid');
-        if (guidAny && guidAny.textContent?.trim().startsWith('http')) {
-            return guidAny.textContent.trim();
-        }
-        
-        // 8. First link element (RSS standard)
-        const firstLink = item.querySelector('link');
-        if (firstLink) {
-            // Check if it has href attribute (Atom) or text content (RSS)
-            const href = firstLink.getAttribute('href');
-            if (href) return href;
+        // 1. Check guid - most RSS feeds use this as the article URL
+        const guid = item.querySelector('guid');
+        if (guid) {
+            const guidText = guid.textContent?.trim();
+            const isPermalink = guid.getAttribute('isPermaLink');
             
-            const text = firstLink.textContent?.trim();
-            if (text && text.startsWith('http')) return text;
+            // If it's a URL and not explicitly marked as NOT a permalink, use it
+            if (guidText && guidText.startsWith('http') && isPermalink !== 'false') {
+                return guidText;
+            }
         }
         
-        // 9. Check all link elements for one that looks like an article URL
-        const allLinks = item.querySelectorAll('link');
-        for (const link of allLinks) {
-            const href = link.getAttribute('href') || link.textContent?.trim();
-            if (href && href.startsWith('http') && !href.includes('#comments') && !href.includes('/feed')) {
+        // 2. Check for feedburner:origLink (feeds through Feedburner)
+        try {
+            const fbOrigLink = item.getElementsByTagNameNS('http://rssnamespace.org/feedburner/ext/1.0', 'origLink')[0] ||
+                              item.getElementsByTagName('feedburner:origLink')[0];
+            if (fbOrigLink?.textContent?.trim()) {
+                return fbOrigLink.textContent.trim();
+            }
+        } catch (e) {}
+        
+        // 3. Check for origLink element
+        const origLink = item.querySelector('origLink');
+        if (origLink?.textContent?.trim()) {
+            return origLink.textContent.trim();
+        }
+        
+        // 4. For Atom feeds: link with rel="alternate" 
+        const atomLinks = item.querySelectorAll('link');
+        for (const link of atomLinks) {
+            const rel = link.getAttribute('rel');
+            const href = link.getAttribute('href');
+            
+            if ((rel === 'alternate' || !rel) && href && href.startsWith('http')) {
                 return href;
             }
         }
+        
+        // 5. RSS <link> element with text content
+        const rssLink = item.querySelector('link');
+        if (rssLink) {
+            // Some feeds have link as text content
+            const text = rssLink.textContent?.trim();
+            if (text && text.startsWith('http')) {
+                return text;
+            }
+            
+            // Some have it as href attribute
+            const href = rssLink.getAttribute('href');
+            if (href && href.startsWith('http')) {
+                return href;
+            }
+        }
+        
+        // 6. Look for URL in description as last resort
+        const description = item.querySelector('description')?.textContent || 
+                           item.querySelector('content')?.textContent || '';
+        
+        // Look for first http link in description
+        const urlMatch = description.match(/https?:\/\/[^\s<>"']+/);
+        if (urlMatch) {
+            const foundUrl = urlMatch[0].replace(/[.,;:!?)]+$/, ''); // Clean trailing punctuation
+            // Make sure it's not a feed/rss URL
+            if (!foundUrl.includes('/feed') && !foundUrl.includes('/rss') && !foundUrl.includes('#comments')) {
+                return foundUrl;
+            }
+        }
+        
+        // 7. If guid exists but doesn't start with http, it might still be useful
+        // (Some feeds use non-URL guids but have link elsewhere)
         
         return null;
     }
