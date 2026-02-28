@@ -766,6 +766,35 @@ a:hover {
     color: var(--color-primary);
 }
 
+.article-item-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-shrink: 0;
+}
+
+.quick-save-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 4px 6px;
+    border-radius: 4px;
+    opacity: 0.6;
+    transition: all var(--transition-fast);
+}
+
+.quick-save-btn:hover {
+    opacity: 1;
+    background: var(--bg-tertiary);
+    transform: scale(1.1);
+}
+
+.quick-save-btn.saved {
+    color: var(--color-success);
+    opacity: 1;
+}
+
 .article-item-score {
     font-size: 0.75rem;
     font-weight: 600;
@@ -1134,6 +1163,16 @@ a:hover {
     display: flex;
     gap: var(--spacing-sm);
     flex-wrap: wrap;
+}
+
+.article-actions .btn-instapaper {
+    background: #1D1D1D;
+    color: white;
+    border: none;
+}
+
+.article-actions .btn-instapaper:hover {
+    background: #333;
 }
 
 /* Digest Sections */

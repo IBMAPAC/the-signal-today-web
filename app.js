@@ -1218,7 +1218,10 @@ ${articleList}`;
             <div class="article-item" onclick="app.openArticle('${safeId}')">
                 <div class="article-item-header">
                     <span class="article-item-source">${this.escapeHtml(article.sourceName)}</span>
-                    <span class="article-item-score ${scoreClass}">${Math.round(article.relevanceScore * 100)}%</span>
+                    <div class="article-item-actions">
+                        <button class="quick-save-btn" onclick="quickSaveToInstapaper('${safeId}', event)" title="Save to Instapaper">📥</button>
+                        <span class="article-item-score ${scoreClass}">${Math.round(article.relevanceScore * 100)}%</span>
+                    </div>
                 </div>
                 <div class="article-item-title">${this.escapeHtml(article.title)}</div>
                 <div class="article-item-summary">${this.escapeHtml(article.summary?.substring(0, 150) || '')}</div>
@@ -1428,6 +1431,43 @@ function copyArticleLink() {
     if (article) {
         navigator.clipboard.writeText(article.url);
         alert('Link copied!');
+    }
+}
+
+function saveToInstapaper() {
+    const articleId = document.getElementById('article-modal').dataset.articleId;
+    const article = app.articles.find(a => a.id === articleId);
+    if (article) {
+        saveArticleToInstapaper(article.url, article.title);
+    }
+}
+
+function saveArticleToInstapaper(url, title) {
+    // Instapaper's simple save URL
+    const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
+    window.open(instapaperUrl, '_blank', 'width=500,height=600');
+}
+
+function quickSaveToInstapaper(articleId, event) {
+    // Prevent opening the article modal
+    if (event) {
+        event.stopPropagation();
+    }
+    
+    const article = app.articles.find(a => a.id === articleId);
+    if (article) {
+        saveArticleToInstapaper(article.url, article.title);
+        
+        // Visual feedback
+        if (event && event.target) {
+            const btn = event.target;
+            btn.textContent = '✓';
+            btn.classList.add('saved');
+            setTimeout(() => {
+                btn.textContent = '📥';
+                btn.classList.remove('saved');
+            }, 2000);
+        }
     }
 }
 
