@@ -2,7 +2,15 @@
 // The Signal Today - Web Application
 // =============================================
 
-const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+const CORS_PROXIES = [
+    'https://api.allorigins.win/raw?url=',
+    'https://corsproxy.io/?',
+    'https://api.codetabs.com/v1/proxy?quest='
+];
+
+// Feed cache to avoid refetching within 2 minutes (short enough to stay fresh)
+const feedCache = new Map();
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 const STORAGE_KEYS = {
     API_KEY: 'signal_api_key',
     SOURCES: 'signal_sources',
@@ -232,9 +240,11 @@ class SignalApp {
     // Refresh Flow
     // ==========================================
 
-    async refresh() {
+    async refresh(quickMode = false) {
         if (this.isLoading) return;
         this.isLoading = true;
+
+        const startTime = performance.now();
 
         try {
             this.showLoading('Fetching articles from RSS feeds...');
@@ -244,9 +254,9 @@ class SignalApp {
             console.log(`📡 Fetching from ${enabledSources.length} sources`);
             
             const fetchedArticles = await this.fetchArticles(enabledSources);
-            console.log(`📰 Fetched ${fetchedArticles.length} articles`);
+            console.log(`📰 Fetched ${fetchedArticles.length} articles in ${Math.round(performance.now() - startTime)}ms`);
             
-            this.showLoading('Scoring and analyzing articles...');
+            this.showLoading(`Scoring ${fetchedArticles.length} articles...`);
             
             // Score articles
             const scoredArticles = this.scoreArticles(fetchedArticles);
@@ -260,9 +270,9 @@ class SignalApp {
             // Categorize into daily/weekly
             this.categorizeArticles();
             
-            // Generate AI digest if API key available
+            // Generate AI digest if API key available (skip in quick mode)
             const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
-            if (apiKey) {
+            if (apiKey && !quickMode) {
                 this.showLoading('Generating AI-powered digest...');
                 await this.generateAIDigest(apiKey);
             } else {
@@ -274,6 +284,9 @@ class SignalApp {
             this.saveToStorage();
             this.renderDigest();
             this.updateUI();
+            
+            const totalTime = Math.round(performance.now() - startTime);
+            console.log(`✅ Refresh completed in ${totalTime}ms`);
             
         } catch (error) {
             console.error('Refresh error:', error);
@@ -290,14 +303,19 @@ class SignalApp {
 
     async fetchArticles(sources) {
         const articles = [];
-        const batchSize = 5;
+        const batchSize = 15; // Parallel batch size for speed
+        const fetchTimeout = 10000; // 10 second timeout (generous for slow feeds)
         
+        // Process in parallel batches
         for (let i = 0; i < sources.length; i += batchSize) {
             const batch = sources.slice(i, i + batchSize);
+            
+            // Fetch all in batch simultaneously with timeout
             const results = await Promise.allSettled(
-                batch.map(source => this.fetchFeed(source))
+                batch.map(source => this.fetchFeedWithTimeout(source, fetchTimeout))
             );
             
+            // Collect successful results
             for (const result of results) {
                 if (result.status === 'fulfilled' && result.value) {
                     articles.push(...result.value);
@@ -306,26 +324,61 @@ class SignalApp {
             
             // Update progress
             const progress = Math.min(100, Math.round((i + batchSize) / sources.length * 100));
-            this.showLoading(`Fetching feeds... ${progress}%`);
+            this.showLoading(`Fetching feeds... ${progress}% (${articles.length} articles)`);
         }
         
         return articles;
     }
 
-    async fetchFeed(source) {
+    async fetchFeedWithTimeout(source, timeout) {
+        // Check cache first
+        const cacheKey = source.url;
+        const cached = feedCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
+            return cached.articles;
+        }
+        
+        // Try all proxies in parallel, use first successful response
+        const fetchPromises = CORS_PROXIES.map(async (proxy) => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+            
+            try {
+                const response = await fetch(proxy + encodeURIComponent(source.url), {
+                    headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' },
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const text = await response.text();
+                return this.parseFeed(text, source);
+            } catch (error) {
+                clearTimeout(timeoutId);
+                throw error; // Let Promise.any handle it
+            }
+        });
+        
         try {
-            const response = await fetch(CORS_PROXY + encodeURIComponent(source.url), {
-                headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' }
-            });
+            // Promise.any returns first successful result
+            const articles = await Promise.any(fetchPromises);
             
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            // Cache successful result
+            feedCache.set(cacheKey, { articles, timestamp: Date.now() });
             
-            const text = await response.text();
-            return this.parseFeed(text, source);
+            return articles;
         } catch (error) {
-            console.warn(`Failed to fetch ${source.name}:`, error.message);
+            // All proxies failed
+            console.warn(`All proxies failed for ${source.name}`);
             return [];
         }
+    }
+
+    async fetchFeed(source) {
+        // Keep for backward compatibility
+        return this.fetchFeedWithTimeout(source, 5000);
     }
 
     parseFeed(xmlText, source) {
@@ -341,7 +394,13 @@ class SignalApp {
             items = doc.querySelectorAll('entry');
         }
         
-        items.forEach(item => {
+        // Process up to 20 items per source (enough for comprehensive coverage)
+        const maxItems = 20;
+        let count = 0;
+        
+        for (const item of items) {
+            if (count >= maxItems) break;
+            
             try {
                 const title = item.querySelector('title')?.textContent?.trim();
                 const link = item.querySelector('link')?.textContent?.trim() || 
@@ -354,7 +413,7 @@ class SignalApp {
                                item.querySelector('updated')?.textContent;
                 
                 if (title && link) {
-                    // Clean HTML from description
+                    // Clean HTML from description - keep full 500 chars for better context
                     const cleanDescription = description.replace(/<[^>]*>/g, '').substring(0, 500);
                     
                     articles.push({
@@ -369,11 +428,12 @@ class SignalApp {
                         credibilityScore: source.credibilityScore,
                         digestType: source.digestType
                     });
+                    count++;
                 }
             } catch (e) {
                 // Skip malformed items
             }
-        });
+        }
         
         return articles;
     }
