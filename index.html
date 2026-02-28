@@ -13,7 +13,7 @@
     <title>The Signal Today</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>" rel="noopener noreferrer">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
@@ -216,7 +216,8 @@
                         <div class="form-group">
                             <label for="api-key">API Key</label>
                             <input type="password" id="api-key" placeholder="sk-ant-...">
-                            <p class="form-hint">Get your API key from <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></p>
+                            <p class="form-hint">⚠️ Your API key is stored unencrypted in browser localStorage. Do not use on shared devices.</p>
+                            <p class="form-hint">Get your API key from <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">console.anthropic.com</a></p>
                         </div>
                     </section>
 
@@ -252,26 +253,14 @@
                     <!-- Instapaper Integration -->
                     <section class="settings-section">
                         <h3>📥 Instapaper</h3>
-                        <p class="form-hint">Save articles directly to your Instapaper account</p>
-                        <div class="form-group">
-                            <label for="instapaper-email">Email or Username</label>
-                            <input type="text" id="instapaper-email" placeholder="you@example.com">
-                        </div>
-                        <div class="form-group">
-                            <label for="instapaper-password">Password</label>
-                            <input type="password" id="instapaper-password" placeholder="Your Instapaper password">
-                        </div>
-                        <div class="form-group">
-                            <button class="btn btn-secondary" onclick="testInstapaperConnection()">Test Connection</button>
-                            <span id="instapaper-status" class="form-hint"></span>
-                        </div>
+                        <p class="form-hint">Save articles to Instapaper. Articles open the Instapaper save page in a new tab.</p>
                     </section>
 
                     <!-- Source Management -->
                     <section class="settings-section">
                         <h3>📰 News Sources</h3>
                         <div class="sources-header">
-                            <span id="sources-count">52 sources</span>
+                            <span id="sources-count">Loading sources...</span>
                             <div class="sources-actions">
                                 <button class="btn btn-secondary btn-sm" onclick="addNewSource()">+ Add Source</button>
                                 <button class="btn btn-secondary btn-sm" onclick="resetSources()">Reset Defaults</button>
@@ -322,7 +311,7 @@
                     </div>
                     <div id="article-summary" class="article-summary"></div>
                     <div class="article-actions">
-                        <a id="article-link" href="#" target="_blank" class="btn btn-primary">Read Full Article →</a>
+                        <a id="article-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Read Full Article →</a>
                         <button class="btn btn-instapaper" onclick="saveToInstapaper()">📥 Save to Instapaper</button>
                         <button class="btn btn-secondary" onclick="copyArticleLink()">📋 Copy Link</button>
                     </div>

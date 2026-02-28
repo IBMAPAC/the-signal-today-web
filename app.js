@@ -19,9 +19,10 @@ const STORAGE_KEYS = {
     ARTICLES: 'signal_articles',
     DIGEST: 'signal_digest',
     SETTINGS: 'signal_settings',
-    LAST_REFRESH: 'signal_last_refresh',
-    INSTAPAPER_EMAIL: 'signal_instapaper_email',
-    INSTAPAPER_PASSWORD: 'signal_instapaper_password'
+    LAST_REFRESH: 'signal_last_refresh'
+    // INSTAPAPER_EMAIL and INSTAPAPER_PASSWORD removed: storing passwords in localStorage
+    // exposes them to XSS and was transmitted via third-party CORS proxies in plaintext.
+    // Instapaper integration now uses the bookmarklet URL only (no credentials needed).
 };
 
 class SignalApp {
@@ -36,10 +37,11 @@ class SignalApp {
         this.settings = {
             dailyMinutes: 15,
             weeklyArticles: 10,
-            weeklyCurrencyDays: 7
+            weeklyCurrencyDays: 7  // Used for weekly article cutoff window
         };
         this.isLoading = false;
         this.currentTab = 'daily';
+        this.crossRefs = []; // Cached cross-reference results to avoid recomputation
         
         this.init();
     }
@@ -109,7 +111,9 @@ class SignalApp {
     categorizeArticles() {
         const now = new Date();
         const dailyCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000); // 48 hours
-        const weeklyCutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000); // 3 months (90 days)
+        // Use the configurable weeklyCurrencyDays setting (default 7 days)
+        const weeklyDays = this.settings.weeklyCurrencyDays || 7;
+        const weeklyCutoff = new Date(now.getTime() - weeklyDays * 24 * 60 * 60 * 1000);
         
         // Daily articles: from daily or both sources, within 48 hours
         // Apply source diversity: max 3 per source for daily
@@ -190,7 +194,8 @@ class SignalApp {
             .reduce((sum, a) => sum + (a.estimatedReadingMinutes || 2), 0);
         
         const badge = document.getElementById('reading-time');
-        badge.textContent = `${Math.min(totalMinutes, this.settings.dailyMinutes)}/${this.settings.dailyMinutes} min`;
+        // Show actual total vs budget (not capped) so user knows how far over budget they are
+        badge.textContent = `${totalMinutes}/${this.settings.dailyMinutes} min`;
         badge.classList.toggle('over-budget', totalMinutes > this.settings.dailyMinutes);
     }
 
@@ -378,11 +383,6 @@ class SignalApp {
         }
     }
 
-    async fetchFeed(source) {
-        // Keep for backward compatibility
-        return this.fetchFeedWithTimeout(source, 5000);
-    }
-
     parseFeed(xmlText, source) {
         // Use regex-based parsing for all RSS feeds
         // Browser DOMParser treats <link> as HTML void element, breaking RSS link extraction
@@ -568,8 +568,12 @@ class SignalApp {
             const dateMatch = itemContent.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i);
             let pubDate = dateMatch ? dateMatch[1].trim() : '';
             
-            // Extract description
-            const descMatch = itemContent.match(/<description[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/i);
+            // Extract description - handle CDATA correctly: capture content inside CDATA or plain text
+            // The (?:\]\]>)? was optional before, which caused "]]>" to appear in output when CDATA was present.
+            // Now we use two separate patterns: one for CDATA content, one for plain text.
+            const descCdataMatch = itemContent.match(/<description[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i);
+            const descPlainMatch = itemContent.match(/<description[^>]*>([\s\S]*?)<\/description>/i);
+            const descMatch = descCdataMatch || descPlainMatch;
             let description = descMatch ? descMatch[1].trim() : '';
             description = description.replace(/<[^>]*>/g, '').substring(0, 500);
             description = this.decodeHtmlEntities(description);
@@ -701,7 +705,19 @@ class SignalApp {
     }
 
     generateId(url) {
-        return btoa(url).replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+        // Use full base64 encoding without truncation to avoid ID collisions.
+        // btoa() may throw on non-Latin1 chars in URLs, so we encode first.
+        try {
+            return btoa(encodeURIComponent(url)).replace(/[^a-zA-Z0-9]/g, '');
+        } catch (e) {
+            // Fallback: hash the URL string manually
+            let hash = 0;
+            for (let i = 0; i < url.length; i++) {
+                hash = ((hash << 5) - hash) + url.charCodeAt(i);
+                hash |= 0;
+            }
+            return 'id' + Math.abs(hash).toString(36);
+        }
     }
 
     // ==========================================
@@ -709,15 +725,17 @@ class SignalApp {
     // ==========================================
 
     scoreArticles(articles) {
-        const crossRefs = this.detectCrossReferences(articles);
+        // Compute and cache cross-references once; reused in rendering to avoid double computation
+        this.crossRefs = this.detectCrossReferences(articles);
         
         return articles.map(article => {
             const text = `${article.title} ${article.summary}`.toLowerCase();
             
             // Calculate scores
             const industryMatch = this.detectIndustry(text);
-            const clientMatch = this.detectClient(text);
-            const crossRefBoost = this.getCrossRefBoost(article, crossRefs);
+            // Use detectAllClients() directly (detectClient() was a duplicate wrapper)
+            const allClients = this.detectAllClients(text);
+            const crossRefBoost = this.getCrossRefBoost(article, this.crossRefs);
             
             // Enhanced scoring formula
             let score = 0.20; // Lower base score
@@ -750,12 +768,11 @@ class SignalApp {
                 article.matchedIndustry = industryMatch.name;
             }
             
-            // Client match (updated to capture all matches)
-            if (clientMatch) {
+            // Client match - use all matched clients, boost if any found
+            if (allClients.length > 0) {
                 score += 0.25;
-                article.matchedClient = clientMatch;
-                // Also store all matched clients
-                article.allMatchedClients = this.detectAllClients(text);
+                article.matchedClient = allClients[0]; // First match for backward compat
+                article.allMatchedClients = allClients;
             }
             
             // Cross-reference boost (unchanged)
@@ -810,43 +827,10 @@ class SignalApp {
         return bestMatch;
     }
 
-    detectClient(text) {
-        // Use word boundary matching to avoid false positives
-        // e.g., "SK" shouldn't match "risk", "ANZ" shouldn't match "organization"
-        const matches = [];
-        
-        for (const client of this.clients) {
-            // Create regex with word boundaries
-            // For short names (2-3 chars), require exact word match
-            // For longer names, allow some flexibility
-            const clientLower = client.toLowerCase();
-            const textLower = text.toLowerCase();
-            
-            let isMatch = false;
-            
-            if (client.length <= 3) {
-                // Short names: require word boundaries on both sides
-                // Match "DBS" but not "adbs" or "dbss"
-                const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}\\b`, 'i');
-                isMatch = regex.test(text);
-            } else {
-                // Longer names: check for word boundary at start
-                const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}`, 'i');
-                isMatch = regex.test(text);
-            }
-            
-            if (isMatch) {
-                matches.push(client);
-            }
-        }
-        
-        // Return the first match for backward compatibility with scoring
-        // But store all matches on the article
-        return matches.length > 0 ? matches[0] : null;
-    }
-    
     detectAllClients(text) {
-        // Return all matched clients for an article
+        // Return all matched clients for an article.
+        // Uses word boundary matching to avoid false positives
+        // e.g., "SK" shouldn't match "risk", "ANZ" shouldn't match "organization"
         const matches = [];
         
         for (const client of this.clients) {
@@ -1078,9 +1062,8 @@ ${articleList}`;
     }
 
     renderDailyTab() {
-        // Render cross-source signals
-        const crossRefs = this.detectCrossReferences(this.articles);
-        this.renderCrossSourceSignals(crossRefs);
+        // Use cached crossRefs computed during scoring (avoids recomputing O(articles×themes×keywords))
+        this.renderCrossSourceSignals(this.crossRefs);
         
         // Render industry intelligence
         this.renderIndustryIntelligence();
@@ -1182,7 +1165,7 @@ ${articleList}`;
                     <div class="signal-source-list">
                         <span class="signal-source-label">Sources:</span>
                         ${Object.entries(sourceArticles).map(([sourceName, article]) => {
-                            return `<a class="signal-source-link" href="${this.escapeAttr(article.url)}" target="_blank" title="${this.escapeAttr(article.title)}">${this.escapeHtml(sourceName)}</a>`;
+                            return `<a class="signal-source-link" href="${this.escapeAttr(article.url)}" target="_blank" rel="noopener noreferrer" title="${this.escapeAttr(article.title)}">${this.escapeHtml(sourceName)}</a>`;
                         }).join('')}
                     </div>
                 </div>
@@ -1461,9 +1444,12 @@ ${articleList}`;
     }
     
     highlightClient(text, client) {
-        // Highlight the client name in the text
+        // Highlight the client name in the text.
+        // escapeHtml() is applied to the full text first, then we wrap matches in <mark>.
+        // The replacement uses a function to re-escape the matched text, preventing XSS
+        // from user-entered client names that might contain HTML characters.
         const regex = new RegExp(`\\b(${this.escapeRegex(client)})\\b`, 'gi');
-        return this.escapeHtml(text).replace(regex, '<mark>$1</mark>');
+        return this.escapeHtml(text).replace(regex, (match) => `<mark>${this.escapeHtml(match)}</mark>`);
     }
 
     renderSections(sections) {
@@ -1533,7 +1519,11 @@ ${articleList}`;
     // ==========================================
 
     openArticle(id) {
-        const article = this.articles.find(a => a.id === id);
+        // Search all article pools: this.articles is the master list (top 200),
+        // but weekly articles are also a subset so this covers both tabs.
+        const article = this.articles.find(a => a.id === id)
+            || this.weeklyArticles.find(a => a.id === id)
+            || this.dailyArticles.find(a => a.id === id);
         if (!article) return;
         
         document.getElementById('article-title').textContent = article.title;
@@ -1574,10 +1564,9 @@ ${articleList}`;
         document.getElementById('weekly-articles').value = this.settings.weeklyArticles;
         document.getElementById('clients-input').value = this.clients.join(', ');
         
-        // Load Instapaper settings
-        document.getElementById('instapaper-email').value = localStorage.getItem(STORAGE_KEYS.INSTAPAPER_EMAIL) || '';
-        document.getElementById('instapaper-password').value = localStorage.getItem(STORAGE_KEYS.INSTAPAPER_PASSWORD) || '';
-        document.getElementById('instapaper-status').textContent = '';
+        // Clean up any legacy Instapaper credentials that may have been stored by older versions
+        localStorage.removeItem('signal_instapaper_email');
+        localStorage.removeItem('signal_instapaper_password');
         
         // Render industry settings
         this.renderIndustrySettings();
@@ -1620,7 +1609,14 @@ ${articleList}`;
 
     formatMarkdownLinks(text) {
         if (!text) return '';
-        return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+        // Escape HTML first to prevent XSS from AI-generated content.
+        // Only allow https?:// URLs to block javascript: and data: URIs.
+        // Link text ($1) comes from the already-escaped string so it is safe.
+        const escaped = this.escapeHtml(text);
+        return escaped.replace(
+            /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+            '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
+        );
     }
 
     escapeHtml(text) {
@@ -1640,9 +1636,6 @@ ${articleList}`;
             .replace(/>/g, '&gt;');
     }
 
-    capitalizeFirst(str) {
-        return str.charAt(0).toUpperCase() + str.slice(1);
-    }
 }
 
 // ==========================================
@@ -1681,27 +1674,22 @@ function closeSettings() {
 
 function saveSettings() {
     const apiKey = document.getElementById('api-key').value.trim();
-    const dailyMinutes = parseInt(document.getElementById('daily-minutes').value) || 15;
-    const weeklyArticles = parseInt(document.getElementById('weekly-articles').value) || 5;
+
+    // Clamp daily minutes between 5 and 60 (JS-side validation in addition to HTML min/max)
+    const rawDailyMinutes = parseInt(document.getElementById('daily-minutes').value) || 15;
+    const dailyMinutes = Math.max(5, Math.min(60, rawDailyMinutes));
+
+    // Clamp weekly articles between 3 and 20
+    const rawWeeklyArticles = parseInt(document.getElementById('weekly-articles').value) || 5;
+    const weeklyArticles = Math.max(3, Math.min(20, rawWeeklyArticles));
+
     const clientsInput = document.getElementById('clients-input').value;
     
-    // Save API key
+    // Save API key to localStorage (NOTE: stored unencrypted - user was warned in Settings UI)
     if (apiKey) {
         localStorage.setItem(STORAGE_KEYS.API_KEY, apiKey);
     } else {
         localStorage.removeItem(STORAGE_KEYS.API_KEY);
-    }
-    
-    // Save Instapaper credentials
-    const instapaperEmail = document.getElementById('instapaper-email').value.trim();
-    const instapaperPassword = document.getElementById('instapaper-password').value;
-    
-    if (instapaperEmail && instapaperPassword) {
-        localStorage.setItem(STORAGE_KEYS.INSTAPAPER_EMAIL, instapaperEmail);
-        localStorage.setItem(STORAGE_KEYS.INSTAPAPER_PASSWORD, instapaperPassword);
-    } else {
-        localStorage.removeItem(STORAGE_KEYS.INSTAPAPER_EMAIL);
-        localStorage.removeItem(STORAGE_KEYS.INSTAPAPER_PASSWORD);
     }
     
     // Save settings
@@ -1758,66 +1746,15 @@ function saveToInstapaper() {
     }
 }
 
-async function saveArticleToInstapaper(url, title) {
-    const email = localStorage.getItem(STORAGE_KEYS.INSTAPAPER_EMAIL);
-    const password = localStorage.getItem(STORAGE_KEYS.INSTAPAPER_PASSWORD);
-    
-    if (!email || !password) {
-        // Fall back to bookmarklet-style URL if no credentials
-        const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
-        window.open(instapaperUrl, '_blank', 'width=500,height=600');
-        return;
-    }
-    
-    try {
-        // Use Instapaper Simple API through CORS proxy
-        const apiUrl = 'https://www.instapaper.com/api/add';
-        const params = new URLSearchParams({
-            username: email,
-            password: password,
-            url: url,
-            title: title
-        });
-        
-        // Try multiple CORS proxies
-        const proxies = [
-            'https://corsproxy.io/?',
-            'https://api.allorigins.win/raw?url='
-        ];
-        
-        let success = false;
-        
-        for (const proxy of proxies) {
-            try {
-                const response = await fetch(proxy + encodeURIComponent(`${apiUrl}?${params.toString()}`), {
-                    method: 'GET'
-                });
-                
-                if (response.ok) {
-                    success = true;
-                    break;
-                }
-            } catch (e) {
-                continue;
-            }
-        }
-        
-        if (success) {
-            showToast('✓ Saved to Instapaper');
-        } else {
-            // Fall back to bookmarklet URL
-            const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
-            window.open(instapaperUrl, '_blank', 'width=500,height=600');
-        }
-    } catch (error) {
-        console.error('Instapaper save error:', error);
-        // Fall back to bookmarklet URL
-        const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
-        window.open(instapaperUrl, '_blank', 'width=500,height=600');
-    }
+// Instapaper integration uses the bookmarklet-style URL only.
+// Credential-based API calls through third-party CORS proxies were removed because
+// they exposed the user's password to proxy operators in plaintext GET query strings.
+function saveArticleToInstapaper(url, title) {
+    const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
+    window.open(instapaperUrl, '_blank', 'noopener,noreferrer,width=500,height=600');
 }
 
-async function quickSaveToInstapaper(articleId, event) {
+function quickSaveToInstapaper(articleId, event) {
     // Prevent opening the article modal
     if (event) {
         event.stopPropagation();
@@ -1826,95 +1763,17 @@ async function quickSaveToInstapaper(articleId, event) {
     const article = app.articles.find(a => a.id === articleId);
     if (!article) return;
     
+    saveArticleToInstapaper(article.url, article.title);
+    
+    // Visual feedback
     const btn = event?.target;
     if (btn) {
-        btn.textContent = '⏳';
-        btn.disabled = true;
-    }
-    
-    try {
-        await saveArticleToInstapaper(article.url, article.title);
-        
-        if (btn) {
-            btn.textContent = '✓';
-            btn.classList.add('saved');
-            setTimeout(() => {
-                btn.textContent = '📥';
-                btn.classList.remove('saved');
-                btn.disabled = false;
-            }, 2000);
-        }
-    } catch (error) {
-        if (btn) {
-            btn.textContent = '❌';
-            setTimeout(() => {
-                btn.textContent = '📥';
-                btn.disabled = false;
-            }, 2000);
-        }
-    }
-}
-
-async function testInstapaperConnection() {
-    const email = document.getElementById('instapaper-email').value.trim();
-    const password = document.getElementById('instapaper-password').value;
-    const statusEl = document.getElementById('instapaper-status');
-    
-    if (!email || !password) {
-        statusEl.textContent = '⚠️ Please enter email and password';
-        statusEl.style.color = 'var(--color-warning)';
-        return;
-    }
-    
-    statusEl.textContent = '⏳ Testing...';
-    statusEl.style.color = 'var(--text-secondary)';
-    
-    try {
-        // Test with Instapaper's authenticate endpoint
-        const apiUrl = 'https://www.instapaper.com/api/authenticate';
-        const params = new URLSearchParams({
-            username: email,
-            password: password
-        });
-        
-        const proxies = [
-            'https://corsproxy.io/?',
-            'https://api.allorigins.win/raw?url='
-        ];
-        
-        let authenticated = false;
-        
-        for (const proxy of proxies) {
-            try {
-                const response = await fetch(proxy + encodeURIComponent(`${apiUrl}?${params.toString()}`));
-                
-                if (response.ok) {
-                    authenticated = true;
-                    break;
-                } else if (response.status === 403) {
-                    statusEl.textContent = '❌ Invalid credentials';
-                    statusEl.style.color = 'var(--color-danger)';
-                    return;
-                }
-            } catch (e) {
-                continue;
-            }
-        }
-        
-        if (authenticated) {
-            statusEl.textContent = '✓ Connection successful!';
-            statusEl.style.color = 'var(--color-success)';
-            
-            // Save credentials
-            localStorage.setItem(STORAGE_KEYS.INSTAPAPER_EMAIL, email);
-            localStorage.setItem(STORAGE_KEYS.INSTAPAPER_PASSWORD, password);
-        } else {
-            statusEl.textContent = '⚠️ Could not verify (will try when saving)';
-            statusEl.style.color = 'var(--color-warning)';
-        }
-    } catch (error) {
-        statusEl.textContent = '⚠️ Connection test failed';
-        statusEl.style.color = 'var(--color-warning)';
+        btn.textContent = '✓';
+        btn.classList.add('saved');
+        setTimeout(() => {
+            btn.textContent = '📥';
+            btn.classList.remove('saved');
+        }, 2000);
     }
 }
 
