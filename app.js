@@ -667,6 +667,21 @@ class SignalApp {
         return decoded;
     }
     
+    // Decode XML/HTML entities specifically in URLs
+    // Uses string splitting to avoid regex entity encoding issues
+    decodeUrlEntities(url) {
+        if (!url) return '';
+        // Decode XML/HTML entities that commonly appear in feed URLs
+        let result = url;
+        result = result.split('&amp;').join('&');
+        result = result.split('&lt;').join('<');
+        result = result.split('&gt;').join('>');
+        result = result.split('&quot;').join('"');
+        result = result.split('&#39;').join(String.fromCharCode(39));
+        result = result.split('&apos;').join(String.fromCharCode(39));
+        return result;
+    }
+    
     // Regex-based RSS parser that bypasses browser DOM quirks
     // This mimics how iOS's XMLParser works with raw XML text
     parseFeedWithRegex(xmlText, source) {
@@ -691,10 +706,13 @@ class SignalApp {
             // Many RSS feeds have newlines/spaces around the URL
             let link = '';
             
-            // Try 1: Standard <link>URL</link> with possible whitespace
+            // Try 1: Standard <link>URL</link> with possible whitespace and HTML entities
+            // InfoQ and many feeds encode & as & in URLs inside XML
             const linkMatch = itemContent.match(/<link[^>]*>\s*(?:<!\[CDATA\[)?\s*(https?:\/\/[^\s<>\[\]]+)\s*(?:\]\]>)?\s*<\/link>/i);
             if (linkMatch) {
                 link = linkMatch[1].trim();
+                // Decode XML/HTML entities in URL (e.g. InfoQ encodes & as & in feed URLs)
+                link = this.decodeUrlEntities(link);
             }
             
             // Try 2: If no link found, extract raw content and clean it
@@ -706,6 +724,8 @@ class SignalApp {
                     const urlExtract = rawContent.match(/https?:\/\/[^\s<>\[\]]+/);
                     if (urlExtract) {
                         link = urlExtract[0].trim();
+                        // Decode XML/HTML entities in URL
+                        link = this.decodeUrlEntities(link);
                     }
                 }
             }
@@ -715,6 +735,8 @@ class SignalApp {
                 const guidMatch = itemContent.match(/<guid[^>]*>\s*(?:<!\[CDATA\[)?\s*(https?:\/\/[^\s<>\[\]]+)\s*(?:\]\]>)?\s*<\/guid>/i);
                 if (guidMatch) {
                     link = guidMatch[1].trim();
+                    // Decode XML/HTML entities in URL
+                    link = this.decodeUrlEntities(link);
                 }
             }
             
@@ -729,8 +751,11 @@ class SignalApp {
             const descPlainMatch = itemContent.match(/<description[^>]*>([\s\S]*?)<\/description>/i);
             const descMatch = descCdataMatch || descPlainMatch;
             let description = descMatch ? descMatch[1].trim() : '';
-            description = description.replace(/<[^>]*>/g, '').substring(0, 500);
+            // Decode HTML entities FIRST (handles feeds like InfoQ that HTML-encode their HTML content,
+            // e.g. <img src="..."><p>text</p> becomes <img src="..."><p>text</p>)
             description = this.decodeHtmlEntities(description);
+            // Then strip all HTML tags (both original tags and those revealed by entity decoding)
+            description = description.replace(/<[^>]*>/g, '').trim().substring(0, 500);
             
             // Skip duplicates
             if (link && seenUrls.has(link)) {
