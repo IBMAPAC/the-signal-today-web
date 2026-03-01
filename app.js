@@ -20,7 +20,9 @@ const STORAGE_KEYS = {
     DIGEST: 'signal_digest',
     SETTINGS: 'signal_settings',
     LAST_REFRESH: 'signal_last_refresh',
-    TREND_HISTORY: 'signal_trend_history'
+    TREND_HISTORY: 'signal_trend_history',
+    ARTICLE_RATINGS: 'signal_article_ratings',   // Per-article 👍/👎 feedback
+    SOURCE_SCORE_DRIFT: 'signal_score_drift'      // Accumulated score drift per source
     // INSTAPAPER_EMAIL and INSTAPAPER_PASSWORD removed: storing passwords in localStorage
     // exposes them to XSS and was transmitted via third-party CORS proxies in plaintext.
     // Instapaper integration now uses the bookmarklet URL only (no credentials needed).
@@ -48,6 +50,8 @@ class SignalApp {
         this.crossRefs = []; // Cached cross-reference results to avoid recomputation
         this.focusedArticleIndex = -1; // For keyboard navigation
         this.autoRefreshTimer = null;
+        this.articleRatings = {};   // { articleId: 1 (👍) | -1 (👎) }
+        this.sourceScoreDrift = {}; // { sourceName: delta } — accumulated from ratings
         
         this.init();
     }
@@ -109,6 +113,13 @@ class SignalApp {
         if (savedSettings) {
             this.settings = { ...this.settings, ...JSON.parse(savedSettings) };
         }
+        
+        // Load article ratings and source score drift (feedback loop)
+        const savedRatings = localStorage.getItem(STORAGE_KEYS.ARTICLE_RATINGS);
+        this.articleRatings = savedRatings ? JSON.parse(savedRatings) : {};
+        
+        const savedDrift = localStorage.getItem(STORAGE_KEYS.SOURCE_SCORE_DRIFT);
+        this.sourceScoreDrift = savedDrift ? JSON.parse(savedDrift) : {};
     }
 
     saveToStorage() {
@@ -117,6 +128,8 @@ class SignalApp {
         localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(this.clients));
         localStorage.setItem(STORAGE_KEYS.ARTICLES, JSON.stringify(this.articles));
         localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(this.settings));
+        localStorage.setItem(STORAGE_KEYS.ARTICLE_RATINGS, JSON.stringify(this.articleRatings));
+        localStorage.setItem(STORAGE_KEYS.SOURCE_SCORE_DRIFT, JSON.stringify(this.sourceScoreDrift));
         if (this.digest) {
             localStorage.setItem(STORAGE_KEYS.DIGEST, JSON.stringify(this.digest));
         }
@@ -965,6 +978,11 @@ class SignalApp {
             const dealBoost = this.calculateDealRelevance(text, allClients);
             score += dealBoost;
             
+            // Feedback loop: apply accumulated source score drift from 👍/👎 ratings
+            // Drift is capped at ±0.15 to prevent runaway amplification
+            const drift = this.sourceScoreDrift[article.sourceName] || 0;
+            score += Math.max(-0.15, Math.min(0.15, drift));
+            
             // Signal type classification
             article.signalType = this.classifySignalType(text, allClients);
             
@@ -975,6 +993,60 @@ class SignalApp {
             article.relevanceScore = Math.min(1, score);
             return article;
         });
+    }
+
+    // ==========================================
+    // Article Feedback (👍/👎 rating + score drift)
+    // ==========================================
+
+    rateArticle(id, rating, event) {
+        // Stop click from bubbling up to the article-item div (which opens the article)
+        if (event) event.stopPropagation();
+        
+        // rating: 1 (👍) or -1 (👎)
+        const article = this.articles.find(a => a.id === id)
+            || this.dailyArticles.find(a => a.id === id)
+            || this.weeklyArticles.find(a => a.id === id);
+        if (!article) return;
+        
+        const previousRating = this.articleRatings[id] || 0;
+        let toastLabel;
+        
+        // Toggle off if same rating clicked again
+        if (previousRating === rating) {
+            delete this.articleRatings[id];
+            // Reverse the drift contribution
+            this.sourceScoreDrift[article.sourceName] =
+                (this.sourceScoreDrift[article.sourceName] || 0) - (rating * 0.02);
+            toastLabel = '↩️ Rating removed';
+        } else {
+            // Remove previous rating's drift contribution before applying new one
+            if (previousRating !== 0) {
+                this.sourceScoreDrift[article.sourceName] =
+                    (this.sourceScoreDrift[article.sourceName] || 0) - (previousRating * 0.02);
+            }
+            this.articleRatings[id] = rating;
+            // Each rating nudges the source's drift by ±0.02
+            // After ~7 consistent 👍 ratings, a source gets +0.14 boost (near the cap)
+            this.sourceScoreDrift[article.sourceName] =
+                (this.sourceScoreDrift[article.sourceName] || 0) + (rating * 0.02);
+            toastLabel = rating === 1 ? '👍 Noted — this source will rank higher' : '👎 Noted — this source will rank lower';
+        }
+        
+        this.saveToStorage();
+        
+        // Re-render the article item in place to reflect new rating state
+        const articleEl = document.querySelector(`[data-article-id="${this.escapeAttr(id)}"]`);
+        if (articleEl) {
+            const updatedArticle = this.articles.find(a => a.id === id)
+                || this.dailyArticles.find(a => a.id === id)
+                || this.weeklyArticles.find(a => a.id === id);
+            if (updatedArticle) {
+                articleEl.outerHTML = this.renderArticleItem(updatedArticle);
+            }
+        }
+        
+        showToast(toastLabel);
     }
 
     calculateDealRelevance(text, matchedClients) {
@@ -1208,9 +1280,38 @@ class SignalApp {
     // ==========================================
 
     async generateAIDigest(apiKey) {
-        const topArticles = this.dailyArticles.slice(0, 20);
+        // Category-aware sampling: take top articles by score, but guarantee at least
+        // 1 article per active category so regulatory/ASEAN signals aren't dropped.
+        const TOTAL_ARTICLES = 35;
+        const byCategory = {};
+        for (const article of this.dailyArticles) {
+            if (!byCategory[article.category]) byCategory[article.category] = [];
+            byCategory[article.category].push(article);
+        }
         
-        const articleList = topArticles.map((a, i) =>
+        // Seed with the best article from each category (already sorted by score)
+        const seeded = new Set();
+        const sampledArticles = [];
+        for (const articles of Object.values(byCategory)) {
+            if (articles.length > 0) {
+                sampledArticles.push(articles[0]);
+                seeded.add(articles[0].id);
+            }
+        }
+        
+        // Fill remaining slots from the top-scored articles not already included
+        for (const article of this.dailyArticles) {
+            if (sampledArticles.length >= TOTAL_ARTICLES) break;
+            if (!seeded.has(article.id)) {
+                sampledArticles.push(article);
+                seeded.add(article.id);
+            }
+        }
+        
+        // Sort final set by score descending so Claude sees highest-value articles first
+        sampledArticles.sort((a, b) => b.relevanceScore - a.relevanceScore);
+        
+        const articleList = sampledArticles.map((a, i) =>
             `[${i + 1}] Source: ${a.sourceName} | URL: ${a.url}\nTitle: ${a.title}\nSummary: ${a.summary?.substring(0, 200) || 'No summary'}`
         ).join('\n\n');
 
@@ -1398,38 +1499,88 @@ ${articleList}`;
         document.getElementById('weekly-reading-time').textContent = totalReadingTime;
         document.getElementById('weekly-source-count').textContent = uniqueSources;
         
-        // Group by category
+        // ── Top 3 Must Reads ──────────────────────────────────────────────
+        // Pick the 3 highest-scored weekly articles (already sorted by score)
+        const top3Section = document.getElementById('weekly-top3-section');
+        const top3List = document.getElementById('weekly-top3-list');
+        const top3 = this.weeklyArticles.slice(0, 3);
+        
+        if (top3.length > 0) {
+            const medals = ['🥇', '🥈', '🥉'];
+            top3List.innerHTML = top3.map((article, i) => {
+                const safeId = this.escapeAttr(article.id);
+                const categoryInfo = CATEGORIES[article.category] || { emoji: '📰' };
+                const readTime = article.estimatedReadingMinutes || 3;
+                const scoreClass = article.relevanceScore >= 0.7 ? 'high' : article.relevanceScore >= 0.5 ? 'medium' : '';
+                const readClass = article.isRead ? ' article-read' : '';
+                const rating = this.articleRatings[article.id] || 0;
+                const thumbUpClass = rating === 1 ? ' rating-active' : '';
+                const thumbDownClass = rating === -1 ? ' rating-active' : '';
+                
+                return `
+                    <div class="weekly-top3-item${readClass}" data-article-id="${safeId}" onclick="app.openArticle('${safeId}')">
+                        <div class="weekly-top3-medal">${medals[i]}</div>
+                        <div class="weekly-top3-body">
+                            <div class="weekly-top3-meta">
+                                <span class="weekly-top3-source">${this.escapeHtml(article.sourceName)}</span>
+                                <span class="weekly-top3-category">${categoryInfo.emoji} ${this.escapeHtml(article.category)}</span>
+                                <span class="weekly-top3-time">~${readTime} min read</span>
+                                <span class="article-item-score ${scoreClass}">${Math.round(article.relevanceScore * 100)}%</span>
+                            </div>
+                            <div class="weekly-top3-title">${this.escapeHtml(article.title)}</div>
+                            <div class="weekly-top3-summary">${this.escapeHtml(article.summary?.substring(0, 200) || '')}</div>
+                            <div class="weekly-top3-actions">
+                                <a href="${this.escapeAttr(article.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" onclick="event.stopPropagation()">Read →</a>
+                                <button class="rating-btn thumb-up${thumbUpClass}" onclick="app.rateArticle('${safeId}', 1, event)" title="👍 Good article">👍</button>
+                                <button class="rating-btn thumb-down${thumbDownClass}" onclick="app.rateArticle('${safeId}', -1, event)" title="👎 Not useful">👎</button>
+                                <button class="quick-save-btn" onclick="quickSaveToInstapaper('${safeId}', event)" title="Save to Instapaper">📥</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            top3Section.classList.remove('hidden');
+        } else {
+            top3Section.classList.add('hidden');
+        }
+        
+        // ── By Category ───────────────────────────────────────────────────
+        // Group by category, excluding the top 3 articles to avoid duplication
+        const top3Ids = new Set(top3.map(a => a.id));
         const byCategory = {};
         for (const article of this.weeklyArticles) {
+            if (top3Ids.has(article.id)) continue; // already shown in top 3
             if (!byCategory[article.category]) {
                 byCategory[article.category] = [];
             }
             byCategory[article.category].push(article);
         }
         
-        // Render categories
-        const categoriesHtml = Object.entries(byCategory).map(([category, articles]) => {
-            const categoryInfo = CATEGORIES[category] || { emoji: '📰' };
-            
-            return `
-                <div class="weekly-category">
-                    <div class="weekly-category-header">
-                        <span>${categoryInfo.emoji}</span>
-                        <span>${category}</span>
-                        <span class="badge">${articles.length}</span>
+        // Render categories (only categories that still have articles after top-3 exclusion)
+        const categoriesHtml = Object.entries(byCategory)
+            .filter(([, articles]) => articles.length > 0)
+            .map(([category, articles]) => {
+                const categoryInfo = CATEGORIES[category] || { emoji: '📰' };
+                
+                return `
+                    <div class="weekly-category">
+                        <div class="weekly-category-header">
+                            <span>${categoryInfo.emoji}</span>
+                            <span>${category}</span>
+                            <span class="badge">${articles.length}</span>
+                        </div>
+                        <div class="weekly-category-articles">
+                            ${articles.map(a => this.renderArticleItem(a)).join('')}
+                        </div>
                     </div>
-                    <div class="weekly-category-articles">
-                        ${articles.map(a => this.renderArticleItem(a)).join('')}
-                    </div>
-                </div>
-            `;
-        }).join('');
+                `;
+            }).join('');
         
         document.getElementById('weekly-categories').innerHTML = categoriesHtml;
         
-        // All weekly articles
+        // All weekly articles (full list, including top 3, for reference)
         document.getElementById('weekly-articles-count').textContent = this.weeklyArticles.length;
-        document.getElementById('weekly-articles-list').innerHTML = 
+        document.getElementById('weekly-articles-list').innerHTML =
             this.weeklyArticles.map(a => this.renderArticleItem(a)).join('');
     }
 
@@ -1860,12 +2011,22 @@ ${articleList}`;
         const scoreClass = article.relevanceScore >= 0.7 ? 'high' : article.relevanceScore >= 0.5 ? 'medium' : '';
         const safeId = this.escapeAttr(article.id);
         const readClass = article.isRead ? ' article-read' : '';
+        const rating = this.articleRatings[article.id] || 0;
+        const thumbUpClass = rating === 1 ? ' rating-active' : '';
+        const thumbDownClass = rating === -1 ? ' rating-active' : '';
+        // Show source drift hint if non-zero
+        const drift = this.sourceScoreDrift[article.sourceName] || 0;
+        const driftHint = drift > 0.04 ? ` title="You've rated this source highly — it ranks higher"`
+                        : drift < -0.04 ? ` title="You've downrated this source — it ranks lower"`
+                        : '';
         
         return `
-            <div class="article-item${readClass}" onclick="app.openArticle('${safeId}')">
+            <div class="article-item${readClass}" data-article-id="${safeId}" onclick="app.openArticle('${safeId}')">
                 <div class="article-item-header">
-                    <span class="article-item-source">${this.escapeHtml(article.sourceName)}</span>
+                    <span class="article-item-source"${driftHint}>${this.escapeHtml(article.sourceName)}</span>
                     <div class="article-item-actions">
+                        <button class="rating-btn thumb-up${thumbUpClass}" onclick="app.rateArticle('${safeId}', 1, event)" title="👍 Good article — rank this source higher">👍</button>
+                        <button class="rating-btn thumb-down${thumbDownClass}" onclick="app.rateArticle('${safeId}', -1, event)" title="👎 Not useful — rank this source lower">👎</button>
                         <button class="quick-save-btn" onclick="quickSaveToInstapaper('${safeId}', event)" title="Save to Instapaper">📥</button>
                         <span class="article-item-score ${scoreClass}">${Math.round(article.relevanceScore * 100)}%</span>
                     </div>

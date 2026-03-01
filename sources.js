@@ -394,6 +394,79 @@ const DEFAULT_SOURCES = [
         digestType: "both",
         enabled: true
     },
+    // NEW: ASEAN coverage — Indonesia, Vietnam, Malaysia, Thailand, Philippines
+    {
+        name: "Katadata Indonesia",
+        url: "https://katadata.co.id/rss",
+        category: "APAC Enterprise",
+        priority: 1,
+        credibilityScore: 0.80,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "DailySocial Indonesia",
+        url: "https://dailysocial.id/feed",
+        category: "APAC Enterprise",
+        priority: 2,
+        credibilityScore: 0.75,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "VnExpress Tech",
+        url: "https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss",
+        category: "APAC Enterprise",
+        priority: 1,
+        credibilityScore: 0.80,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "Vietnam Investment Review Tech",
+        url: "https://vir.com.vn/rss/technology.rss",
+        category: "APAC Enterprise",
+        priority: 2,
+        credibilityScore: 0.80,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "Digital News Asia",
+        url: "https://www.digitalnewsasia.com/rss.xml",
+        category: "APAC Enterprise",
+        priority: 1,
+        credibilityScore: 0.80,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "The Edge Malaysia",
+        url: "https://theedgemalaysia.com/rss/technology",
+        category: "APAC Enterprise",
+        priority: 1,
+        credibilityScore: 0.85,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "Bangkok Post Tech",
+        url: "https://www.bangkokpost.com/rss/data/tech.xml",
+        category: "APAC Enterprise",
+        priority: 1,
+        credibilityScore: 0.80,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "BusinessWorld Philippines",
+        url: "https://www.bworldonline.com/feed/",
+        category: "APAC Enterprise",
+        priority: 2,
+        credibilityScore: 0.75,
+        digestType: "daily",
+        enabled: true
+    },
 
     // ============================================
     // 🇨🇳 CHINA & TECH GEOPOLITICS (6 sources)
@@ -454,8 +527,50 @@ const DEFAULT_SOURCES = [
     },
 
     // ============================================
-    // ⚔️ COMPETITIVE LANDSCAPE (19 sources)
+    // ⚔️ COMPETITIVE LANDSCAPE (24 sources)
+    // Analyst commentary sources moved here from Strategic Perspectives —
+    // they provide competitive intelligence, not just strategic reading.
+    // Vendor blogs (Azure/AWS/GCP) retained for signal detection but
+    // credibility-scored low (0.60) to reflect marketing bias.
     // ============================================
+    // --- Analyst Commentary (highest value competitive intel) ---
+    {
+        name: "Gartner Blog",
+        url: "https://blogs.gartner.com/feed/",
+        category: "Competitive Landscape",
+        priority: 1,
+        credibilityScore: 0.95,
+        digestType: "both",
+        enabled: true
+    },
+    {
+        name: "Forrester Blog",
+        url: "https://www.forrester.com/blogs/feed/",
+        category: "Competitive Landscape",
+        priority: 1,
+        credibilityScore: 0.95,
+        digestType: "both",
+        enabled: true
+    },
+    {
+        name: "IDC Insights",
+        url: "https://www.idc.com/rss/press-releases.xml",
+        category: "Competitive Landscape",
+        priority: 1,
+        credibilityScore: 0.95,
+        digestType: "both",
+        enabled: true
+    },
+    {
+        name: "451 Research",
+        url: "https://451research.com/feed",
+        category: "Competitive Landscape",
+        priority: 1,
+        credibilityScore: 0.90,
+        digestType: "both",
+        enabled: true
+    },
+    // --- Trade press (independent competitive coverage) ---
     {
         name: "CIO Dive",
         url: "https://www.ciodive.com/feeds/news/",
@@ -483,12 +598,13 @@ const DEFAULT_SOURCES = [
         digestType: "daily",
         enabled: true
     },
+    // --- Competitor vendor blogs (marketing content — low credibility score) ---
     {
         name: "Microsoft Azure Blog",
         url: "https://azure.microsoft.com/en-us/blog/feed/",
         category: "Competitive Landscape",
         priority: 1,
-        credibilityScore: 0.70,
+        credibilityScore: 0.60,
         digestType: "daily",
         enabled: true
     },
@@ -497,7 +613,7 @@ const DEFAULT_SOURCES = [
         url: "https://aws.amazon.com/blogs/aws/feed/",
         category: "Competitive Landscape",
         priority: 1,
-        credibilityScore: 0.70,
+        credibilityScore: 0.60,
         digestType: "daily",
         enabled: true
     },
@@ -506,7 +622,7 @@ const DEFAULT_SOURCES = [
         url: "https://cloud.google.com/blog/feed",
         category: "Competitive Landscape",
         priority: 1,
-        credibilityScore: 0.70,
+        credibilityScore: 0.60,
         digestType: "daily",
         enabled: true
     },
@@ -515,7 +631,7 @@ const DEFAULT_SOURCES = [
         url: "https://www.salesforce.com/blog/feed/",
         category: "Competitive Landscape",
         priority: 1,
-        credibilityScore: 0.70,
+        credibilityScore: 0.60,
         digestType: "daily",
         enabled: true
     },
@@ -524,7 +640,7 @@ const DEFAULT_SOURCES = [
         url: "https://www.servicenow.com/blogs.xml",
         category: "Competitive Landscape",
         priority: 2,
-        credibilityScore: 0.70,
+        credibilityScore: 0.60,
         digestType: "daily",
         enabled: true
     },
@@ -533,7 +649,7 @@ const DEFAULT_SOURCES = [
         url: "https://news.sap.com/feed/",
         category: "Competitive Landscape",
         priority: 1,
-        credibilityScore: 0.70,
+        credibilityScore: 0.60,
         digestType: "daily",
         enabled: true
     },
@@ -542,10 +658,11 @@ const DEFAULT_SOURCES = [
         url: "https://blogs.oracle.com/feed",
         category: "Competitive Landscape",
         priority: 2,
-        credibilityScore: 0.70,
+        credibilityScore: 0.60,
         digestType: "daily",
         enabled: true
     },
+    // --- Consulting competitors ---
     {
         name: "Accenture Newsroom",
         url: "https://newsroom.accenture.com/rss/news.xml",
@@ -582,13 +699,13 @@ const DEFAULT_SOURCES = [
         digestType: "weekly",
         enabled: true
     },
-    // NEW: APAC Competitors
+    // --- APAC Competitors ---
     {
         name: "Alibaba Cloud Blog",
         url: "https://www.alibabacloud.com/blog/feed",
         category: "Competitive Landscape",
         priority: 1,
-        credibilityScore: 0.70,
+        credibilityScore: 0.60,
         digestType: "daily",
         enabled: true
     },
@@ -715,7 +832,9 @@ const DEFAULT_SOURCES = [
     },
 
     // ============================================
-    // 💭 STRATEGIC PERSPECTIVES (10 sources)
+    // 💭 STRATEGIC PERSPECTIVES (7 sources)
+    // Note: Gartner, IDC, Forrester moved to Competitive Landscape —
+    // they provide competitive intelligence, not just strategic reading.
     // ============================================
     {
         name: "Stratechery",
@@ -733,33 +852,6 @@ const DEFAULT_SOURCES = [
         priority: 1,
         credibilityScore: 0.95,
         digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "Gartner",
-        url: "https://www.gartner.com/en/newsroom/rss",
-        category: "Strategic Perspectives",
-        priority: 1,
-        credibilityScore: 0.95,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "IDC",
-        url: "https://www.idc.com/rss/press-releases.xml",
-        category: "Strategic Perspectives",
-        priority: 1,
-        credibilityScore: 0.95,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "Forrester",
-        url: "https://www.forrester.com/blogs/feed/",
-        category: "Strategic Perspectives",
-        priority: 1,
-        credibilityScore: 0.95,
-        digestType: "both",
         enabled: true
     },
     {
