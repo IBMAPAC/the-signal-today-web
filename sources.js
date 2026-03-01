@@ -1,6 +1,6 @@
 // =============================================
 // The Signal Today - Optimized Sources Configuration
-// Version 2.0 - Comprehensive APAC Field CTO Coverage
+// Version 3.0 - Field CTO Intelligence Upgrade
 // =============================================
 
 const DEFAULT_SOURCES = [
@@ -90,7 +90,7 @@ const DEFAULT_SOURCES = [
     },
 
     // ============================================
-    // 🛡️ SOVEREIGNTY & REGULATION (12 sources)
+    // 🛡️ SOVEREIGNTY & REGULATION (19 sources)
     // ============================================
     {
         name: "IAPP Privacy",
@@ -198,6 +198,70 @@ const DEFAULT_SOURCES = [
         priority: 2,
         credibilityScore: 0.80,
         digestType: "daily",
+        enabled: true
+    },
+    // NEW: APAC Regulators
+    {
+        name: "HKMA",
+        url: "https://www.hkma.gov.hk/eng/rss/press-releases.xml",
+        category: "Sovereignty & Regulation",
+        priority: 1,
+        credibilityScore: 0.95,
+        digestType: "both",
+        enabled: true
+    },
+    {
+        name: "IMDA Singapore",
+        url: "https://www.imda.gov.sg/resources/press-releases-factsheets-and-speeches/rss",
+        category: "Sovereignty & Regulation",
+        priority: 1,
+        credibilityScore: 0.95,
+        digestType: "both",
+        enabled: true
+    },
+    {
+        name: "SEBI India",
+        url: "https://www.sebi.gov.in/rss/pressreleases.xml",
+        category: "Sovereignty & Regulation",
+        priority: 2,
+        credibilityScore: 0.95,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "OJK Indonesia",
+        url: "https://www.ojk.go.id/en/rss/siaran-pers.xml",
+        category: "Sovereignty & Regulation",
+        priority: 2,
+        credibilityScore: 0.90,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "BSP Philippines",
+        url: "https://www.bsp.gov.ph/SitePages/RSS/PressReleases.aspx",
+        category: "Sovereignty & Regulation",
+        priority: 2,
+        credibilityScore: 0.90,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "MeitY India",
+        url: "https://www.meity.gov.in/rss.xml",
+        category: "Sovereignty & Regulation",
+        priority: 2,
+        credibilityScore: 0.90,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "ASD Cyber Australia",
+        url: "https://www.cyber.gov.au/about-us/news/rss",
+        category: "Sovereignty & Regulation",
+        priority: 1,
+        credibilityScore: 0.95,
+        digestType: "both",
         enabled: true
     },
 
@@ -390,7 +454,7 @@ const DEFAULT_SOURCES = [
     },
 
     // ============================================
-    // ⚔️ COMPETITIVE LANDSCAPE (14 sources)
+    // ⚔️ COMPETITIVE LANDSCAPE (19 sources)
     // ============================================
     {
         name: "CIO Dive",
@@ -512,6 +576,52 @@ const DEFAULT_SOURCES = [
     {
         name: "TCS Perspectives",
         url: "https://www.tcs.com/rss/insights",
+        category: "Competitive Landscape",
+        priority: 3,
+        credibilityScore: 0.70,
+        digestType: "weekly",
+        enabled: true
+    },
+    // NEW: APAC Competitors
+    {
+        name: "Alibaba Cloud Blog",
+        url: "https://www.alibabacloud.com/blog/feed",
+        category: "Competitive Landscape",
+        priority: 1,
+        credibilityScore: 0.70,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "NTT Data Insights",
+        url: "https://www.nttdata.com/global/en/insights/rss",
+        category: "Competitive Landscape",
+        priority: 2,
+        credibilityScore: 0.75,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "Fujitsu Blog",
+        url: "https://blog.global.fujitsu.com/feed/",
+        category: "Competitive Landscape",
+        priority: 2,
+        credibilityScore: 0.75,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "Infosys Insights",
+        url: "https://www.infosys.com/insights/rss-feeds/insights.xml",
+        category: "Competitive Landscape",
+        priority: 2,
+        credibilityScore: 0.70,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "Wipro Insights",
+        url: "https://www.wipro.com/rss/insights.xml",
         category: "Competitive Landscape",
         priority: 3,
         credibilityScore: 0.70,
@@ -696,6 +806,55 @@ const DEFAULT_SOURCES = [
         credibilityScore: 0.80,
         digestType: "weekly",
         enabled: true
+    },
+
+    // ============================================
+    // 🔵 IBM & PARTNERS (5 sources) — NEW
+    // ============================================
+    {
+        name: "IBM Research Blog",
+        url: "https://research.ibm.com/blog/rss",
+        category: "IBM & Partners",
+        priority: 1,
+        credibilityScore: 0.90,
+        digestType: "both",
+        enabled: true
+    },
+    {
+        name: "IBM Institute for Business Value",
+        url: "https://www.ibm.com/thought-leadership/institute-business-value/rss",
+        category: "IBM & Partners",
+        priority: 1,
+        credibilityScore: 0.85,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "IBM Security Intelligence",
+        url: "https://securityintelligence.com/feed/",
+        category: "IBM & Partners",
+        priority: 1,
+        credibilityScore: 0.85,
+        digestType: "both",
+        enabled: true
+    },
+    {
+        name: "IBM watsonx Blog",
+        url: "https://www.ibm.com/blog/category/watsonx/feed/",
+        category: "IBM & Partners",
+        priority: 1,
+        credibilityScore: 0.85,
+        digestType: "both",
+        enabled: true
+    },
+    {
+        name: "OpenShift Blog",
+        url: "https://www.openshift.com/blog/feed",
+        category: "IBM & Partners",
+        priority: 2,
+        credibilityScore: 0.85,
+        digestType: "weekly",
+        enabled: true
     }
 ];
 
@@ -714,23 +873,67 @@ const DEFAULT_INDUSTRIES = [
 ];
 
 // ============================================
-// EXPANDED CLIENT WATCHLIST
+// EXPANDED CLIENT WATCHLIST — WITH TIERS
+// Tier 1 = Strategic (daily monitoring, always shown)
+// Tier 2 = Growth (weekly monitoring)
+// Tier 3 = Prospect / Background
 // ============================================
 const DEFAULT_CLIENTS = [
-    // Singapore
-    "DBS", "OCBC", "UOB", "Singtel", "CapitaLand", "ST Engineering", "Singapore Airlines", "SIA", "PSA",
-    // Australia
-    "Commonwealth Bank", "CBA", "ANZ", "Westpac", "NAB", "Telstra", "BHP", "Rio Tinto", "Woolworths", "Qantas", "AGL",
-    // Korea
-    "Samsung", "SK", "LG", "Hyundai", "Kia", "POSCO", "KT",
-    // India
-    "Reliance", "Tata", "HDFC", "ICICI", "Infosys", "Wipro", "TCS",
-    // ASEAN
-    "CIMB", "Maybank", "Grab", "Sea Limited", "Gojek", "AirAsia", "Petronas", "PTT",
-    // Japan (regional coverage)
-    "NTT", "SoftBank", "Toyota", "Sony",
-    // China (competitors/partners)
-    "Alibaba", "Tencent", "Huawei", "ByteDance"
+    // Singapore — Tier 1
+    { name: "DBS", tier: 1, country: "SG" },
+    { name: "OCBC", tier: 1, country: "SG" },
+    { name: "UOB", tier: 1, country: "SG" },
+    { name: "Singtel", tier: 1, country: "SG" },
+    { name: "ST Engineering", tier: 1, country: "SG" },
+    { name: "PSA", tier: 2, country: "SG" },
+    { name: "CapitaLand", tier: 2, country: "SG" },
+    { name: "Singapore Airlines", tier: 2, country: "SG" },
+    { name: "SIA", tier: 2, country: "SG" },
+    // Australia — Tier 1
+    { name: "Commonwealth Bank", tier: 1, country: "AU" },
+    { name: "CBA", tier: 1, country: "AU" },
+    { name: "ANZ", tier: 1, country: "AU" },
+    { name: "Westpac", tier: 1, country: "AU" },
+    { name: "NAB", tier: 1, country: "AU" },
+    { name: "Telstra", tier: 1, country: "AU" },
+    { name: "BHP", tier: 2, country: "AU" },
+    { name: "Rio Tinto", tier: 2, country: "AU" },
+    { name: "Woolworths", tier: 2, country: "AU" },
+    { name: "Qantas", tier: 2, country: "AU" },
+    { name: "AGL", tier: 3, country: "AU" },
+    // Korea — Tier 1/2
+    { name: "Samsung", tier: 1, country: "KR" },
+    { name: "SK", tier: 1, country: "KR" },
+    { name: "LG", tier: 2, country: "KR" },
+    { name: "Hyundai", tier: 2, country: "KR" },
+    { name: "Kia", tier: 3, country: "KR" },
+    { name: "POSCO", tier: 2, country: "KR" },
+    { name: "KT", tier: 2, country: "KR" },
+    // India — Tier 1/2
+    { name: "Reliance", tier: 1, country: "IN" },
+    { name: "Tata", tier: 1, country: "IN" },
+    { name: "HDFC", tier: 1, country: "IN" },
+    { name: "ICICI", tier: 1, country: "IN" },
+    { name: "TCS", tier: 2, country: "IN" },
+    // ASEAN — Tier 1/2
+    { name: "CIMB", tier: 1, country: "MY" },
+    { name: "Maybank", tier: 1, country: "MY" },
+    { name: "Grab", tier: 2, country: "SG" },
+    { name: "Sea Limited", tier: 2, country: "SG" },
+    { name: "Gojek", tier: 2, country: "ID" },
+    { name: "AirAsia", tier: 2, country: "MY" },
+    { name: "Petronas", tier: 1, country: "MY" },
+    { name: "PTT", tier: 2, country: "TH" },
+    // Japan — Tier 2
+    { name: "NTT", tier: 2, country: "JP" },
+    { name: "SoftBank", tier: 2, country: "JP" },
+    { name: "Toyota", tier: 2, country: "JP" },
+    { name: "Sony", tier: 3, country: "JP" },
+    // China / Competitors — Tier 3 (monitor as competitive signals)
+    { name: "Alibaba", tier: 3, country: "CN" },
+    { name: "Tencent", tier: 3, country: "CN" },
+    { name: "Huawei", tier: 2, country: "CN" },
+    { name: "ByteDance", tier: 3, country: "CN" }
 ];
 
 // ============================================
@@ -798,7 +1001,8 @@ const CATEGORIES = {
     "Competitive Landscape": { emoji: "⚔️", color: "#2563eb", weight: 1.10 },
     "APAC Enterprise": { emoji: "🌏", color: "#059669", weight: 1.05 },
     "Strategic Perspectives": { emoji: "💭", color: "#6b7280", weight: 1.00 },
-    "Architecture & Platform": { emoji: "🏗️", color: "#4f46e5", weight: 0.95 }
+    "Architecture & Platform": { emoji: "🏗️", color: "#4f46e5", weight: 0.95 },
+    "IBM & Partners": { emoji: "🔵", color: "#0f62fe", weight: 1.10 }
 };
 
 // ============================================
@@ -820,5 +1024,60 @@ const CROSS_REFERENCE_THEMES = {
     'Sustainability Tech': ['green it', 'sustainable tech', 'carbon footprint', 'esg reporting', 'climate tech', 'net zero tech'],
     'Talent & Skills': ['ai talent', 'tech talent', 'skills gap', 'upskilling', 'workforce transformation', 'hiring'],
     'M&A Activity': ['acquisition', 'merger', 'acquired', 'strategic investment', 'buyout', 'ipo', 'spac'],
-    'APAC Expansion': ['apac expansion', 'asia pacific', 'singapore hub', 'regional headquarters', 'apac growth', 'asia strategy']
+    'APAC Expansion': ['apac expansion', 'asia pacific', 'singapore hub', 'regional headquarters', 'apac growth', 'asia strategy'],
+    // NEW: IBM-specific competitive intelligence themes
+    'IBM vs Azure': ['azure openai', 'microsoft ai', 'copilot enterprise', 'azure arc', 'microsoft fabric', 'azure ai foundry'],
+    'IBM vs AWS': ['aws bedrock', 'amazon q', 'aws sagemaker', 'amazon connect', 'aws generative ai'],
+    'IBM vs Google Cloud': ['vertex ai', 'google workspace ai', 'gemini enterprise', 'google cloud ai'],
+    'watsonx & IBM AI': ['watsonx', 'watson', 'ibm ai', 'ibm cloud', 'ibm consulting', 'ibm z', 'ibm power'],
+    'APAC Regulatory Compliance': ['mas notice', 'apra prudential', 'pdpc advisory', 'hkma circular', 'sebi circular', 'ojk regulation', 'bsp circular', 'imda guideline', 'meity notification'],
+    'C-Suite Changes': ['new cto', 'new cio', 'appoints', 'names chief', 'chief technology officer', 'chief information officer', 'chief digital officer', 'cdo appointed', 'cto appointed', 'cio appointed'],
+    'Digital Transformation Deals': ['digital transformation', 'cloud migration', 'modernization program', 'rfp', 'tender', 'procurement', 'technology investment', 'it budget', 'digital initiative']
 };
+
+// ============================================
+// DEAL RELEVANCE SIGNALS — NEW
+// Used for deal-relevance scoring layer in app.js
+// ============================================
+const DEAL_RELEVANCE_SIGNALS = {
+    // Competitor keywords — co-occurrence with a client = competitive threat
+    COMPETITOR_KEYWORDS: [
+        'microsoft', 'azure', 'aws', 'amazon web services', 'google cloud', 'gcp',
+        'accenture', 'deloitte', 'mckinsey', 'pwc', 'kpmg', 'ey consulting',
+        'alibaba cloud', 'aliyun', 'tencent cloud', 'ntt data', 'fujitsu', 
+        'infosys', 'wipro', 'cognizant', 'capgemini', 'dxc technology',
+        'servicenow', 'salesforce', 'sap', 'oracle cloud'
+    ],
+    // C-suite change keywords — signals new decision-maker, potential re-evaluation
+    CSUITE_KEYWORDS: [
+        'new cto', 'new cio', 'new cdo', 'appoints', 'names chief', 
+        'chief technology officer', 'chief information officer', 'chief digital officer',
+        'chief data officer', 'cdo appointed', 'cto appointed', 'cio appointed',
+        'technology leadership', 'digital leadership', 'it leadership change',
+        'executive appointment', 'joins as', 'promoted to'
+    ],
+    // Regulatory keywords — compliance pressure = IBM opportunity
+    REGULATORY_KEYWORDS: [
+        'mas notice', 'apra prudential', 'pdpc advisory', 'hkma circular',
+        'sebi circular', 'ojk regulation', 'bsp circular', 'imda guideline',
+        'meity notification', 'compliance deadline', 'regulatory requirement',
+        'mandatory', 'non-compliance', 'regulatory fine', 'enforcement action',
+        'data protection law', 'ai regulation', 'cloud regulation'
+    ],
+    // IBM product/solution keywords — direct IBM relevance
+    IBM_KEYWORDS: [
+        'watsonx', 'watson', 'ibm cloud', 'red hat', 'openshift', 'ansible',
+        'ibm consulting', 'ibm security', 'qradar', 'ibm z', 'ibm power',
+        'ibm storage', 'ibm quantum', 'ibm research', 'ibm institute',
+        'hybrid cloud ibm', 'ibm ai', 'ibm automation'
+    ],
+    // Opportunity keywords — signals active buying intent
+    OPPORTUNITY_KEYWORDS: [
+        'digital transformation', 'ai strategy', 'cloud migration', 'modernization',
+        'rfp', 'request for proposal', 'tender', 'procurement', 'technology investment',
+        'it budget', 'digital initiative', 'technology roadmap', 'vendor selection',
+        'proof of concept', 'pilot program', 'strategic partnership', 'technology refresh'
+    ]
+};
+
+// Made with Bob

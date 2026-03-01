@@ -26,10 +26,12 @@
                 <h1>📡 The Signal Today</h1>
                 <div class="header-actions">
                     <span id="reading-time" class="reading-badge">0/15 min</span>
-                    <button id="refresh-btn" class="btn btn-primary" title="Refresh">
+                    <button id="export-btn" class="btn btn-secondary btn-sm" title="Export brief as Markdown">📤 Export</button>
+                    <button id="refresh-btn" class="btn btn-primary" title="Refresh (R)">
                         <span class="refresh-icon">↻</span> Refresh
                     </button>
                     <button id="settings-btn" class="btn btn-secondary" title="Settings">⚙️</button>
+                    <button class="btn btn-secondary btn-sm" onclick="app.showKeyboardHelp()" title="Keyboard shortcuts">⌨️</button>
                 </div>
             </div>
             <div class="header-meta">
@@ -219,6 +221,11 @@
                             <p class="form-hint">⚠️ Your API key is stored unencrypted in browser localStorage. Do not use on shared devices.</p>
                             <p class="form-hint">Get your API key from <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">console.anthropic.com</a></p>
                         </div>
+                        <div class="form-group">
+                            <label for="week-context">This Week's Context</label>
+                            <textarea id="week-context" rows="3" placeholder="e.g. Meeting DBS CTO on Tuesday re: watsonx POC. Telstra deal review Thursday. OCBC RFP deadline Friday."></textarea>
+                            <p class="form-hint">Claude will prioritize articles relevant to your current meetings and deals.</p>
+                        </div>
                     </section>
 
                     <!-- Time Budget -->
@@ -232,6 +239,11 @@
                             <label for="weekly-articles">Weekly Article Count</label>
                             <input type="number" id="weekly-articles" min="3" max="20" value="5">
                         </div>
+                        <div class="form-group">
+                            <label for="auto-refresh-time">Auto-Refresh Time (24h format)</label>
+                            <input type="time" id="auto-refresh-time" placeholder="06:30">
+                            <p class="form-hint">Leave blank to disable. Browser must be open at this time.</p>
+                        </div>
                     </section>
 
                     <!-- Industry Priorities -->
@@ -244,7 +256,7 @@
                     <!-- Client Watchlist -->
                     <section class="settings-section">
                         <h3>👤 Client Watchlist</h3>
-                        <p class="form-hint">Companies to monitor (+25% boost when mentioned)</p>
+                        <p class="form-hint">Companies to monitor. Tier 1 (Strategic) = +35% boost, Tier 2 (Growth) = +25%, Tier 3 (Prospect) = +15%. Tiers are set automatically from defaults or can be edited in sources.js.</p>
                         <div id="client-settings">
                             <textarea id="clients-input" rows="4" placeholder="DBS, Singtel, Telstra, OCBC, UOB..."></textarea>
                         </div>
@@ -276,6 +288,7 @@
                                 <option value="Competitive Landscape">⚔️ Competitive Landscape</option>
                                 <option value="Architecture & Platform">🏗️ Architecture & Platform</option>
                                 <option value="Strategic Perspectives">💭 Strategic Perspectives</option>
+                                <option value="IBM & Partners">🔵 IBM & Partners</option>
                             </select>
                         </div>
                         <div id="sources-list" class="sources-list"></div>
@@ -312,9 +325,30 @@
                     <div id="article-summary" class="article-summary"></div>
                     <div class="article-actions">
                         <a id="article-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Read Full Article →</a>
+                        <button id="deep-read-btn" class="btn btn-secondary hidden" onclick="app.deepReadArticle(document.getElementById('article-modal').dataset.articleId)">🤖 Deep Read</button>
                         <button class="btn btn-instapaper" onclick="saveToInstapaper()">📥 Save to Instapaper</button>
                         <button class="btn btn-secondary" onclick="copyArticleLink()">📋 Copy Link</button>
                     </div>
+                    <div id="deep-read-content" class="deep-read-content hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Meeting Brief Modal -->
+        <div id="meeting-brief-modal" class="modal hidden">
+            <div class="modal-backdrop" onclick="closeMeetingBrief()"></div>
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h2>📋 Meeting Brief: <span id="meeting-brief-client"></span></h2>
+                    <button class="modal-close" onclick="closeMeetingBrief()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div id="meeting-brief-body">
+                        <div class="meeting-brief-loading">Generating brief...</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeMeetingBrief()">Close</button>
                 </div>
             </div>
         </div>
@@ -346,6 +380,7 @@
                             <option value="Competitive Landscape">⚔️ Competitive Landscape</option>
                             <option value="Architecture & Platform">🏗️ Architecture & Platform</option>
                             <option value="Strategic Perspectives">💭 Strategic Perspectives</option>
+                            <option value="IBM & Partners">🔵 IBM & Partners</option>
                         </select>
                     </div>
                     <div class="form-group">

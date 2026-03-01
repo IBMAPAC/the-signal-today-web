@@ -19,7 +19,8 @@ const STORAGE_KEYS = {
     ARTICLES: 'signal_articles',
     DIGEST: 'signal_digest',
     SETTINGS: 'signal_settings',
-    LAST_REFRESH: 'signal_last_refresh'
+    LAST_REFRESH: 'signal_last_refresh',
+    TREND_HISTORY: 'signal_trend_history'
     // INSTAPAPER_EMAIL and INSTAPAPER_PASSWORD removed: storing passwords in localStorage
     // exposes them to XSS and was transmitted via third-party CORS proxies in plaintext.
     // Instapaper integration now uses the bookmarklet URL only (no credentials needed).
@@ -37,11 +38,16 @@ class SignalApp {
         this.settings = {
             dailyMinutes: 15,
             weeklyArticles: 10,
-            weeklyCurrencyDays: 7  // Used for weekly article cutoff window
+            weeklyCurrencyDays: 7,   // Used for weekly article cutoff window
+            thisWeekContext: '',      // Current meetings/deals context for Claude
+            autoRefreshTime: '',      // e.g. "06:30" for 6:30 AM auto-refresh
+            keyboardShortcuts: true   // Enable/disable keyboard shortcuts
         };
         this.isLoading = false;
         this.currentTab = 'daily';
         this.crossRefs = []; // Cached cross-reference results to avoid recomputation
+        this.focusedArticleIndex = -1; // For keyboard navigation
+        this.autoRefreshTimer = null;
         
         this.init();
     }
@@ -51,6 +57,8 @@ class SignalApp {
         this.updateUI();
         this.bindEvents();
         this.updateDate();
+        this.initKeyboardShortcuts();
+        this.initAutoRefresh();
         
         // Show cached content if available
         if (this.digest || this.articles.length > 0) {
@@ -74,9 +82,19 @@ class SignalApp {
         const savedIndustries = localStorage.getItem(STORAGE_KEYS.INDUSTRIES);
         this.industries = savedIndustries ? JSON.parse(savedIndustries) : [...DEFAULT_INDUSTRIES];
         
-        // Load clients
+        // Load clients — migrate legacy flat string array to structured objects
         const savedClients = localStorage.getItem(STORAGE_KEYS.CLIENTS);
-        this.clients = savedClients ? JSON.parse(savedClients) : [...DEFAULT_CLIENTS];
+        if (savedClients) {
+            const parsed = JSON.parse(savedClients);
+            // Migration: if stored as flat strings, convert to objects
+            if (parsed.length > 0 && typeof parsed[0] === 'string') {
+                this.clients = parsed.map(name => ({ name, tier: 2, country: '' }));
+            } else {
+                this.clients = parsed;
+            }
+        } else {
+            this.clients = [...DEFAULT_CLIENTS];
+        }
         
         // Load articles
         const savedArticles = localStorage.getItem(STORAGE_KEYS.ARTICLES);
@@ -171,6 +189,142 @@ class SignalApp {
     bindEvents() {
         document.getElementById('refresh-btn').addEventListener('click', () => this.refresh());
         document.getElementById('settings-btn').addEventListener('click', () => this.openSettings());
+        
+        const exportBtn = document.getElementById('export-btn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => this.exportBrief());
+        }
+    }
+
+    // ==========================================
+    // Keyboard Shortcuts
+    // ==========================================
+
+    initKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Skip if focus is in an input, textarea, or select
+            const tag = document.activeElement?.tagName?.toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+            
+            // Skip if any modal is open
+            const anyModalOpen = !document.getElementById('settings-modal').classList.contains('hidden') ||
+                                 !document.getElementById('article-modal').classList.contains('hidden') ||
+                                 !(document.getElementById('meeting-brief-modal')?.classList.contains('hidden') ?? true);
+            
+            switch (e.key) {
+                case 'r':
+                case 'R':
+                    if (!anyModalOpen) { e.preventDefault(); this.refresh(); }
+                    break;
+                case '1':
+                    if (!anyModalOpen) { e.preventDefault(); switchDigestTab('daily'); }
+                    break;
+                case '2':
+                    if (!anyModalOpen) { e.preventDefault(); switchDigestTab('weekly'); }
+                    break;
+                case 'j':
+                case 'J':
+                    if (!anyModalOpen) { e.preventDefault(); this.navigateArticles(1); }
+                    break;
+                case 'k':
+                case 'K':
+                    if (!anyModalOpen) { e.preventDefault(); this.navigateArticles(-1); }
+                    break;
+                case 'o':
+                case 'O':
+                    if (!anyModalOpen && this.focusedArticleIndex >= 0) {
+                        e.preventDefault();
+                        const articles = this.currentTab === 'daily' ? this.dailyArticles : this.weeklyArticles;
+                        const article = articles[this.focusedArticleIndex];
+                        if (article) this.openArticle(article.id);
+                    }
+                    break;
+                case 'Escape':
+                    e.preventDefault();
+                    if (!document.getElementById('article-modal').classList.contains('hidden')) {
+                        closeArticle();
+                    } else if (!document.getElementById('settings-modal').classList.contains('hidden')) {
+                        closeSettings();
+                    } else if (document.getElementById('meeting-brief-modal') &&
+                               !document.getElementById('meeting-brief-modal').classList.contains('hidden')) {
+                        closeMeetingBrief();
+                    }
+                    break;
+                case '?':
+                    if (!anyModalOpen) { e.preventDefault(); this.showKeyboardHelp(); }
+                    break;
+            }
+        });
+    }
+
+    navigateArticles(direction) {
+        const articles = this.currentTab === 'daily' ? this.dailyArticles : this.weeklyArticles;
+        if (articles.length === 0) return;
+        
+        this.focusedArticleIndex = Math.max(0, Math.min(articles.length - 1, this.focusedArticleIndex + direction));
+        
+        document.querySelectorAll('.article-item').forEach((el, i) => {
+            el.classList.toggle('keyboard-focused', i === this.focusedArticleIndex);
+        });
+        
+        const focusedEl = document.querySelectorAll('.article-item')[this.focusedArticleIndex];
+        focusedEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    showKeyboardHelp() {
+        const shortcuts = [
+            ['R', 'Refresh digest'],
+            ['1', 'Switch to Daily tab'],
+            ['2', 'Switch to Weekly tab'],
+            ['J / K', 'Navigate articles down / up'],
+            ['O', 'Open focused article'],
+            ['Esc', 'Close modal'],
+            ['?', 'Show this help']
+        ];
+        const text = shortcuts.map(([key, desc]) => `${key.padEnd(8)} ${desc}`).join('\n');
+        alert(`⌨️ Keyboard Shortcuts\n\n${text}`);
+    }
+
+    // ==========================================
+    // Auto-Refresh
+    // ==========================================
+
+    initAutoRefresh() {
+        if (!this.settings.autoRefreshTime) return;
+        
+        const scheduleNext = () => {
+            const now = new Date();
+            const [hours, minutes] = this.settings.autoRefreshTime.split(':').map(Number);
+            
+            const next = new Date(now);
+            next.setHours(hours, minutes, 0, 0);
+            
+            // If the time has already passed today, schedule for tomorrow
+            if (next <= now) next.setDate(next.getDate() + 1);
+            
+            const msUntilRefresh = next.getTime() - now.getTime();
+            console.log(`⏰ Auto-refresh scheduled in ${Math.round(msUntilRefresh / 60000)} minutes`);
+            
+            this.autoRefreshTimer = setTimeout(async () => {
+                console.log('⏰ Auto-refresh triggered');
+                await this.refresh();
+                
+                if (Notification.permission === 'granted') {
+                    new Notification('📡 Signal Today Updated', {
+                        body: `Your daily digest is ready — ${this.dailyArticles.length} articles`,
+                        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📡</text></svg>'
+                    });
+                }
+                
+                scheduleNext();
+            }, msUntilRefresh);
+        };
+        
+        if (Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+        
+        scheduleNext();
     }
 
     // ==========================================
@@ -768,15 +922,26 @@ class SignalApp {
                 article.matchedIndustry = industryMatch.name;
             }
             
-            // Client match - use all matched clients, boost if any found
+            // Client match - tier-weighted boost
             if (allClients.length > 0) {
-                score += 0.25;
-                article.matchedClient = allClients[0]; // First match for backward compat
+                const topClient = allClients[0];
+                const clientObj = this.clients.find(c => (typeof c === 'string' ? c : c.name) === topClient);
+                const clientTier = (clientObj && typeof clientObj === 'object') ? clientObj.tier : 2;
+                const tierBoost = { 1: 0.35, 2: 0.25, 3: 0.15 }[clientTier] || 0.25;
+                score += tierBoost;
+                article.matchedClient = topClient;
                 article.allMatchedClients = allClients;
             }
             
-            // Cross-reference boost (unchanged)
+            // Cross-reference boost
             score += crossRefBoost;
+            
+            // Deal relevance scoring layer
+            const dealBoost = this.calculateDealRelevance(text, allClients);
+            score += dealBoost;
+            
+            // Signal type classification
+            article.signalType = this.classifySignalType(text, allClients);
             
             // Estimate reading time
             const wordCount = (article.summary || '').split(/\s+/).length;
@@ -785,6 +950,63 @@ class SignalApp {
             article.relevanceScore = Math.min(1, score);
             return article;
         });
+    }
+
+    calculateDealRelevance(text, matchedClients) {
+        if (typeof DEAL_RELEVANCE_SIGNALS === 'undefined') return 0;
+        
+        let boost = 0;
+        const hasClient = matchedClients.length > 0;
+        
+        const hasCompetitor = DEAL_RELEVANCE_SIGNALS.COMPETITOR_KEYWORDS.some(kw => text.includes(kw));
+        const hasCsuite = DEAL_RELEVANCE_SIGNALS.CSUITE_KEYWORDS.some(kw => text.includes(kw));
+        const hasRegulatory = DEAL_RELEVANCE_SIGNALS.REGULATORY_KEYWORDS.some(kw => text.includes(kw));
+        const hasIBM = DEAL_RELEVANCE_SIGNALS.IBM_KEYWORDS.some(kw => text.includes(kw));
+        const hasOpportunity = DEAL_RELEVANCE_SIGNALS.OPPORTUNITY_KEYWORDS.some(kw => text.includes(kw));
+        
+        // Highest boost: client + competitor co-occurrence = competitive threat
+        if (hasClient && hasCompetitor) boost += 0.35;
+        // Client + C-suite change = new decision-maker opportunity
+        else if (hasClient && hasCsuite) boost += 0.30;
+        // Client + opportunity signal = active buying intent
+        else if (hasClient && hasOpportunity) boost += 0.20;
+        // Regulatory signal = compliance pressure = IBM opportunity
+        if (hasRegulatory) boost += 0.25;
+        // IBM keyword = direct relevance
+        if (hasIBM) boost += 0.15;
+        
+        return Math.min(0.40, boost);
+    }
+
+    classifySignalType(text, matchedClients) {
+        if (typeof DEAL_RELEVANCE_SIGNALS === 'undefined') return 'background';
+        
+        const hasClient = matchedClients.length > 0;
+        const hasCompetitor = DEAL_RELEVANCE_SIGNALS.COMPETITOR_KEYWORDS.some(kw => text.includes(kw));
+        const hasCsuite = DEAL_RELEVANCE_SIGNALS.CSUITE_KEYWORDS.some(kw => text.includes(kw));
+        const hasRegulatory = DEAL_RELEVANCE_SIGNALS.REGULATORY_KEYWORDS.some(kw => text.includes(kw));
+        const hasIBM = DEAL_RELEVANCE_SIGNALS.IBM_KEYWORDS.some(kw => text.includes(kw));
+        const hasOpportunity = DEAL_RELEVANCE_SIGNALS.OPPORTUNITY_KEYWORDS.some(kw => text.includes(kw));
+        
+        if (hasClient && hasCompetitor) return 'risk';
+        if (hasClient && hasCsuite) return 'relationship';
+        if (hasRegulatory) return 'regulatory';
+        if (hasIBM) return 'ibm';
+        if (hasClient && hasOpportunity) return 'opportunity';
+        if (hasClient) return 'relationship';
+        return 'background';
+    }
+
+    getSignalTypeBadge(signalType) {
+        const badges = {
+            'risk':         { emoji: '🔴', label: 'Risk',         cssClass: 'signal-risk' },
+            'opportunity':  { emoji: '🟡', label: 'Opportunity',  cssClass: 'signal-opportunity' },
+            'relationship': { emoji: '🟢', label: 'Relationship', cssClass: 'signal-relationship' },
+            'regulatory':   { emoji: '🛡️', label: 'Regulatory',   cssClass: 'signal-regulatory' },
+            'ibm':          { emoji: '🔵', label: 'IBM',          cssClass: 'signal-ibm' },
+            'background':   { emoji: '⚪', label: 'Background',   cssClass: 'signal-background' }
+        };
+        return badges[signalType] || badges['background'];
     }
 
     detectIndustry(text) {
@@ -828,17 +1050,19 @@ class SignalApp {
     }
 
     detectAllClients(text) {
-        // Return all matched clients for an article.
+        // Return all matched client names for an article.
+        // Works with both structured objects {name, tier} and legacy strings.
         // Uses word boundary matching to avoid false positives
         // e.g., "SK" shouldn't match "risk", "ANZ" shouldn't match "organization"
         const matches = [];
         
-        for (const client of this.clients) {
-            const clientLower = client.toLowerCase();
+        for (const clientEntry of this.clients) {
+            const clientName = typeof clientEntry === 'string' ? clientEntry : clientEntry.name;
+            const clientLower = clientName.toLowerCase();
             
             let isMatch = false;
             
-            if (client.length <= 3) {
+            if (clientName.length <= 3) {
                 const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}\\b`, 'i');
                 isMatch = regex.test(text);
             } else {
@@ -847,7 +1071,7 @@ class SignalApp {
             }
             
             if (isMatch) {
-                matches.push(client);
+                matches.push(clientName);
             }
         }
         
@@ -895,7 +1119,53 @@ class SignalApp {
             }
         }
         
-        return topicGroups.sort((a, b) => b.sourceCount - a.sourceCount);
+        const sorted = topicGroups.sort((a, b) => b.sourceCount - a.sourceCount);
+        
+        // Trend tracking: store daily signal counts for up to 14 days
+        try {
+            const trendHistory = JSON.parse(localStorage.getItem(STORAGE_KEYS.TREND_HISTORY) || '{}');
+            const today = new Date().toDateString();
+            for (const group of sorted) {
+                if (!trendHistory[group.theme]) trendHistory[group.theme] = [];
+                const todayEntry = trendHistory[group.theme].find(e => e.date === today);
+                if (!todayEntry) {
+                    trendHistory[group.theme].push({ date: today, count: group.sourceCount });
+                    // Keep only last 14 days
+                    trendHistory[group.theme] = trendHistory[group.theme].slice(-14);
+                }
+            }
+            localStorage.setItem(STORAGE_KEYS.TREND_HISTORY, JSON.stringify(trendHistory));
+        } catch (e) {
+            // Non-critical: ignore storage errors
+        }
+        
+        return sorted;
+    }
+
+    getTrendIndicator(theme) {
+        try {
+            const trendHistory = JSON.parse(localStorage.getItem(STORAGE_KEYS.TREND_HISTORY) || '{}');
+            const history = trendHistory[theme] || [];
+            if (history.length < 2) return '';
+            
+            // Check for consecutive days
+            const sorted = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
+            let consecutiveDays = 1;
+            for (let i = 1; i < sorted.length; i++) {
+                const prev = new Date(sorted[i - 1].date);
+                const curr = new Date(sorted[i].date);
+                const diffDays = Math.round((prev - curr) / 86400000);
+                if (diffDays === 1) consecutiveDays++;
+                else break;
+            }
+            
+            const latestCount = sorted[0]?.count || 0;
+            if (latestCount > 5) return '<span class="trend-hot">🔥 hot</span>';
+            if (consecutiveDays >= 3) return `<span class="trend-rising">↑ ${consecutiveDays}d</span>`;
+            return '';
+        } catch (e) {
+            return '';
+        }
     }
 
     getCrossRefBoost(article, crossRefs) {
@@ -915,12 +1185,17 @@ class SignalApp {
     async generateAIDigest(apiKey) {
         const topArticles = this.dailyArticles.slice(0, 20);
         
-        const articleList = topArticles.map((a, i) => 
+        const articleList = topArticles.map((a, i) =>
             `[${i + 1}] Source: ${a.sourceName} | URL: ${a.url}\nTitle: ${a.title}\nSummary: ${a.summary?.substring(0, 200) || 'No summary'}`
         ).join('\n\n');
 
-        const prompt = `You are the intelligence briefer for the Field CTO of IBM Asia Pacific.
+        // Inject "This Week's Context" if set
+        const contextBlock = this.settings.thisWeekContext
+            ? `\nTHIS WEEK'S CONTEXT (prioritize relevance to these meetings/deals):\n${this.settings.thisWeekContext}\n`
+            : '';
 
+        const prompt = `You are the intelligence briefer for the Field CTO of IBM Asia Pacific.
+${contextBlock}
 YOUR JOB IS NOT TO SUMMARIZE NEWS. Your job is to answer:
 1. What should I BRING UP in client meetings today?
 2. What COMPETITIVE THREAT requires immediate attention?
@@ -931,7 +1206,7 @@ CONTEXT:
 - Role: Field CTO leading 100+ Account Technical Leaders across 343 enterprise accounts in APAC
 - Focus: Dual-wave thesis (AI/Agentic transformation + Sovereignty/Regulation)
 - Priority Industries: Financial Services, Government, Manufacturing, Energy, Retail
-- Competitors: Microsoft Azure, Google Cloud, AWS, Accenture, Deloitte
+- Competitors: Microsoft Azure, Google Cloud, AWS, Accenture, Deloitte, Alibaba Cloud, NTT Data, Infosys, Wipro
 
 CRITICAL CITATION RULES:
 1. ALWAYS use the actual Source Name in citations, NOT generic "Source"
@@ -1146,6 +1421,7 @@ ${articleList}`;
         list.innerHTML = crossRefs.slice(0, 5).map(ref => {
             // Generate a description of the signal theme
             const themeDescription = this.generateThemeDescription(ref);
+            const trendIndicator = this.getTrendIndicator(ref.theme);
             
             // Group articles by source for cleaner display
             const sourceArticles = {};
@@ -1158,7 +1434,7 @@ ${articleList}`;
             return `
                 <div class="signal-item">
                     <div class="signal-header">
-                        <span class="signal-theme">${this.escapeHtml(ref.theme)}</span>
+                        <span class="signal-theme">${this.escapeHtml(ref.theme)} ${trendIndicator}</span>
                         <span class="signal-sources">📰 ${ref.sourceCount} sources</span>
                     </div>
                     <div class="signal-description">${themeDescription}</div>
@@ -1191,7 +1467,15 @@ ${articleList}`;
             'Sustainability Tech': 'Multiple sources covering green IT, ESG reporting, or climate technology.',
             'Talent & Skills': 'Cross-source coverage of tech talent, skills gaps, or workforce transformation.',
             'M&A Activity': 'Multiple reports on acquisitions, mergers, or strategic investments in tech.',
-            'APAC Expansion': 'Converging coverage of Asia Pacific expansion, regional strategies, or market entry.'
+            'APAC Expansion': 'Converging coverage of Asia Pacific expansion, regional strategies, or market entry.',
+            // IBM-specific themes (keys must match CROSS_REFERENCE_THEMES in sources.js exactly)
+            'IBM vs Azure': '🚨 COMPETITIVE ALERT: Multiple sources covering Microsoft Azure/Copilot moves — use IBM\'s on-prem sovereignty and watsonx governance story in your next banking or government conversation.',
+            'IBM vs AWS': '🚨 COMPETITIVE ALERT: Multiple sources covering AWS Bedrock/Amazon Q moves — lead with IBM\'s enterprise-grade AI governance and hybrid cloud differentiation.',
+            'IBM vs Google Cloud': '🚨 COMPETITIVE ALERT: Multiple sources covering Google Cloud/Vertex AI moves — position IBM watsonx on data sovereignty and regulated-industry compliance.',
+            'watsonx & IBM AI': '🔵 IBM watsonx coverage across multiple sources — use for client conversations on enterprise AI governance, data sovereignty, and responsible AI.',
+            'APAC Regulatory Compliance': '🛡️ Converging regulatory signals from APAC markets — MAS, APRA, PDPA, or sector-specific compliance requirements affecting your clients.',
+            'C-Suite Changes': '🤝 Multiple sources reporting executive changes at enterprise accounts — new CTO/CIO/CDO appointments create relationship opportunities.',
+            'Digital Transformation Deals': '💰 Cross-source coverage of enterprise digital transformation announcements — potential IBM opportunities or competitive wins to track.'
         };
         
         // Use predefined description or generate from article titles
@@ -1363,84 +1647,133 @@ ${articleList}`;
             const text = `${article.title} ${article.summary}`.toLowerCase();
             const matchedClients = this.detectAllClients(text);
             if (matchedClients.length > 0) {
-                clientArticles.push({
-                    ...article,
-                    matchedClients: matchedClients
-                });
+                clientArticles.push({ ...article, matchedClients });
             }
         }
-        
-        if (clientArticles.length === 0) {
-            section.classList.add('hidden');
-            return;
-        }
-        
-        section.classList.remove('hidden');
-        count.textContent = clientArticles.length;
         
         // Group by client - an article can appear under multiple clients
         const byClient = {};
         for (const article of clientArticles) {
             for (const client of article.matchedClients) {
-                if (!byClient[client]) {
-                    byClient[client] = [];
-                }
-                // Avoid duplicates
+                if (!byClient[client]) byClient[client] = [];
                 if (!byClient[client].find(a => a.id === article.id)) {
                     byClient[client].push(article);
                 }
             }
         }
         
-        // Sort clients by number of articles (most coverage first)
-        const sortedClients = Object.entries(byClient)
-            .sort((a, b) => b[1].length - a[1].length);
+        // Build tier-grouped client list
+        // Tier 1 clients always shown (even with 0 articles)
+        const tier1Clients = this.clients
+            .filter(c => (typeof c === 'object' ? c.tier : 2) === 1)
+            .map(c => typeof c === 'string' ? c : c.name);
         
-        list.innerHTML = sortedClients.map(([client, articles]) => {
-            // Determine context hint based on article content
-            const hasCompetitor = articles.some(a => {
-                const text = `${a.title} ${a.summary}`.toLowerCase();
-                return ['microsoft', 'aws', 'amazon', 'google', 'accenture', 'deloitte', 'salesforce', 'sap'].some(c => 
-                    text.includes(c)
-                );
+        // Ensure all T1 clients appear in byClient (even with empty arrays)
+        for (const name of tier1Clients) {
+            if (!byClient[name]) byClient[name] = [];
+        }
+        
+        const totalWithArticles = Object.values(byClient).filter(a => a.length > 0).length;
+        
+        if (totalWithArticles === 0 && tier1Clients.length === 0) {
+            section.classList.add('hidden');
+            return;
+        }
+        
+        section.classList.remove('hidden');
+        count.textContent = totalWithArticles;
+        
+        // Group clients by tier for display
+        const clientsByTier = { 1: [], 2: [], 3: [] };
+        for (const [clientName, articles] of Object.entries(byClient)) {
+            const clientObj = this.clients.find(c => (typeof c === 'string' ? c : c.name) === clientName);
+            const tier = (clientObj && typeof clientObj === 'object') ? clientObj.tier : 2;
+            clientsByTier[tier].push({ clientName, articles, tier });
+        }
+        
+        // Sort within each tier: clients with articles first, then alphabetically
+        for (const tier of [1, 2, 3]) {
+            clientsByTier[tier].sort((a, b) => {
+                if (b.articles.length !== a.articles.length) return b.articles.length - a.articles.length;
+                return a.clientName.localeCompare(b.clientName);
             });
+        }
+        
+        const renderClientGroup = (clientName, articles, tier) => {
+            const safeClientName = this.escapeAttr(clientName);
+            const tierLabel = tier === 1 ? '<span class="client-tier-badge tier-1">T1</span>' :
+                              tier === 2 ? '<span class="client-tier-badge tier-2">T2</span>' :
+                                           '<span class="client-tier-badge tier-3">T3</span>';
             
-            const hasPartnership = articles.some(a => {
-                const text = `${a.title} ${a.summary}`.toLowerCase();
-                return ['partner', 'collaboration', 'alliance', 'joint venture', 'agreement'].some(kw => 
-                    text.includes(kw)
-                );
-            });
-            
-            let contextHint;
-            if (hasCompetitor) {
-                contextHint = '⚠️ Competitor activity detected - review before client meeting';
-            } else if (hasPartnership) {
-                contextHint = '🤝 Partnership/collaboration news - potential conversation topic';
-            } else {
-                contextHint = '💡 Recent coverage - potential conversation starter';
+            if (articles.length === 0) {
+                return `
+                    <div class="client-group client-no-coverage">
+                        <div class="client-name-row">
+                            ${tierLabel}
+                            <span class="client-name">${this.escapeHtml(clientName)}</span>
+                            <button class="btn-meeting-brief" onclick="app.openMeetingBrief('${safeClientName}')" title="Meeting Brief">📋</button>
+                        </div>
+                        <div class="client-no-coverage-text">No recent coverage</div>
+                    </div>`;
             }
+            
+            // Determine dominant signal type across articles
+            const signalCounts = {};
+            for (const a of articles) {
+                const st = a.signalType || 'background';
+                signalCounts[st] = (signalCounts[st] || 0) + 1;
+            }
+            const dominantSignal = Object.entries(signalCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'background';
+            const badge = this.getSignalTypeBadge(dominantSignal);
             
             return `
                 <div class="client-group">
-                    <div class="client-name">${this.escapeHtml(client)}</div>
-                    <div class="client-context">${contextHint}</div>
+                    <div class="client-name-row">
+                        ${tierLabel}
+                        <span class="client-name">${this.escapeHtml(clientName)}</span>
+                        <span class="signal-type-badge ${badge.cssClass}">${badge.emoji} ${badge.label}</span>
+                        <button class="btn-meeting-brief" onclick="app.openMeetingBrief('${safeClientName}')" title="Meeting Brief">📋</button>
+                    </div>
                     <div class="client-articles">
                         ${articles.slice(0, 3).map(a => {
                             const safeId = this.escapeAttr(a.id);
                             const shortTitle = a.title.substring(0, 70) + (a.title.length > 70 ? '...' : '');
-                            // Highlight the client name in the title if present
-                            const highlightedTitle = this.highlightClient(shortTitle, client);
+                            const highlightedTitle = this.highlightClient(shortTitle, clientName);
+                            const artBadge = this.getSignalTypeBadge(a.signalType || 'background');
                             return `
                             <div class="client-article">
                                 <span class="client-article-source">${this.escapeHtml(a.sourceName)}</span>
+                                <span class="client-article-signal" title="${artBadge.label}">${artBadge.emoji}</span>
                                 <span class="client-article-title" onclick="app.openArticle('${safeId}')" title="${this.escapeAttr(a.title)}">${highlightedTitle}</span>
-                            </div>
-                        `}).join('')}
+                            </div>`;
+                        }).join('')}
                     </div>
-                </div>
-            `;
-        }).join('');
+                </div>`;
+        };
+        
+        let html = '';
+        
+        // Tier 1 section
+        if (clientsByTier[1].length > 0) {
+            html += `<div class="client-tier-header">⭐ Strategic Accounts (Tier 1)</div>`;
+            html += clientsByTier[1].map(({ clientName, articles, tier }) => renderClientGroup(clientName, articles, tier)).join('');
+        }
+        
+        // Tier 2 section (only clients with articles)
+        const tier2WithArticles = clientsByTier[2].filter(c => c.articles.length > 0);
+        if (tier2WithArticles.length > 0) {
+            html += `<div class="client-tier-header">📈 Growth Accounts (Tier 2)</div>`;
+            html += tier2WithArticles.map(({ clientName, articles, tier }) => renderClientGroup(clientName, articles, tier)).join('');
+        }
+        
+        // Tier 3 section (only clients with articles)
+        const tier3WithArticles = clientsByTier[3].filter(c => c.articles.length > 0);
+        if (tier3WithArticles.length > 0) {
+            html += `<div class="client-tier-header">🔍 Prospects (Tier 3)</div>`;
+            html += tier3WithArticles.map(({ clientName, articles, tier }) => renderClientGroup(clientName, articles, tier)).join('');
+        }
+        
+        list.innerHTML = html;
     }
     
     highlightClient(text, client) {
@@ -1498,9 +1831,10 @@ ${articleList}`;
     renderArticleItem(article) {
         const scoreClass = article.relevanceScore >= 0.7 ? 'high' : article.relevanceScore >= 0.5 ? 'medium' : '';
         const safeId = this.escapeAttr(article.id);
+        const readClass = article.isRead ? ' article-read' : '';
         
         return `
-            <div class="article-item" onclick="app.openArticle('${safeId}')">
+            <div class="article-item${readClass}" onclick="app.openArticle('${safeId}')">
                 <div class="article-item-header">
                     <span class="article-item-source">${this.escapeHtml(article.sourceName)}</span>
                     <div class="article-item-actions">
@@ -1533,8 +1867,315 @@ ${articleList}`;
         document.getElementById('article-summary').innerHTML = this.escapeHtml(article.summary || 'No summary available.');
         document.getElementById('article-link').href = article.url;
         
+        // Mark as read
+        article.isRead = true;
+        this.saveToStorage();
+        this.updateReadingTime();
+        
+        // Show/hide Deep Read button based on API key availability
+        const hasApiKey = !!localStorage.getItem(STORAGE_KEYS.API_KEY);
+        const deepReadBtn = document.getElementById('deep-read-btn');
+        if (deepReadBtn) deepReadBtn.classList.toggle('hidden', !hasApiKey);
+        
+        // Clear previous deep read content
+        const deepReadContent = document.getElementById('deep-read-content');
+        if (deepReadContent) {
+            deepReadContent.classList.add('hidden');
+            deepReadContent.innerHTML = '';
+        }
+        
         document.getElementById('article-modal').classList.remove('hidden');
         document.getElementById('article-modal').dataset.articleId = id;
+    }
+
+    async deepReadArticle(id) {
+        const article = this.articles.find(a => a.id === id)
+            || this.weeklyArticles.find(a => a.id === id)
+            || this.dailyArticles.find(a => a.id === id);
+        if (!article) return;
+        
+        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+        if (!apiKey) return;
+        
+        const deepReadContent = document.getElementById('deep-read-content');
+        const deepReadBtn = document.getElementById('deep-read-btn');
+        if (!deepReadContent) return;
+        
+        deepReadContent.classList.remove('hidden');
+        deepReadContent.innerHTML = '<div class="deep-read-loading">🤖 Generating deep read analysis...</div>';
+        if (deepReadBtn) deepReadBtn.disabled = true;
+        
+        const prompt = `You are briefing the IBM APAC Field CTO. Analyze this article and provide a concise intelligence brief.
+
+Article: ${article.title}
+Source: ${article.sourceName}
+Summary: ${article.summary || 'No summary available'}
+URL: ${article.url}
+
+Provide EXACTLY this JSON structure:
+{
+    "keyFacts": ["Fact 1 (one sentence)", "Fact 2 (one sentence)", "Fact 3 (one sentence)"],
+    "ibmAngle": "One sentence on how this relates to IBM's position or opportunity in APAC.",
+    "conversationOpener": "One specific question to ask a client CTO about this topic."
+}`;
+        
+        try {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 600,
+                    messages: [{ role: 'user', content: prompt }]
+                })
+            });
+            
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            
+            const data = await response.json();
+            const text = data.content[0].text;
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            
+            if (jsonMatch) {
+                const result = JSON.parse(jsonMatch[0]);
+                deepReadContent.innerHTML = `
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">📌 Key Facts</div>
+                        <ul class="deep-read-facts">
+                            ${(result.keyFacts || []).map(f => `<li>${this.escapeHtml(f)}</li>`).join('')}
+                        </ul>
+                    </div>
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">🔵 IBM Angle</div>
+                        <div class="deep-read-text">${this.escapeHtml(result.ibmAngle || '')}</div>
+                    </div>
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">💬 Conversation Opener</div>
+                        <div class="deep-read-text deep-read-opener">${this.escapeHtml(result.conversationOpener || '')}</div>
+                    </div>`;
+            } else {
+                deepReadContent.innerHTML = '<div class="deep-read-error">Could not parse AI response.</div>';
+            }
+        } catch (error) {
+            deepReadContent.innerHTML = `<div class="deep-read-error">Deep read failed: ${this.escapeHtml(error.message)}</div>`;
+        } finally {
+            if (deepReadBtn) deepReadBtn.disabled = false;
+        }
+    }
+
+    // ==========================================
+    // Meeting Brief
+    // ==========================================
+
+    openMeetingBrief(clientName) {
+        const modal = document.getElementById('meeting-brief-modal');
+        if (!modal) return;
+        
+        document.getElementById('meeting-brief-client').textContent = clientName;
+        document.getElementById('meeting-brief-body').innerHTML = '<div class="meeting-brief-loading">🤖 Generating meeting brief...</div>';
+        modal.classList.remove('hidden');
+        modal.dataset.clientName = clientName;
+        
+        this.generateMeetingBrief(clientName);
+    }
+
+    async generateMeetingBrief(clientName) {
+        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+        const bodyEl = document.getElementById('meeting-brief-body');
+        if (!bodyEl) return;
+        
+        // Gather articles mentioning this client
+        const clientArticles = this.dailyArticles.filter(a => {
+            const text = `${a.title} ${a.summary}`.toLowerCase();
+            const clientLower = clientName.toLowerCase();
+            if (clientName.length <= 3) {
+                return new RegExp(`\\b${this.escapeRegex(clientLower)}\\b`, 'i').test(text);
+            }
+            return new RegExp(`\\b${this.escapeRegex(clientLower)}`, 'i').test(text);
+        }).slice(0, 8);
+        
+        if (!apiKey) {
+            // No API key: render basic brief from articles
+            if (clientArticles.length === 0) {
+                bodyEl.innerHTML = `<p class="meeting-brief-empty">No recent news coverage found for <strong>${this.escapeHtml(clientName)}</strong>. Add context in Settings → This Week's Context.</p>`;
+            } else {
+                bodyEl.innerHTML = `
+                    <div class="meeting-brief-section">
+                        <div class="meeting-brief-label">📰 Recent Coverage (${clientArticles.length} articles)</div>
+                        ${clientArticles.map(a => `
+                            <div class="meeting-brief-article">
+                                <span class="meeting-brief-source">${this.escapeHtml(a.sourceName)}</span>
+                                <span class="meeting-brief-title" onclick="closeMeetingBrief(); app.openArticle('${this.escapeAttr(a.id)}')">${this.escapeHtml(a.title)}</span>
+                            </div>`).join('')}
+                    </div>
+                    <p class="meeting-brief-hint">Add a Claude API key in Settings for AI-powered meeting briefs.</p>`;
+            }
+            return;
+        }
+        
+        const articleList = clientArticles.map((a, i) =>
+            `[${i + 1}] ${a.sourceName}: ${a.title}\n${a.summary?.substring(0, 200) || ''}`
+        ).join('\n\n');
+        
+        const contextBlock = this.settings.thisWeekContext
+            ? `\nTHIS WEEK'S CONTEXT:\n${this.settings.thisWeekContext}\n`
+            : '';
+        
+        const prompt = `You are preparing a meeting brief for the IBM APAC Field CTO who is meeting with ${clientName}.
+${contextBlock}
+Recent news about ${clientName}:
+${articleList || 'No recent news found.'}
+
+Return ONLY valid JSON:
+{
+    "situationSummary": "2-3 sentences on ${clientName}'s current situation based on the news.",
+    "talkingPoints": ["Point 1 with IBM angle", "Point 2 with IBM angle", "Point 3 with IBM angle"],
+    "riskFlags": ["Risk or concern to be aware of (if any)"],
+    "openingQuestion": "One specific opening question to build rapport and uncover needs."
+}`;
+        
+        try {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 800,
+                    messages: [{ role: 'user', content: prompt }]
+                })
+            });
+            
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            
+            const data = await response.json();
+            const text = data.content[0].text;
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            
+            if (jsonMatch) {
+                const brief = JSON.parse(jsonMatch[0]);
+                bodyEl.innerHTML = `
+                    <div class="meeting-brief-section">
+                        <div class="meeting-brief-label">📊 Situation</div>
+                        <div class="meeting-brief-text">${this.escapeHtml(brief.situationSummary || '')}</div>
+                    </div>
+                    <div class="meeting-brief-section">
+                        <div class="meeting-brief-label">💡 Talking Points</div>
+                        <ul class="meeting-brief-list">
+                            ${(brief.talkingPoints || []).map(p => `<li>${this.escapeHtml(p)}</li>`).join('')}
+                        </ul>
+                    </div>
+                    ${(brief.riskFlags || []).length > 0 ? `
+                    <div class="meeting-brief-section">
+                        <div class="meeting-brief-label">⚠️ Risk Flags</div>
+                        <ul class="meeting-brief-list meeting-brief-risks">
+                            ${brief.riskFlags.map(r => `<li>${this.escapeHtml(r)}</li>`).join('')}
+                        </ul>
+                    </div>` : ''}
+                    <div class="meeting-brief-section">
+                        <div class="meeting-brief-label">💬 Opening Question</div>
+                        <div class="meeting-brief-text meeting-brief-opener">${this.escapeHtml(brief.openingQuestion || '')}</div>
+                    </div>
+                    ${clientArticles.length > 0 ? `
+                    <div class="meeting-brief-section">
+                        <div class="meeting-brief-label">📰 Source Articles (${clientArticles.length})</div>
+                        ${clientArticles.map(a => `
+                            <div class="meeting-brief-article">
+                                <span class="meeting-brief-source">${this.escapeHtml(a.sourceName)}</span>
+                                <span class="meeting-brief-title" onclick="closeMeetingBrief(); app.openArticle('${this.escapeAttr(a.id)}')">${this.escapeHtml(a.title.substring(0, 80))}${a.title.length > 80 ? '...' : ''}</span>
+                            </div>`).join('')}
+                    </div>` : ''}`;
+            } else {
+                bodyEl.innerHTML = '<div class="meeting-brief-error">Could not parse AI response.</div>';
+            }
+        } catch (error) {
+            bodyEl.innerHTML = `<div class="meeting-brief-error">Brief generation failed: ${this.escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    // ==========================================
+    // Export
+    // ==========================================
+
+    exportBrief() {
+        if (this.dailyArticles.length === 0 && !this.digest) {
+            alert('No digest to export yet. Please refresh first.');
+            return;
+        }
+        
+        const lines = [];
+        const date = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        
+        lines.push(`# The Signal Today — ${date}`);
+        lines.push('');
+        
+        // Executive Summary
+        if (this.digest?.executiveSummary) {
+            lines.push('## ⚡ Action Brief');
+            // Strip markdown links to plain text for export
+            lines.push(this.digest.executiveSummary.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'));
+            lines.push('');
+        }
+        
+        // Digest Sections
+        if (this.digest?.sections?.length > 0) {
+            for (const section of this.digest.sections) {
+                lines.push(`## ${section.emoji || ''} ${section.title}`);
+                lines.push((section.summary || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'));
+                lines.push('');
+            }
+        }
+        
+        // Conversation Starters
+        if (this.digest?.conversationStarters?.length > 0) {
+            lines.push('## 💬 Conversation Openers');
+            for (const starter of this.digest.conversationStarters) {
+                lines.push(`- ${starter.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')}`);
+            }
+            lines.push('');
+        }
+        
+        // Client Watch
+        const clientArticles = this.dailyArticles.filter(a => a.matchedClient);
+        if (clientArticles.length > 0) {
+            lines.push('## 👁️ Client Watch');
+            const byClient = {};
+            for (const a of clientArticles) {
+                if (!byClient[a.matchedClient]) byClient[a.matchedClient] = [];
+                byClient[a.matchedClient].push(a);
+            }
+            for (const [client, articles] of Object.entries(byClient)) {
+                lines.push(`### ${client}`);
+                for (const a of articles.slice(0, 3)) {
+                    lines.push(`- [${a.sourceName}] ${a.title} — ${a.url}`);
+                }
+            }
+            lines.push('');
+        }
+        
+        // Top Articles
+        lines.push('## 📰 Top Daily Articles');
+        for (const a of this.dailyArticles.slice(0, 15)) {
+            lines.push(`- **${a.sourceName}**: ${a.title} — ${a.url}`);
+        }
+        
+        const content = lines.join('\n');
+        const blob = new Blob([content], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `signal-brief-${new Date().toISOString().split('T')[0]}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
     }
 
     copyStarter(index) {
@@ -1562,7 +2203,17 @@ ${articleList}`;
         document.getElementById('api-key').value = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
         document.getElementById('daily-minutes').value = this.settings.dailyMinutes;
         document.getElementById('weekly-articles').value = this.settings.weeklyArticles;
-        document.getElementById('clients-input').value = this.clients.join(', ');
+        
+        // Populate clients — display as comma-separated names (handle both string and object formats)
+        const clientNames = this.clients.map(c => typeof c === 'string' ? c : c.name);
+        document.getElementById('clients-input').value = clientNames.join(', ');
+        
+        // Populate new fields if they exist in the DOM
+        const weekContextEl = document.getElementById('week-context');
+        if (weekContextEl) weekContextEl.value = this.settings.thisWeekContext || '';
+        
+        const autoRefreshEl = document.getElementById('auto-refresh-time');
+        if (autoRefreshEl) autoRefreshEl.value = this.settings.autoRefreshTime || '';
         
         // Clean up any legacy Instapaper credentials that may have been stored by older versions
         localStorage.removeItem('signal_instapaper_email');
@@ -1696,8 +2347,30 @@ function saveSettings() {
     app.settings.dailyMinutes = dailyMinutes;
     app.settings.weeklyArticles = weeklyArticles;
     
-    // Parse clients
-    app.clients = clientsInput.split(',').map(c => c.trim()).filter(c => c);
+    // Save new context fields if present in DOM
+    const weekContextEl = document.getElementById('week-context');
+    if (weekContextEl) app.settings.thisWeekContext = weekContextEl.value.trim();
+    
+    const autoRefreshEl = document.getElementById('auto-refresh-time');
+    if (autoRefreshEl) {
+        const newTime = autoRefreshEl.value.trim();
+        if (newTime !== app.settings.autoRefreshTime) {
+            app.settings.autoRefreshTime = newTime;
+            // Reschedule auto-refresh with new time
+            if (app.autoRefreshTimer) clearTimeout(app.autoRefreshTimer);
+            if (newTime) app.initAutoRefresh();
+        }
+    }
+    
+    // Parse clients — preserve existing tier/country data for known clients, default T2 for new ones
+    // Capture old clients BEFORE reassigning to avoid reading a partially-mutated array
+    const oldClients = app.clients.slice();
+    const newClientNames = clientsInput.split(',').map(c => c.trim()).filter(c => c);
+    app.clients = newClientNames.map(name => {
+        const existing = oldClients.find(c => (typeof c === 'string' ? c : c.name) === name);
+        if (existing && typeof existing === 'object') return existing;
+        return { name, tier: 2, country: '' };
+    });
     
     // Save to storage
     app.saveToStorage();
@@ -1727,6 +2400,11 @@ function clearAllData() {
 
 function closeArticle() {
     document.getElementById('article-modal').classList.add('hidden');
+}
+
+function closeMeetingBrief() {
+    const modal = document.getElementById('meeting-brief-modal');
+    if (modal) modal.classList.add('hidden');
 }
 
 function copyArticleLink() {
