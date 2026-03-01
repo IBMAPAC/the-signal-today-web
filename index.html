@@ -25,13 +25,11 @@
             <div class="header-content">
                 <h1>📡 The Signal Today</h1>
                 <div class="header-actions">
-                    <span id="reading-time" class="reading-badge">0/15 min</span>
-                    <button id="export-btn" class="btn btn-secondary btn-sm" title="Export brief as Markdown">📤 Export</button>
+                    <span id="reading-time" class="reading-badge">~0 min unread</span>
                     <button id="refresh-btn" class="btn btn-primary" title="Refresh (R)">
                         <span class="refresh-icon">↻</span> Refresh
                     </button>
                     <button id="settings-btn" class="btn btn-secondary" title="Settings">⚙️</button>
-                    <button class="btn btn-secondary btn-sm" onclick="app.showKeyboardHelp()" title="Keyboard shortcuts">⌨️</button>
                 </div>
             </div>
             <div class="header-meta">
@@ -92,9 +90,21 @@
                         </div>
                     </section>
 
+                    <!-- Industry Signals — AI-generated per-industry strategic guidance -->
+                    <section id="industry-signals-section" class="card industry-signals-card hidden">
+                        <div class="card-header">
+                            <h2>📊 Industry Signals</h2>
+                            <span id="industry-signals-count" class="badge badge-blue">0</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-description">AI-generated strategic signal per industry — IBM angle and sales action for your ATL team</p>
+                            <div id="industry-signals-list"></div>
+                        </div>
+                    </section>
+
                     <!-- Client Watch — account-specific intel -->
                     <section id="clients-section" class="card clients-card hidden">
-                        <div class="card-header" onclick="toggleSection('clients')">
+                        <div class="card-header card-header--collapsible" onclick="toggleSection('clients')">
                             <h2>👁️ Client Watch</h2>
                             <span id="clients-count" class="badge badge-purple">0</span>
                             <span class="chevron">▼</span>
@@ -107,7 +117,7 @@
 
                     <!-- Cross-Source Signals — multi-source themes (broader context) -->
                     <section id="signals-section" class="card signals-card hidden">
-                        <div class="card-header" onclick="toggleSection('signals')">
+                        <div class="card-header card-header--collapsible" onclick="toggleSection('signals')">
                             <h2>🔥 Cross-Source Signals</h2>
                             <span id="signals-count" class="badge">0</span>
                             <span class="chevron">▼</span>
@@ -118,25 +128,12 @@
                         </div>
                     </section>
 
-                    <!-- Industry Intelligence — sector-level patterns -->
-                    <section id="industry-section" class="card industry-card hidden">
-                        <div class="card-header" onclick="toggleSection('industry')">
-                            <h2>🏢 Industry Intelligence</h2>
-                            <span id="industry-count" class="badge badge-green">0</span>
-                            <span class="chevron">▼</span>
-                        </div>
-                        <div id="industry-content" class="card-body">
-                            <p class="card-description">Key themes emerging in your priority industries</p>
-                            <div id="industry-list"></div>
-                        </div>
-                    </section>
-
                     <!-- Digest Sections — AI thematic deep-dives -->
                     <div id="digest-sections"></div>
 
                     <!-- All Daily Articles — full reference list -->
                     <section id="articles-section" class="card">
-                        <div class="card-header" onclick="toggleSection('articles')">
+                        <div class="card-header card-header--collapsible" onclick="toggleSection('articles')">
                             <h2>📰 All Daily Articles</h2>
                             <span id="articles-count" class="badge">0</span>
                             <span class="chevron">▼</span>
@@ -171,6 +168,10 @@
                                     <span class="weekly-stat-label">Sources</span>
                                 </div>
                             </div>
+                            <div class="weekly-export-actions">
+                                <button class="btn btn-secondary btn-sm" onclick="app.exportBrief()" title="Export daily brief as Markdown">📤 Export Daily Brief</button>
+                                <button class="btn btn-primary btn-sm" id="gtm-digest-btn" onclick="app.openGTMDigest()" title="Generate GTM team email digest">📧 GTM Digest Email</button>
+                            </div>
                         </div>
                     </section>
 
@@ -187,7 +188,7 @@
 
                     <!-- All Weekly Articles -->
                     <section id="weekly-articles-section" class="card">
-                        <div class="card-header" onclick="toggleSection('weekly-articles')">
+                        <div class="card-header card-header--collapsible" onclick="toggleSection('weekly-articles')">
                             <h2>📖 All Weekly Articles</h2>
                             <span id="weekly-articles-count" class="badge">0</span>
                             <span class="chevron">▼</span>
@@ -357,6 +358,28 @@
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="closeMeetingBrief()">Close</button>
+                    <button class="btn btn-slack hidden" id="copy-slack-btn" onclick="app.copyMeetingBriefSlack()">💬 Copy for Slack</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GTM Digest Modal -->
+        <div id="gtm-digest-modal" class="modal hidden">
+            <div class="modal-backdrop" onclick="closeGTMDigest()"></div>
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h2>📧 GTM Weekly Digest</h2>
+                    <button class="modal-close" onclick="closeGTMDigest()">×</button>
+                </div>
+                <div class="modal-body">
+                    <p class="form-hint">Plain-text email for your GTM sales team — organised by industry vertical. Copy and paste into email or Slack.</p>
+                    <div id="gtm-digest-body">
+                        <div class="meeting-brief-loading">Generating GTM digest...</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeGTMDigest()">Close</button>
+                    <button class="btn btn-primary hidden" id="copy-gtm-btn" onclick="app.copyGTMDigest()">📋 Copy to Clipboard</button>
                 </div>
             </div>
         </div>

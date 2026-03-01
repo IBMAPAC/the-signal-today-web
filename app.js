@@ -361,8 +361,8 @@ class SignalApp {
             .reduce((sum, a) => sum + (a.estimatedReadingMinutes || 2), 0);
         
         const badge = document.getElementById('reading-time');
-        // Show actual total vs budget (not capped) so user knows how far over budget they are
-        badge.textContent = `${totalMinutes}/${this.settings.dailyMinutes} min`;
+        // Show unread time vs budget so user knows how far over/under budget they are
+        badge.textContent = `~${totalMinutes} min unread`;
         badge.classList.toggle('over-budget', totalMinutes > this.settings.dailyMinutes);
     }
 
@@ -1344,6 +1344,19 @@ CRITICAL FRAMING RULES:
 2. BAD: "Microsoft announced new Azure AI services"
 3. GOOD: "COMPETITIVE ALERT: Microsoft's new Azure AI [CIO Dive](url) could affect your banking deals. ACTION: Lead with IBM's on-prem sovereignty in your next DBS conversation."
 
+INDUSTRY SIGNALS REQUIRED:
+For each of these Tier 1 industries — Financial Services, Government, Manufacturing, Energy, Retail —
+scan today's articles and produce one entry in the industrySignals array.
+Each entry must have:
+- industry: exact name from the list above
+- emoji: the correct industry emoji (🏦 FSI, 🏛️ Government, 🏭 Manufacturing, ⚡ Energy, 🛒 Retail)
+- headline: one sentence — the most important signal for this industry in today's articles
+- ibmAngle: one sentence — the specific IBM product or capability most relevant to this signal.
+  Be specific: watsonx.ai, watsonx.governance, IBM Consulting, Red Hat OpenShift, IBM Security, hybrid cloud, IBM Z
+- salesAction: one sentence — a specific action for an ATL or GTM seller this week.
+  Example: "Lead with watsonx.governance in your next DBS conversation — new MAS AI guidelines create urgency."
+If no relevant signal exists for an industry today, omit that industry from the array entirely.
+
 Return ONLY valid JSON:
 {
     "executiveSummary": "3-4 ACTION-ORIENTED sentences with [Source Name](URL) citations.",
@@ -1375,6 +1388,15 @@ Return ONLY valid JSON:
     ],
     "conversationStarters": [
         "Specific opener with [Source Name](URL) citation."
+    ],
+    "industrySignals": [
+        {
+            "industry": "Financial Services",
+            "emoji": "🏦",
+            "headline": "One-sentence signal for FSI today.",
+            "ibmAngle": "Specific IBM product/capability angle.",
+            "salesAction": "Specific action for ATL/GTM this week."
+        }
     ]
 }
 
@@ -1470,24 +1492,54 @@ ${articleList}`;
             // 2. Conversation Openers — immediately actionable talking points
             this.renderStarters(this.digest.conversationStarters || []);
         }
-        
-        // 3. Client Watch — account-specific intel
+
+        // 3. Client Watch — account-specific intel (highest urgency: meeting prep)
         this.renderClientWatch();
+
+        // 4. Industry Signals — AI-generated per-industry strategic guidance (ATL team framing)
+        if (this.digest) {
+            this.renderIndustrySignals();
+        }
         
-        // 4. Cross-Source Signals — multi-source themes (broader context)
+        // 5. Cross-Source Signals — multi-source themes (broader context)
         // Use cached crossRefs computed during scoring (avoids recomputing O(articles×themes×keywords))
         this.renderCrossSourceSignals(this.crossRefs);
         
-        // 5. Industry Intelligence — sector-level patterns
-        this.renderIndustryIntelligence();
-        
-        // 6. AI Digest Sections — thematic deep-dives (rendered after digest check above)
+        // 6. AI Digest Sections — thematic deep-dives
         if (this.digest) {
             this.renderSections(this.digest.sections || []);
         }
         
         // 7. All Daily Articles — full reference list
         this.renderDailyArticles();
+    }
+
+    renderIndustrySignals() {
+        const section = document.getElementById('industry-signals-section');
+        const list = document.getElementById('industry-signals-list');
+        const countEl = document.getElementById('industry-signals-count');
+        if (!section || !list) return;
+
+        const signals = this.digest?.industrySignals;
+        if (!signals || signals.length === 0) {
+            section.classList.add('hidden');
+            return;
+        }
+
+        section.classList.remove('hidden');
+        if (countEl) countEl.textContent = signals.length;
+
+        list.innerHTML = signals.map(s => `
+            <div class="industry-signal-item">
+                <div class="industry-signal-header">
+                    <span class="industry-signal-emoji">${this.escapeHtml(s.emoji || '🏢')}</span>
+                    <span class="industry-signal-name">${this.escapeHtml(s.industry || '')}</span>
+                </div>
+                <div class="industry-signal-headline">${this.escapeHtml(s.headline || '')}</div>
+                <div class="industry-signal-ibm">🔵 IBM: ${this.escapeHtml(s.ibmAngle || '')}</div>
+                <div class="industry-signal-action">⚡ Action: ${this.escapeHtml(s.salesAction || '')}</div>
+            </div>
+        `).join('');
     }
 
     renderWeeklyTab() {
@@ -1665,154 +1717,6 @@ ${articleList}`;
         // Fallback: extract key phrases from article titles
         const titles = ref.articles.slice(0, 3).map(a => a.title);
         return `Multiple sources reporting on related developments: ${titles[0]?.substring(0, 80)}...`;
-    }
-
-    renderIndustryIntelligence() {
-        const section = document.getElementById('industry-section');
-        const list = document.getElementById('industry-list');
-        const count = document.getElementById('industry-count');
-        
-        // Group articles by industry
-        const industryArticles = this.dailyArticles.filter(a => a.matchedIndustry);
-        
-        if (industryArticles.length === 0) {
-            section.classList.add('hidden');
-            return;
-        }
-        
-        section.classList.remove('hidden');
-        count.textContent = industryArticles.length;
-        
-        // Group by industry
-        const byIndustry = {};
-        for (const article of industryArticles) {
-            const ind = article.matchedIndustry;
-            if (!byIndustry[ind]) {
-                byIndustry[ind] = [];
-            }
-            byIndustry[ind].push(article);
-        }
-        
-        // For each industry, cluster by industry-specific themes
-        list.innerHTML = Object.entries(byIndustry).map(([industry, articles]) => {
-            const industryInfo = this.industries.find(i => i.name === industry) || { emoji: '🏢' };
-            
-            // Use industry-specific theme clustering
-            const themes = this.clusterByIndustryTheme(industry, articles);
-            
-            return `
-                <div class="industry-group">
-                    <div class="industry-group-header">
-                        <span>${industryInfo.emoji || '🏢'}</span>
-                        <span class="industry-group-name">${this.escapeHtml(industry)}</span>
-                        <span class="industry-group-count">${articles.length} articles</span>
-                    </div>
-                    ${themes.map(theme => `
-                        <div class="industry-theme">
-                            <div class="industry-theme-name">${this.escapeHtml(theme.name)} (${theme.articles.length})</div>
-                            <div class="industry-theme-articles">
-                                ${theme.articles.slice(0, 3).map(a => {
-                                    const safeId = this.escapeAttr(a.id);
-                                    const shortTitle = a.title.substring(0, 60) + (a.title.length > 60 ? '...' : '');
-                                    return `<a href="javascript:void(0)" onclick="app.openArticle('${safeId}')" title="${this.escapeAttr(a.title)}"><strong>${this.escapeHtml(a.sourceName)}:</strong> ${this.escapeHtml(shortTitle)}</a>`;
-                                }).join('<br>')}
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }).join('');
-    }
-
-    clusterByIndustryTheme(industry, articles) {
-        // Industry-specific theme keywords
-        const industryThemes = {
-            "Financial Services": {
-                'Digital Banking & Payments': ['digital bank', 'neobank', 'payment', 'mobile banking', 'real-time', 'swift', 'cbdc'],
-                'Risk & Compliance': ['risk', 'compliance', 'regulation', 'kyc', 'aml', 'basel', 'audit'],
-                'Wealth & Investment': ['wealth', 'investment', 'trading', 'asset management', 'portfolio'],
-                'AI in Finance': ['ai', 'machine learning', 'fraud', 'credit scoring', 'automation'],
-                'Open Banking': ['open banking', 'api', 'fintech', 'embedded finance']
-            },
-            "Government": {
-                'Digital Services': ['digital government', 'e-government', 'citizen', 'portal', 'online services'],
-                'Smart City': ['smart city', 'urban', 'infrastructure', 'iot', 'sensors'],
-                'Security & Defense': ['security', 'defense', 'military', 'cyber', 'national security'],
-                'Public Cloud': ['cloud', 'data center', 'sovereign', 'migration'],
-                'AI in Government': ['ai', 'automation', 'analytics', 'decision support']
-            },
-            "Manufacturing": {
-                'Industry 4.0': ['industry 4.0', 'smart factory', 'automation', 'robotics', 'iot'],
-                'Supply Chain': ['supply chain', 'logistics', 'inventory', 'warehouse', 'distribution'],
-                'Quality & Maintenance': ['quality', 'predictive maintenance', 'inspection', 'defect'],
-                'Digital Twin': ['digital twin', 'simulation', 'modeling', '3d'],
-                'Sustainability': ['sustainability', 'carbon', 'emissions', 'green', 'circular']
-            },
-            "Energy": {
-                'Renewable Energy': ['renewable', 'solar', 'wind', 'clean energy', 'green'],
-                'Grid & Utilities': ['grid', 'smart grid', 'utility', 'distribution', 'transmission'],
-                'Oil & Gas': ['oil', 'gas', 'petroleum', 'lng', 'drilling', 'refinery'],
-                'Sustainability & ESG': ['sustainability', 'esg', 'carbon', 'net zero', 'emissions'],
-                'Energy Storage': ['battery', 'storage', 'ev charging', 'hydrogen']
-            },
-            "Retail": {
-                'E-commerce': ['ecommerce', 'e-commerce', 'online', 'marketplace', 'digital commerce'],
-                'Customer Experience': ['customer experience', 'personalization', 'loyalty', 'engagement'],
-                'Supply Chain & Fulfillment': ['supply chain', 'fulfillment', 'last mile', 'inventory', 'warehouse'],
-                'Omnichannel': ['omnichannel', 'store', 'pos', 'click and collect'],
-                'AI in Retail': ['ai', 'recommendation', 'demand forecasting', 'pricing']
-            },
-            "Telecommunications": {
-                '5G & Network': ['5g', 'network', 'spectrum', 'coverage', 'open ran'],
-                'Edge & Cloud': ['edge computing', 'cloud', 'data center', 'latency'],
-                'IoT & Connectivity': ['iot', 'connectivity', 'device', 'sensor', 'm2m'],
-                'Digital Services': ['digital services', 'streaming', 'content', 'platform'],
-                'Enterprise Solutions': ['enterprise', 'b2b', 'private 5g', 'managed services']
-            },
-            "Healthcare": {
-                'Digital Health': ['digital health', 'telehealth', 'telemedicine', 'remote', 'virtual care'],
-                'Clinical & Research': ['clinical', 'trial', 'research', 'drug discovery', 'genomics'],
-                'AI in Healthcare': ['ai', 'machine learning', 'diagnosis', 'imaging', 'radiology'],
-                'Patient Experience': ['patient', 'experience', 'engagement', 'portal', 'app'],
-                'Data & Interoperability': ['ehr', 'health record', 'interoperability', 'data exchange', 'fhir']
-            },
-            "Technology": {
-                'Cloud & Infrastructure': ['cloud', 'infrastructure', 'data center', 'saas', 'paas'],
-                'AI & ML': ['ai', 'machine learning', 'llm', 'genai', 'model'],
-                'Developer & Platform': ['developer', 'platform', 'api', 'devops', 'agile'],
-                'Security': ['security', 'cyber', 'threat', 'vulnerability', 'zero trust'],
-                'Startup & Investment': ['startup', 'funding', 'vc', 'investment', 'acquisition']
-            }
-        };
-        
-        const themes = industryThemes[industry] || {
-            'General News': ['news', 'announcement', 'update']
-        };
-        
-        const result = [];
-        const assigned = new Set();
-        
-        // Match articles to themes
-        for (const [themeName, keywords] of Object.entries(themes)) {
-            const matching = articles.filter(a => {
-                if (assigned.has(a.id)) return false;
-                const text = `${a.title} ${a.summary}`.toLowerCase();
-                return keywords.some(kw => text.includes(kw));
-            });
-            
-            if (matching.length > 0) {
-                result.push({ name: themeName, articles: matching });
-                matching.forEach(a => assigned.add(a.id));
-            }
-        }
-        
-        // Add remaining as "Other [Industry] News"
-        const remaining = articles.filter(a => !assigned.has(a.id));
-        if (remaining.length > 0) {
-            result.push({ name: `Other ${industry} News`, articles: remaining });
-        }
-        
-        return result.filter(t => t.articles.length > 0);
     }
 
     renderClientWatch() {
@@ -2177,6 +2081,17 @@ Provide EXACTLY this JSON structure:
         const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
         const bodyEl = document.getElementById('meeting-brief-body');
         if (!bodyEl) return;
+
+        // Look up client object to get industry (Phase 2)
+        const clientObj = this.clients.find(c =>
+            (typeof c === 'string' ? c : c.name).toLowerCase() === clientName.toLowerCase()
+        );
+        const clientIndustry = clientObj?.industry || null;
+
+        // Look up matching industry signal from today's digest (Phase 2)
+        const industrySignal = clientIndustry
+            ? (this.digest?.industrySignals || []).find(s => s.industry === clientIndustry)
+            : null;
         
         // Gather articles mentioning this client
         const clientArticles = this.dailyArticles.filter(a => {
@@ -2214,18 +2129,28 @@ Provide EXACTLY this JSON structure:
         const contextBlock = this.settings.thisWeekContext
             ? `\nTHIS WEEK'S CONTEXT:\n${this.settings.thisWeekContext}\n`
             : '';
+
+        // Industry context block (Phase 2)
+        const industryBlock = clientIndustry ? `
+CLIENT INDUSTRY: ${clientIndustry}
+${industrySignal ? `INDUSTRY SIGNAL THIS WEEK: ${industrySignal.headline}
+IBM ANGLE FOR ${clientIndustry.toUpperCase()}: ${industrySignal.ibmAngle}` : ''}
+Frame all talking points through ${clientIndustry} challenges and priorities.
+` : '';
         
         const prompt = `You are preparing a meeting brief for the IBM APAC Field CTO who is meeting with ${clientName}.
-${contextBlock}
+${contextBlock}${industryBlock}
 Recent news about ${clientName}:
 ${articleList || 'No recent news found.'}
 
 Return ONLY valid JSON:
 {
     "situationSummary": "2-3 sentences on ${clientName}'s current situation based on the news.",
-    "talkingPoints": ["Point 1 with IBM angle", "Point 2 with IBM angle", "Point 3 with IBM angle"],
+    "talkingPoints": ["Point 1 framed as a ${clientIndustry || 'enterprise'} challenge with specific IBM angle", "Point 2", "Point 3"],
     "riskFlags": ["Risk or concern to be aware of (if any)"],
-    "openingQuestion": "One specific opening question to build rapport and uncover needs."
+    "openingQuestion": "One specific opening question relevant to ${clientIndustry || 'their'} priorities.",
+    "salesAngle": "One sentence on the commercial opportunity — what specific IBM product/service and why now.",
+    "slackMessage": "*${clientName} — Signal Alert*\\n📊 [situation in 1 sentence]\\n💡 [top talking point]\\n⚡ [sales angle]\\n💬 Q: [opening question]"
 }`;
         
         try {
@@ -2239,7 +2164,7 @@ Return ONLY valid JSON:
                 },
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-20250514',
-                    max_tokens: 800,
+                    max_tokens: 1000,
                     messages: [{ role: 'user', content: prompt }]
                 })
             });
@@ -2252,11 +2177,24 @@ Return ONLY valid JSON:
             
             if (jsonMatch) {
                 const brief = JSON.parse(jsonMatch[0]);
+
+                // Store slackMessage for the Copy for Slack button (Phase 2)
+                this._lastMeetingBriefSlack = brief.slackMessage || '';
+
+                // Show/hide the Copy for Slack button based on availability
+                const slackBtn = document.getElementById('copy-slack-btn');
+                if (slackBtn) slackBtn.classList.toggle('hidden', !brief.slackMessage);
+
                 bodyEl.innerHTML = `
                     <div class="meeting-brief-section">
                         <div class="meeting-brief-label">📊 Situation</div>
                         <div class="meeting-brief-text">${this.escapeHtml(brief.situationSummary || '')}</div>
                     </div>
+                    ${brief.salesAngle ? `
+                    <div class="meeting-brief-section">
+                        <div class="meeting-brief-label">⚡ Sales Angle</div>
+                        <div class="meeting-brief-text meeting-brief-sales-angle">${this.escapeHtml(brief.salesAngle)}</div>
+                    </div>` : ''}
                     <div class="meeting-brief-section">
                         <div class="meeting-brief-label">💡 Talking Points</div>
                         <ul class="meeting-brief-list">
@@ -2289,6 +2227,23 @@ Return ONLY valid JSON:
         } catch (error) {
             bodyEl.innerHTML = `<div class="meeting-brief-error">Brief generation failed: ${this.escapeHtml(error.message)}</div>`;
         }
+    }
+
+    copyMeetingBriefSlack() {
+        const slackText = this._lastMeetingBriefSlack;
+        if (!slackText) return;
+        navigator.clipboard.writeText(slackText).then(() => {
+            const btn = document.getElementById('copy-slack-btn');
+            if (btn) {
+                const original = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = original;
+                    btn.classList.remove('copied');
+                }, 2000);
+            }
+        });
     }
 
     // ==========================================
@@ -2365,6 +2320,164 @@ Return ONLY valid JSON:
         a.download = `signal-brief-${new Date().toISOString().split('T')[0]}.md`;
         a.click();
         URL.revokeObjectURL(url);
+    }
+
+    // ==========================================
+    // GTM Weekly Digest (Phase 3)
+    // ==========================================
+
+    openGTMDigest() {
+        const modal = document.getElementById('gtm-digest-modal');
+        if (!modal) return;
+
+        if (this.weeklyArticles.length === 0 && !this.digest) {
+            alert('No digest available yet. Please refresh first.');
+            return;
+        }
+
+        const bodyEl = document.getElementById('gtm-digest-body');
+        if (bodyEl) bodyEl.innerHTML = '<div class="meeting-brief-loading">🤖 Generating GTM digest...</div>';
+
+        const copyBtn = document.getElementById('copy-gtm-btn');
+        if (copyBtn) copyBtn.classList.add('hidden');
+
+        modal.classList.remove('hidden');
+        this.generateGTMDigest();
+    }
+
+    async generateGTMDigest() {
+        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+        const bodyEl = document.getElementById('gtm-digest-body');
+        const copyBtn = document.getElementById('copy-gtm-btn');
+        if (!bodyEl) return;
+
+        const date = new Date().toLocaleDateString('en-SG', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+
+        // Build industry signals block from Phase 1 output
+        const industrySignals = this.digest?.industrySignals || [];
+        const industryBlock = industrySignals.length > 0
+            ? industrySignals.map(s =>
+                `${s.industry.toUpperCase()}\nSignal: ${s.headline}\nIBM angle: ${s.ibmAngle}\nAction: ${s.salesAction}`
+              ).join('\n\n')
+            : 'No industry signals available — run a fresh digest first.';
+
+        // Top 5 weekly articles for the "Top Articles" section
+        const topArticles = this.weeklyArticles.slice(0, 5);
+        const topArticleList = topArticles.map(a =>
+            `- ${a.title} (${a.sourceName}) — ${a.url}`
+        ).join('\n');
+
+        // Competitive / regulatory signals from digest sections
+        const competitiveSection = (this.digest?.sections || []).find(s =>
+            s.title?.toLowerCase().includes('competitive')
+        );
+        const regulatorySection = (this.digest?.sections || []).find(s =>
+            s.title?.toLowerCase().includes('regulatory')
+        );
+        const crossIndustryBlock = [
+            competitiveSection ? `Competitive: ${(competitiveSection.summary || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').substring(0, 400)}` : '',
+            regulatorySection ? `Regulatory: ${(regulatorySection.summary || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').substring(0, 400)}` : ''
+        ].filter(Boolean).join('\n');
+
+        if (!apiKey) {
+            // No API key: produce a basic plain-text digest from available data
+            const lines = [
+                `Subject: IBM APAC Field CTO — Weekly Intelligence Brief | ${date}`,
+                '',
+                industryBlock,
+                '',
+                crossIndustryBlock ? `CROSS-INDUSTRY SIGNALS\n${crossIndustryBlock}` : '',
+                '',
+                `TOP ARTICLES\n${topArticleList || 'No articles available.'}`
+            ].filter(l => l !== undefined);
+            const text = lines.join('\n');
+            this._lastGTMDigestText = text;
+            bodyEl.innerHTML = `<pre class="gtm-digest-text">${this.escapeHtml(text)}</pre>
+                <p class="form-hint">Add a Claude API key in Settings for AI-enhanced GTM digests.</p>`;
+            if (copyBtn) copyBtn.classList.remove('hidden');
+            return;
+        }
+
+        const prompt = `You are the IBM APAC Field CTO preparing a weekly intelligence brief for the GTM sales team.
+The sales team is organised by industry vertical. Write a plain-text email they can read in under 2 minutes.
+Do NOT use markdown formatting, bullet symbols, or HTML. Use plain text only.
+Use ALL CAPS for section headers. Use dashes for list items.
+
+INDUSTRY SIGNALS AVAILABLE:
+${industryBlock}
+
+CROSS-INDUSTRY CONTEXT:
+${crossIndustryBlock || 'No cross-industry signals available.'}
+
+TOP ARTICLES THIS WEEK:
+${topArticleList || 'No articles available.'}
+
+Produce EXACTLY this structure (plain text, no markdown):
+
+Subject: IBM APAC Field CTO — Weekly Intelligence Brief | ${date}
+
+[For each industry that has a signal, write a section:]
+[INDUSTRY NAME IN CAPS]
+Signal: [headline]
+IBM angle: [ibmAngle — be specific about the IBM product/service]
+Action: [salesAction — what the GTM seller should do this week]
+
+CROSS-INDUSTRY SIGNALS
+- [competitive alert or regulatory change affecting all verticals, 2-3 bullets max]
+
+WHAT TO LEAD WITH THIS WEEK
+[1 short paragraph — the single most important IBM message given this week's signals]
+
+TOP ARTICLES
+[list the top 3-5 articles with title and URL, one per line]`;
+
+        try {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 1200,
+                    messages: [{ role: 'user', content: prompt }]
+                })
+            });
+
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+
+            const data = await response.json();
+            const text = data.content[0].text;
+
+            this._lastGTMDigestText = text;
+            bodyEl.innerHTML = `<pre class="gtm-digest-text">${this.escapeHtml(text)}</pre>`;
+            if (copyBtn) copyBtn.classList.remove('hidden');
+
+        } catch (error) {
+            bodyEl.innerHTML = `<div class="meeting-brief-error">GTM digest generation failed: ${this.escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    copyGTMDigest() {
+        const text = this._lastGTMDigestText;
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = document.getElementById('copy-gtm-btn');
+            if (btn) {
+                const original = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = original;
+                    btn.classList.remove('copied');
+                }, 2000);
+            }
+        });
     }
 
     copyStarter(index) {
@@ -2593,6 +2706,11 @@ function closeArticle() {
 
 function closeMeetingBrief() {
     const modal = document.getElementById('meeting-brief-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function closeGTMDigest() {
+    const modal = document.getElementById('gtm-digest-modal');
     if (modal) modal.classList.add('hidden');
 }
 
