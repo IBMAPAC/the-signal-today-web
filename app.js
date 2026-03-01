@@ -1362,27 +1362,30 @@ ${articleList}`;
     }
 
     renderDailyTab() {
-        // Use cached crossRefs computed during scoring (avoids recomputing O(articles×themes×keywords))
-        this.renderCrossSourceSignals(this.crossRefs);
-        
-        // Render industry intelligence
-        this.renderIndustryIntelligence();
-        
-        // Render client watch
-        this.renderClientWatch();
-        
-        // Render executive summary
+        // 1. Action Brief — synthesised headline, read this first
         if (this.digest) {
             document.getElementById('executive-summary').innerHTML = this.formatMarkdownLinks(this.digest.executiveSummary);
             
-            // Render sections
-            this.renderSections(this.digest.sections || []);
-            
-            // Render conversation starters
+            // 2. Conversation Openers — immediately actionable talking points
             this.renderStarters(this.digest.conversationStarters || []);
         }
         
-        // Render daily articles
+        // 3. Client Watch — account-specific intel
+        this.renderClientWatch();
+        
+        // 4. Cross-Source Signals — multi-source themes (broader context)
+        // Use cached crossRefs computed during scoring (avoids recomputing O(articles×themes×keywords))
+        this.renderCrossSourceSignals(this.crossRefs);
+        
+        // 5. Industry Intelligence — sector-level patterns
+        this.renderIndustryIntelligence();
+        
+        // 6. AI Digest Sections — thematic deep-dives (rendered after digest check above)
+        if (this.digest) {
+            this.renderSections(this.digest.sections || []);
+        }
+        
+        // 7. All Daily Articles — full reference list
         this.renderDailyArticles();
     }
 

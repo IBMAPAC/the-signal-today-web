@@ -71,34 +71,28 @@
 
                 <!-- Daily Digest Tab -->
                 <div id="daily-tab" class="digest-tab-content">
-                    
-                    <!-- Cross-Source Signals (formerly Trending Topics) -->
-                    <section id="signals-section" class="card signals-card hidden">
-                        <div class="card-header" onclick="toggleSection('signals')">
-                            <h2>🔥 Cross-Source Signals</h2>
-                            <span id="signals-count" class="badge">0</span>
-                            <span class="chevron">▼</span>
+
+                    <!-- Action Brief — synthesised headline, read this first -->
+                    <section id="summary-section" class="card summary-card">
+                        <div class="card-header">
+                            <h2>⚡ Action Brief</h2>
                         </div>
-                        <div id="signals-content" class="card-body">
-                            <p class="card-description">Topics covered by multiple independent sources - higher signal, lower noise</p>
-                            <div id="signals-list"></div>
+                        <div id="summary-content" class="card-body">
+                            <p id="executive-summary">Pull to refresh to generate your daily digest.</p>
                         </div>
                     </section>
 
-                    <!-- Industry Intelligence (improved) -->
-                    <section id="industry-section" class="card industry-card hidden">
-                        <div class="card-header" onclick="toggleSection('industry')">
-                            <h2>🏢 Industry Intelligence</h2>
-                            <span id="industry-count" class="badge badge-green">0</span>
-                            <span class="chevron">▼</span>
+                    <!-- Conversation Starters — immediately actionable talking points -->
+                    <section id="starters-section" class="card starters-card hidden">
+                        <div class="card-header">
+                            <h2>💬 Conversation Openers</h2>
                         </div>
-                        <div id="industry-content" class="card-body">
-                            <p class="card-description">Key themes emerging in your priority industries</p>
-                            <div id="industry-list"></div>
+                        <div id="starters-content" class="card-body">
+                            <div id="starters-list"></div>
                         </div>
                     </section>
 
-                    <!-- Client Watch (improved) -->
+                    <!-- Client Watch — account-specific intel -->
                     <section id="clients-section" class="card clients-card hidden">
                         <div class="card-header" onclick="toggleSection('clients')">
                             <h2>👁️ Client Watch</h2>
@@ -111,30 +105,36 @@
                         </div>
                     </section>
 
-                    <!-- Action Brief -->
-                    <section id="summary-section" class="card summary-card">
-                        <div class="card-header">
-                            <h2>⚡ Action Brief</h2>
+                    <!-- Cross-Source Signals — multi-source themes (broader context) -->
+                    <section id="signals-section" class="card signals-card hidden">
+                        <div class="card-header" onclick="toggleSection('signals')">
+                            <h2>🔥 Cross-Source Signals</h2>
+                            <span id="signals-count" class="badge">0</span>
+                            <span class="chevron">▼</span>
                         </div>
-                        <div id="summary-content" class="card-body">
-                            <p id="executive-summary">Pull to refresh to generate your daily digest.</p>
+                        <div id="signals-content" class="card-body">
+                            <p class="card-description">Topics covered by multiple independent sources - higher signal, lower noise</p>
+                            <div id="signals-list"></div>
                         </div>
                     </section>
 
-                    <!-- Digest Sections -->
+                    <!-- Industry Intelligence — sector-level patterns -->
+                    <section id="industry-section" class="card industry-card hidden">
+                        <div class="card-header" onclick="toggleSection('industry')">
+                            <h2>🏢 Industry Intelligence</h2>
+                            <span id="industry-count" class="badge badge-green">0</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="industry-content" class="card-body">
+                            <p class="card-description">Key themes emerging in your priority industries</p>
+                            <div id="industry-list"></div>
+                        </div>
+                    </section>
+
+                    <!-- Digest Sections — AI thematic deep-dives -->
                     <div id="digest-sections"></div>
 
-                    <!-- Conversation Starters -->
-                    <section id="starters-section" class="card starters-card hidden">
-                        <div class="card-header">
-                            <h2>💬 Conversation Openers</h2>
-                        </div>
-                        <div id="starters-content" class="card-body">
-                            <div id="starters-list"></div>
-                        </div>
-                    </section>
-
-                    <!-- All Daily Articles -->
+                    <!-- All Daily Articles — full reference list -->
                     <section id="articles-section" class="card">
                         <div class="card-header" onclick="toggleSection('articles')">
                             <h2>📰 All Daily Articles</h2>
