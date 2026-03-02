@@ -323,8 +323,9 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .weekly-export-actions { display: flex; gap: var(--cds-spacing-03); flex-wrap: wrap; margin-top: var(--cds-spacing-05); padding-top: var(--cds-spacing-05); border-top: 1px solid var(--cds-border-subtle-01); }
 .btn-sm { padding: var(--cds-spacing-02) var(--cds-spacing-04); font-size: var(--cds-body-01); min-height: 32px; }
 
-/* Meeting Brief — Sales Angle + Slack button (Phase 2) */
+/* Meeting Brief — Sales Angle, ATL Note + Slack button */
 .meeting-brief-sales-angle { border-left: 3px solid var(--cds-support-success); padding-left: var(--cds-spacing-04); color: var(--cds-support-success); font-weight: 500; }
+.meeting-brief-atl-note { border-left: 3px solid #08bdba; padding-left: var(--cds-spacing-04); font-style: italic; color: var(--cds-text-secondary); }
 .btn-slack { background: #4a154b; color: #ffffff; border: none; }
 .btn-slack:hover { background: #611f69; }
 .btn-slack.copied { background: var(--cds-support-success); color: var(--cds-text-inverse); }
@@ -420,6 +421,10 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .deep-read-text { font-size: var(--cds-body-01); color: var(--cds-text-primary); line-height: 1.6; }
 .deep-read-opener { font-style: italic; color: var(--cds-support-warning); }
 .deep-read-loading { color: var(--cds-text-secondary); font-size: var(--cds-body-01); font-style: italic; }
+/* Deep Read — new strategic sections */
+.deep-read-so-what { border-left: 3px solid var(--cds-support-warning, #f1c21b); padding-left: var(--cds-spacing-04); }
+.deep-read-client { border-left: 3px solid var(--cds-support-success, #24a148); padding-left: var(--cds-spacing-04); }
+.deep-read-competitive { border-left: 3px solid var(--cds-support-error, #da1e28); padding-left: var(--cds-spacing-04); }
 .deep-read-error { color: var(--cds-support-error); font-size: var(--cds-body-01); }
 
 /* Meeting Brief Modal */

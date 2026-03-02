@@ -1311,9 +1311,14 @@ class SignalApp {
         // Sort final set by score descending so Claude sees highest-value articles first
         sampledArticles.sort((a, b) => b.relevanceScore - a.relevanceScore);
         
-        const articleList = sampledArticles.map((a, i) =>
-            `[${i + 1}] Source: ${a.sourceName} | URL: ${a.url}\nTitle: ${a.title}\nSummary: ${a.summary?.substring(0, 200) || 'No summary'}`
-        ).join('\n\n');
+        // Inject client/industry/signal metadata into each article entry so Claude
+        // can connect articles to watchlist clients and industry verticals
+        const articleList = sampledArticles.map((a, i) => {
+            const clientTag = a.matchedClient ? ` | Client: ${a.matchedClient}` : '';
+            const industryTag = a.matchedIndustry ? ` | Industry: ${a.matchedIndustry}` : '';
+            const signalTag = (a.signalType && a.signalType !== 'background') ? ` | Signal: ${a.signalType}` : '';
+            return `[${i + 1}] Source: ${a.sourceName}${clientTag}${industryTag}${signalTag} | URL: ${a.url}\nTitle: ${a.title}\nSummary: ${a.summary?.substring(0, 250) || 'No summary'}`;
+        }).join('\n\n');
 
         // Inject "This Week's Context" if set
         const contextBlock = this.settings.thisWeekContext
@@ -1322,80 +1327,90 @@ class SignalApp {
 
         const prompt = `You are the intelligence briefer for the Field CTO of IBM Asia Pacific.
 ${contextBlock}
-YOUR JOB IS NOT TO SUMMARIZE NEWS. Your job is to answer:
+YOUR JOB IS NOT TO SUMMARIZE NEWS. Answer these four questions:
 1. What should I BRING UP in client meetings today?
 2. What COMPETITIVE THREAT requires immediate attention?
 3. What REGULATORY CHANGE affects my clients?
 4. What OPPORTUNITY should I act on this week?
 
-CONTEXT:
-- Role: Field CTO leading 100+ Account Technical Leaders across 343 enterprise accounts in APAC
-- Focus: Dual-wave thesis (AI/Agentic transformation + Sovereignty/Regulation)
-- Priority Industries: Financial Services, Government, Manufacturing, Energy, Retail
-- Competitors: Microsoft Azure, Google Cloud, AWS, Accenture, Deloitte, Alibaba Cloud, NTT Data, Infosys, Wipro
+ROLE CONTEXT:
+- You lead 115 Account Technical Leaders (ATLs) across 343 enterprise accounts in APAC
+- Dual-wave thesis: every insight belongs to either the AI/Agentic wave OR the Sovereignty/Regulation wave
+- Tag EVERY insight as [AI WAVE] or [SOVEREIGNTY WAVE] — this routes it to the right conversation
+- Priority industries: Financial Services, Government, Manufacturing, Energy, Retail
+- Competitors: Microsoft Azure, AWS, Google Cloud, Salesforce, SAP, Oracle, ServiceNow,
+  Accenture, Deloitte, TCS, Alibaba Cloud, Huawei Cloud, NTT Data, Fujitsu, Infosys, Wipro
 
-CRITICAL CITATION RULES:
-1. ALWAYS use the actual Source Name in citations, NOT generic "Source"
-2. Format: [Actual Source Name](URL) - e.g., [MIT Tech Review](https://...)
-3. Every factual claim MUST have a citation with the real source name
+CITATION RULES (strictly enforced):
+1. ALWAYS cite with the actual source name: [MIT Tech Review](https://...)
+2. NEVER use generic "Source" — use the real source name from the article list
+3. Every factual claim needs a citation
 
-CRITICAL FRAMING RULES:
+FRAMING RULES (strictly enforced):
 1. Frame EVERY insight as an ACTION, not information
 2. BAD: "Microsoft announced new Azure AI services"
-3. GOOD: "COMPETITIVE ALERT: Microsoft's new Azure AI [CIO Dive](url) could affect your banking deals. ACTION: Lead with IBM's on-prem sovereignty in your next DBS conversation."
+3. GOOD: "[AI WAVE] COMPETITIVE ALERT: Microsoft's Azure AI Foundry [Azure Blog](url) now offers
+   on-premises deployment — directly challenges IBM's hybrid cloud positioning. ACTION: Lead with
+   watsonx.ai's enterprise governance in your next Samsung or DBS conversation."
 
-INDUSTRY SIGNALS REQUIRED:
-For each of these Tier 1 industries — Financial Services, Government, Manufacturing, Energy, Retail —
-scan today's articles and produce one entry in the industrySignals array.
-Each entry must have:
-- industry: exact name from the list above
-- emoji: the correct industry emoji (🏦 FSI, 🏛️ Government, 🏭 Manufacturing, ⚡ Energy, 🛒 Retail)
-- headline: one sentence — the most important signal for this industry in today's articles
-- ibmAngle: one sentence — the specific IBM product or capability most relevant to this signal.
-  Be specific: watsonx.ai, watsonx.governance, IBM Consulting, Red Hat OpenShift, IBM Security, hybrid cloud, IBM Z
-- salesAction: one sentence — a specific action for an ATL or GTM seller this week.
-  Example: "Lead with watsonx.governance in your next DBS conversation — new MAS AI guidelines create urgency."
-If no relevant signal exists for an industry today, omit that industry from the array entirely.
+CLIENT INTELLIGENCE RULES:
+- Articles tagged with a Client name are watchlist client signals
+- For Tier 1 clients (DBS, OCBC, UOB, Commonwealth Bank, ANZ, Westpac, NAB, Samsung, Reliance,
+  HDFC, ICICI, CIMB, Maybank, Petronas, Singtel, ST Engineering, Tata, Telstra, SK):
+  flag their signals explicitly in executiveSummary or the relevant section
+- If thisWeekContext mentions a client by name, that client's signals are MEETING PREP —
+  surface them first in executiveSummary
+- When a client article reveals a broader industry pattern, reference it in the
+  corresponding industrySignals entry as evidence (e.g. "DBS's AI announcement signals...")
 
-Return ONLY valid JSON:
+INDUSTRY SIGNALS RULES:
+- Scan today's articles for each Tier 1 industry: Financial Services, Government, Manufacturing, Energy, Retail
+- Only produce an industrySignals entry if today's articles contain a relevant signal
+- Omit industries with no relevant signal — do not produce filler
+- If a watchlist client article is the evidence for an industry signal, name the client in the headline
+- salesAction must name a specific client account where possible
+
+SECTION RULES:
+- Only include a section if today's articles contain at least one relevant signal
+- Omit sections with no content — do not produce generic filler
+- Produce EXACTLY 3 conversationStarters — no more, no fewer
+- Do NOT include readingTimeMinutes in any section
+
+Return ONLY valid JSON, no markdown fences:
 {
-    "executiveSummary": "3-4 ACTION-ORIENTED sentences with [Source Name](URL) citations.",
+    "executiveSummary": "3-4 ACTION-ORIENTED sentences. Tag each [AI WAVE] or [SOVEREIGNTY WAVE]. Cite sources. If thisWeekContext mentions a client meeting, lead with that signal.",
     "sections": [
         {
             "title": "Competitive Alerts",
             "emoji": "🚨",
-            "summary": "Competitive threats with [Source Name](URL) citations.",
-            "readingTimeMinutes": 3
+            "summary": "Competitive threats with [Source Name](URL) citations. Tag [AI WAVE] or [SOVEREIGNTY WAVE]."
         },
         {
             "title": "Industry Opportunities",
             "emoji": "💰",
-            "summary": "Opportunities with [Source Name](URL) citations.",
-            "readingTimeMinutes": 3
+            "summary": "Opportunities with [Source Name](URL) citations. Tag [AI WAVE] or [SOVEREIGNTY WAVE]."
         },
         {
             "title": "Regulatory Watch",
             "emoji": "🛡️",
-            "summary": "Regulatory updates with [Source Name](URL) citations.",
-            "readingTimeMinutes": 3
+            "summary": "Regulatory updates with [Source Name](URL) citations. Tag [SOVEREIGNTY WAVE]."
         },
         {
             "title": "AI & Agentic",
             "emoji": "🤖",
-            "summary": "AI developments with [Source Name](URL) citations.",
-            "readingTimeMinutes": 3
+            "summary": "AI developments with [Source Name](URL) citations. Tag [AI WAVE]."
         }
     ],
     "conversationStarters": [
-        "Specific opener with [Source Name](URL) citation."
+        "Exactly 3 starters. Each must cite a source and demonstrate a point of view, not just a headline."
     ],
     "industrySignals": [
         {
             "industry": "Financial Services",
             "emoji": "🏦",
-            "headline": "One-sentence signal for FSI today.",
-            "ibmAngle": "Specific IBM product/capability angle.",
-            "salesAction": "Specific action for ATL/GTM this week."
+            "headline": "One-sentence signal grounded in today's articles. Name a client if one was matched.",
+            "ibmAngle": "Specific IBM product: watsonx.ai / watsonx.governance / IBM Consulting / Red Hat OpenShift / IBM Security / IBM Z / hybrid cloud.",
+            "salesAction": "Specific action for an ATL this week. Name a client account if relevant."
         }
     ]
 }
@@ -1998,18 +2013,43 @@ ${articleList}`;
         deepReadContent.innerHTML = '<div class="deep-read-loading">🤖 Generating deep read analysis...</div>';
         if (deepReadBtn) deepReadBtn.disabled = true;
         
-        const prompt = `You are briefing the IBM APAC Field CTO. Analyze this article and provide a concise intelligence brief.
+        // Inject all available article metadata so Claude has full context
+        const clientContext = (article.allMatchedClients?.length)
+            ? `Watchlist clients mentioned: ${article.allMatchedClients.slice(0, 5).join(', ')}.`
+            : 'No watchlist clients matched.';
+        const industryContext = article.matchedIndustry ? `Detected industry: ${article.matchedIndustry}.` : '';
+        const signalContext = (article.signalType && article.signalType !== 'background')
+            ? `Signal type: ${article.signalType}.` : '';
+        const weekContext = this.settings.thisWeekContext
+            ? `\nThis week's context: ${this.settings.thisWeekContext}` : '';
 
-Article: ${article.title}
-Source: ${article.sourceName}
+        const prompt = `You are the intelligence analyst for the IBM APAC Field CTO.
+Turn this article into a 60-second strategic brief that answers: "What does this mean for IBM APAC, and what should I do about it today?"
+
+ARTICLE
+Title: ${article.title}
+Source: ${article.sourceName} (Category: ${article.category || 'General'})
 Summary: ${article.summary || 'No summary available'}
-URL: ${article.url}
+${clientContext}
+${industryContext}
+${signalContext}${weekContext}
 
-Provide EXACTLY this JSON structure:
+FIELD DEFINITIONS:
+- keyFacts: 3 facts extracted directly from the article. One sentence each. No interpretation.
+- soWhat: The market-level shift this article signals. Why does this matter RIGHT NOW in APAC? Be specific about timing, geography, or competitive dynamics. Do NOT mention IBM here — this is about what is changing in the market.
+- ibmAngle: Which specific IBM capability is most relevant (watsonx.ai, watsonx.governance, IBM Consulting, Red Hat OpenShift, IBM Security, IBM Z, hybrid cloud), and why is NOW the right moment to position it?
+- clientImplication: Answer TWO questions in one field: (1) If watchlist clients were matched above, does this article reveal a broader industry trend the Field CTO should know before their next meeting with that client? (2) What should the ATL aligned to that client do with this information this week? If no clients matched, describe the APAC enterprise type most affected.
+- competitiveWatch: Name any competitor (AWS, Azure, Google, Salesforce, SAP, Oracle, ServiceNow, Accenture, TCS, Alibaba Cloud, Huawei Cloud, Fujitsu) whose position is strengthened or weakened. Return empty string if genuinely not applicable.
+- conversationOpener: A question that demonstrates you have a point of view — not just that you read the headline. Frame as a hypothesis: "I've been thinking that [observation from this article] — is that consistent with what you're seeing?" Peer CTO tone. Not a sales pitch.
+
+Return ONLY valid JSON, no markdown fences:
 {
-    "keyFacts": ["Fact 1 (one sentence)", "Fact 2 (one sentence)", "Fact 3 (one sentence)"],
-    "ibmAngle": "One sentence on how this relates to IBM's position or opportunity in APAC.",
-    "conversationOpener": "One specific question to ask a client CTO about this topic."
+    "keyFacts": ["string", "string", "string"],
+    "soWhat": "string",
+    "ibmAngle": "string",
+    "clientImplication": "string",
+    "competitiveWatch": "string",
+    "conversationOpener": "string"
 }`;
         
         try {
@@ -2023,7 +2063,7 @@ Provide EXACTLY this JSON structure:
                 },
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-20250514',
-                    max_tokens: 600,
+                    max_tokens: 800,
                     messages: [{ role: 'user', content: prompt }]
                 })
             });
@@ -2044,9 +2084,23 @@ Provide EXACTLY this JSON structure:
                         </ul>
                     </div>
                     <div class="deep-read-section">
+                        <div class="deep-read-label">⚡ So What</div>
+                        <div class="deep-read-text deep-read-so-what">${this.escapeHtml(result.soWhat || '')}</div>
+                    </div>
+                    <div class="deep-read-section">
                         <div class="deep-read-label">🔵 IBM Angle</div>
                         <div class="deep-read-text">${this.escapeHtml(result.ibmAngle || '')}</div>
                     </div>
+                    ${result.clientImplication ? `
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">👤 Client Implication</div>
+                        <div class="deep-read-text deep-read-client">${this.escapeHtml(result.clientImplication)}</div>
+                    </div>` : ''}
+                    ${result.competitiveWatch ? `
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">⚔️ Competitive Watch</div>
+                        <div class="deep-read-text deep-read-competitive">${this.escapeHtml(result.competitiveWatch)}</div>
+                    </div>` : ''}
                     <div class="deep-read-section">
                         <div class="deep-read-label">💬 Conversation Opener</div>
                         <div class="deep-read-text deep-read-opener">${this.escapeHtml(result.conversationOpener || '')}</div>
@@ -2122,15 +2176,23 @@ Provide EXACTLY this JSON structure:
             return;
         }
         
+        // Increase summary truncation 200 → 350 chars for better article context
         const articleList = clientArticles.map((a, i) =>
-            `[${i + 1}] ${a.sourceName}: ${a.title}\n${a.summary?.substring(0, 200) || ''}`
+            `[${i + 1}] ${a.sourceName}: ${a.title}\n${a.summary?.substring(0, 350) || ''}`
         ).join('\n\n');
         
         const contextBlock = this.settings.thisWeekContext
             ? `\nTHIS WEEK'S CONTEXT:\n${this.settings.thisWeekContext}\n`
             : '';
 
-        // Industry context block (Phase 2)
+        // Determine if this is a live meeting brief or ATL enablement brief
+        const isMeetingThisWeek = !!(this.settings.thisWeekContext &&
+            this.settings.thisWeekContext.toLowerCase().includes(clientName.toLowerCase()));
+        const briefPurpose = isMeetingThisWeek
+            ? `LIVE MEETING BRIEF — you are meeting ${clientName} this week`
+            : `ATL ENABLEMENT BRIEF — for the ATL aligned to ${clientName}`;
+
+        // Industry context block
         const industryBlock = clientIndustry ? `
 CLIENT INDUSTRY: ${clientIndustry}
 ${industrySignal ? `INDUSTRY SIGNAL THIS WEEK: ${industrySignal.headline}
@@ -2138,19 +2200,31 @@ IBM ANGLE FOR ${clientIndustry.toUpperCase()}: ${industrySignal.ibmAngle}` : ''}
 Frame all talking points through ${clientIndustry} challenges and priorities.
 ` : '';
         
-        const prompt = `You are preparing a meeting brief for the IBM APAC Field CTO who is meeting with ${clientName}.
+        const prompt = `You are preparing a meeting brief for the IBM APAC Field CTO.
+Brief purpose: ${briefPurpose}
 ${contextBlock}${industryBlock}
 Recent news about ${clientName}:
 ${articleList || 'No recent news found.'}
 
-Return ONLY valid JSON:
+BRIEF RULES:
+- If LIVE MEETING BRIEF: lead with the most time-sensitive signal; frame talking points as what to say in the room today
+- If ATL ENABLEMENT BRIEF: frame talking points as intelligence the ATL can use in their next client touchpoint or QBR
+- talkingPoints: produce EXACTLY 3 points, each framed as a ${clientIndustry || 'enterprise'} challenge with a specific IBM product angle (watsonx.ai, watsonx.governance, IBM Consulting, Red Hat OpenShift, IBM Security, IBM Z, hybrid cloud)
+- riskFlags: specific risks only — reputational issues, known competitor relationships, regulatory exposure, C-suite changes, or deal blockers. Omit array if none.
+- openingQuestion: frame as a hypothesis to test, not an open-ended probe. Style: "I've been thinking that [observation from the news] — is that consistent with what you're seeing?" Peer CTO tone, not a sales pitch.
+- salesAngle: name a specific IBM product AND a specific trigger (regulatory deadline, competitor move, or client news) that makes NOW the right time
+- atlNote: one sentence the ATL aligned to ${clientName} should know — what to watch for or act on this week, even if the Field CTO is not personally meeting the client
+- slackMessage: under 280 characters total
+
+Return ONLY valid JSON, no markdown fences:
 {
-    "situationSummary": "2-3 sentences on ${clientName}'s current situation based on the news.",
-    "talkingPoints": ["Point 1 framed as a ${clientIndustry || 'enterprise'} challenge with specific IBM angle", "Point 2", "Point 3"],
-    "riskFlags": ["Risk or concern to be aware of (if any)"],
-    "openingQuestion": "One specific opening question relevant to ${clientIndustry || 'their'} priorities.",
-    "salesAngle": "One sentence on the commercial opportunity — what specific IBM product/service and why now.",
-    "slackMessage": "*${clientName} — Signal Alert*\\n📊 [situation in 1 sentence]\\n💡 [top talking point]\\n⚡ [sales angle]\\n💬 Q: [opening question]"
+    "situationSummary": "2-3 sentences on ${clientName}'s current situation.",
+    "talkingPoints": ["Exactly 3 points. Each: ${clientIndustry || 'enterprise'} challenge + specific IBM product angle.", "Point 2.", "Point 3."],
+    "riskFlags": ["Specific risk only — reputational, competitive, regulatory, C-suite, or deal blocker. Omit array if none."],
+    "openingQuestion": "Hypothesis-framed. Peer CTO tone. Not a sales pitch.",
+    "salesAngle": "Specific IBM product + specific trigger for why now.",
+    "atlNote": "One sentence for the ATL aligned to ${clientName} — what to watch for or act on this week.",
+    "slackMessage": "*${clientName} — Signal Alert*\\n📊 [1-sentence situation]\\n💡 [top talking point]\\n⚡ [sales angle]\\n💬 Q: [opening question]"
 }`;
         
         try {
@@ -2164,7 +2238,7 @@ Return ONLY valid JSON:
                 },
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-20250514',
-                    max_tokens: 1000,
+                    max_tokens: 1100,
                     messages: [{ role: 'user', content: prompt }]
                 })
             });
@@ -2194,6 +2268,11 @@ Return ONLY valid JSON:
                     <div class="meeting-brief-section">
                         <div class="meeting-brief-label">⚡ Sales Angle</div>
                         <div class="meeting-brief-text meeting-brief-sales-angle">${this.escapeHtml(brief.salesAngle)}</div>
+                    </div>` : ''}
+                    ${brief.atlNote ? `
+                    <div class="meeting-brief-section">
+                        <div class="meeting-brief-label">👤 ATL Note</div>
+                        <div class="meeting-brief-text meeting-brief-atl-note">${this.escapeHtml(brief.atlNote)}</div>
                     </div>` : ''}
                     <div class="meeting-brief-section">
                         <div class="meeting-brief-label">💡 Talking Points</div>
@@ -2400,13 +2479,40 @@ Return ONLY valid JSON:
             return;
         }
 
-        const prompt = `You are the IBM APAC Field CTO preparing a weekly intelligence brief for the GTM sales team.
-The sales team is organised by industry vertical. Write a plain-text email they can read in under 2 minutes.
-Do NOT use markdown formatting, bullet symbols, or HTML. Use plain text only.
-Use ALL CAPS for section headers. Use dashes for list items.
+        // Build client signals block grouped by industry (Tier 1 & 2 only)
+        const clientSignalLines = [];
+        for (const article of this.dailyArticles.filter(a => a.matchedClient)) {
+            const clientObj = this.clients.find(c =>
+                (typeof c === 'string' ? c : c.name) === article.matchedClient
+            );
+            if (!clientObj || (typeof clientObj === 'object' && clientObj.tier > 2)) continue;
+            const tier = (typeof clientObj === 'object') ? clientObj.tier : 2;
+            const industry = (typeof clientObj === 'object' && clientObj.industry) ? clientObj.industry : 'Other';
+            const signalType = article.signalType || 'signal';
+            clientSignalLines.push(
+                `${article.matchedClient} (${industry}, Tier ${tier}, ${signalType}): ${article.title}`
+            );
+        }
+        const clientSignalBlock = clientSignalLines.length > 0
+            ? clientSignalLines.join('\n')
+            : 'No Tier 1/2 client signals today.';
 
+        // Inject thisWeekContext (was missing from original GTM prompt)
+        const weekContextBlock = this.settings.thisWeekContext
+            ? `\nTHIS WEEK'S CONTEXT:\n${this.settings.thisWeekContext}\n`
+            : '';
+
+        const prompt = `Write a weekly intelligence email FROM the IBM APAC Field CTO TO the GTM sales team.
+Write in first person. You are the Field CTO addressing your team directly.
+The team is organised by industry vertical. They need to know what to do this week, not just what happened.
+Plain text only. No markdown, no bullet symbols, no HTML.
+Use ALL CAPS for section headers. Use dashes for list items.
+${weekContextBlock}
 INDUSTRY SIGNALS AVAILABLE:
 ${industryBlock}
+
+CLIENT SIGNALS THIS WEEK (Tier 1 & 2 accounts only):
+${clientSignalBlock}
 
 CROSS-INDUSTRY CONTEXT:
 ${crossIndustryBlock || 'No cross-industry signals available.'}
@@ -2418,17 +2524,21 @@ Produce EXACTLY this structure (plain text, no markdown):
 
 Subject: IBM APAC Field CTO — Weekly Intelligence Brief | ${date}
 
+WHAT TO LEAD WITH THIS WEEK
+[2-3 sentences maximum. State the single IBM message, the market evidence for it, and the call to action for sellers. Tag as [AI WAVE] or [SOVEREIGNTY WAVE].]
+
 [For each industry that has a signal, write a section:]
 [INDUSTRY NAME IN CAPS]
-Signal: [headline]
+Signal: [headline — if a watchlist client is the evidence, name them]
 IBM angle: [ibmAngle — be specific about the IBM product/service]
-Action: [salesAction — what the GTM seller should do this week]
+Action: [salesAction — what the GTM seller should do this week, name a client account if relevant]
+Client watch: [if any Tier 1/2 clients in this industry had signals today, list them with one-sentence implication for the ATL. Omit this line if no client signals.]
 
 CROSS-INDUSTRY SIGNALS
-- [competitive alert or regulatory change affecting all verticals, 2-3 bullets max]
+- [2-3 bullets: competitive alerts or regulatory changes affecting all verticals]
 
-WHAT TO LEAD WITH THIS WEEK
-[1 short paragraph — the single most important IBM message given this week's signals]
+CALL TO ACTION THIS WEEK
+- [1-2 specific actions for sellers, tied to the week's signals. Name accounts where possible.]
 
 TOP ARTICLES
 [list the top 3-5 articles with title and URL, one per line]`;
@@ -2444,7 +2554,7 @@ TOP ARTICLES
                 },
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-20250514',
-                    max_tokens: 1200,
+                    max_tokens: 1500,
                     messages: [{ role: 'user', content: prompt }]
                 })
             });
