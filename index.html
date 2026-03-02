@@ -80,7 +80,20 @@
                         </div>
                     </section>
 
-                    <!-- Conversation Starters — immediately actionable talking points -->
+                    <!-- Client Watch — account-specific intel (highest urgency: meeting prep) -->
+                    <section id="clients-section" class="card clients-card hidden">
+                        <div class="card-header card-header--collapsible" onclick="toggleSection('clients')">
+                            <h2>👁️ Client Watch</h2>
+                            <span id="clients-count" class="badge badge-purple">0</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="clients-content" class="card-body">
+                            <p class="card-description">Recent coverage of your watchlist accounts - useful for meeting prep and competitive intel</p>
+                            <div id="clients-list"></div>
+                        </div>
+                    </section>
+
+                    <!-- Conversation Starters — talking points, contextualised by Client Watch above -->
                     <section id="starters-section" class="card starters-card hidden">
                         <div class="card-header">
                             <h2>💬 Conversation Openers</h2>
@@ -102,20 +115,10 @@
                         </div>
                     </section>
 
-                    <!-- Client Watch — account-specific intel -->
-                    <section id="clients-section" class="card clients-card hidden">
-                        <div class="card-header card-header--collapsible" onclick="toggleSection('clients')">
-                            <h2>👁️ Client Watch</h2>
-                            <span id="clients-count" class="badge badge-purple">0</span>
-                            <span class="chevron">▼</span>
-                        </div>
-                        <div id="clients-content" class="card-body">
-                            <p class="card-description">Recent coverage of your watchlist accounts - useful for meeting prep and competitive intel</p>
-                            <div id="clients-list"></div>
-                        </div>
-                    </section>
+                    <!-- Digest Sections — AI thematic deep-dives -->
+                    <div id="digest-sections"></div>
 
-                    <!-- Cross-Source Signals — multi-source themes (broader context) -->
+                    <!-- Cross-Source Signals — keyword-matched multi-source themes (supporting context) -->
                     <section id="signals-section" class="card signals-card hidden">
                         <div class="card-header card-header--collapsible" onclick="toggleSection('signals')">
                             <h2>🔥 Cross-Source Signals</h2>
@@ -127,9 +130,6 @@
                             <div id="signals-list"></div>
                         </div>
                     </section>
-
-                    <!-- Digest Sections — AI thematic deep-dives -->
-                    <div id="digest-sections"></div>
 
                     <!-- All Daily Articles — full reference list -->
                     <section id="articles-section" class="card">

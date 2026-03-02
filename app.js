@@ -1334,12 +1334,11 @@ YOUR JOB IS NOT TO SUMMARIZE NEWS. Answer these four questions:
 4. What OPPORTUNITY should I act on this week?
 
 ROLE CONTEXT:
-- You lead 115 Account Technical Leaders (ATLs) across 343 enterprise accounts in APAC
+- You lead 115 Account Technical Leaders (ATLs) across 343 enterprise accounts in Asia Pacific (excluding Japan)
 - Dual-wave thesis: every insight belongs to either the AI/Agentic wave OR the Sovereignty/Regulation wave
 - Tag EVERY insight as [AI WAVE] or [SOVEREIGNTY WAVE] — this routes it to the right conversation
 - Priority industries: Financial Services, Government, Manufacturing, Energy, Retail
-- Competitors: Microsoft Azure, AWS, Google Cloud, Salesforce, SAP, Oracle, ServiceNow,
-  Accenture, Deloitte, TCS, Alibaba Cloud, Huawei Cloud, NTT Data, Fujitsu, Infosys, Wipro
+- Competitors: Microsoft Azure, AWS, Google Cloud, Salesforce, SAP, Oracle, ServiceNow, Databricks, Snowflake
 
 CITATION RULES (strictly enforced):
 1. ALWAYS cite with the actual source name: [MIT Tech Review](https://...)
@@ -1355,8 +1354,8 @@ FRAMING RULES (strictly enforced):
 
 CLIENT INTELLIGENCE RULES:
 - Articles tagged with a Client name are watchlist client signals
-- For Tier 1 clients (DBS, OCBC, UOB, Commonwealth Bank, ANZ, Westpac, NAB, Samsung, Reliance,
-  HDFC, ICICI, CIMB, Maybank, Petronas, Singtel, ST Engineering, Tata, Telstra, SK):
+- For Tier 1 clients (DBS, Commonwealth Bank, ANZ, Westpac, NAB, Samsung, Reliance,
+  HDFC, ICICI, CIMB, Maybank, Petronas, Singtel, Starhub, Telstra, SK Telecom):
   flag their signals explicitly in executiveSummary or the relevant section
 - If thisWeekContext mentions a client by name, that client's signals are MEETING PREP —
   surface them first in executiveSummary
@@ -1503,27 +1502,29 @@ ${articleList}`;
         // 1. Action Brief — synthesised headline, read this first
         if (this.digest) {
             document.getElementById('executive-summary').innerHTML = this.formatMarkdownLinks(this.digest.executiveSummary);
-            
-            // 2. Conversation Openers — immediately actionable talking points
-            this.renderStarters(this.digest.conversationStarters || []);
         }
 
-        // 3. Client Watch — account-specific intel (highest urgency: meeting prep)
+        // 2. Client Watch — account-specific intel (highest urgency: meeting prep)
         this.renderClientWatch();
+
+        // 3. Conversation Openers — talking points, contextualised by Client Watch above
+        if (this.digest) {
+            this.renderStarters(this.digest.conversationStarters || []);
+        }
 
         // 4. Industry Signals — AI-generated per-industry strategic guidance (ATL team framing)
         if (this.digest) {
             this.renderIndustrySignals();
         }
-        
-        // 5. Cross-Source Signals — multi-source themes (broader context)
-        // Use cached crossRefs computed during scoring (avoids recomputing O(articles×themes×keywords))
-        this.renderCrossSourceSignals(this.crossRefs);
-        
-        // 6. AI Digest Sections — thematic deep-dives
+
+        // 5. AI Digest Sections — thematic deep-dives (AI-generated block stays together)
         if (this.digest) {
             this.renderSections(this.digest.sections || []);
         }
+
+        // 6. Cross-Source Signals — keyword-matched multi-source themes (supporting context)
+        // Use cached crossRefs computed during scoring (avoids recomputing O(articles×themes×keywords))
+        this.renderCrossSourceSignals(this.crossRefs);
         
         // 7. All Daily Articles — full reference list
         this.renderDailyArticles();

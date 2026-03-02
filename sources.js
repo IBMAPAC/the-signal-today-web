@@ -45,7 +45,7 @@ const DEFAULT_SOURCES = [
     },
     {
         name: "OpenAI Blog",
-        url: "https://openai.com/blog/rss.xml",
+        url: "https://openai.com/news/rss.xml",
         category: "AI & Agentic",
         priority: 2,
         credibilityScore: 0.90,
@@ -211,11 +211,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "IMDA Singapore",
-        url: "https://www.imda.gov.sg/resources/press-releases-factsheets-and-speeches/rss",
+        name: "ComputerWeekly IT Security",
+        url: "https://www.computerweekly.com/rss/IT-security.xml",
         category: "Sovereignty & Regulation",
         priority: 1,
-        credibilityScore: 0.95,
+        credibilityScore: 0.85,
         digestType: "both",
         enabled: true
     },
@@ -332,11 +332,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "ZDNet Australia",
-        url: "https://www.zdnet.com/topic/australia/rss.xml",
+        name: "iTnews Australia",
+        url: "https://www.itnews.com.au/rss/",
         category: "APAC Enterprise",
         priority: 2,
-        credibilityScore: 0.80,
+        credibilityScore: 0.85,
         digestType: "daily",
         enabled: true
     },
@@ -508,11 +508,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Protocol China",
-        url: "https://www.protocol.com/china/rss.xml",
+        name: "Trivium China",
+        url: "https://triviumchina.com/feed/",
         category: "China & Geopolitics",
         priority: 2,
-        credibilityScore: 0.85,
+        credibilityScore: 0.90,
         digestType: "both",
         enabled: true
     },
@@ -562,8 +562,8 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "451 Research",
-        url: "https://451research.com/feed",
+        name: "Omdia",
+        url: "https://omdia.tech.informa.com/rss",
         category: "Competitive Landscape",
         priority: 1,
         credibilityScore: 0.90,
@@ -636,11 +636,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "ServiceNow Blog",
-        url: "https://www.servicenow.com/blogs.xml",
+        name: "ZDNet Enterprise",
+        url: "https://www.zdnet.com/topic/enterprise-software/rss.xml",
         category: "Competitive Landscape",
         priority: 2,
-        credibilityScore: 0.60,
+        credibilityScore: 0.80,
         digestType: "daily",
         enabled: true
     },
@@ -913,12 +913,12 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "IBM Institute for Business Value",
-        url: "https://www.ibm.com/thought-leadership/institute-business-value/rss",
+        name: "Red Hat Blog",
+        url: "https://www.redhat.com/en/rss/blog",
         category: "IBM & Partners",
         priority: 1,
         credibilityScore: 0.85,
-        digestType: "weekly",
+        digestType: "both",
         enabled: true
     },
     {
@@ -941,7 +941,7 @@ const DEFAULT_SOURCES = [
     },
     {
         name: "OpenShift Blog",
-        url: "https://www.openshift.com/blog/feed",
+        url: "https://www.redhat.com/en/rss/blog/channel/red-hat-openshift",
         category: "IBM & Partners",
         priority: 2,
         credibilityScore: 0.85,
