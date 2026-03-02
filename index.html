@@ -25,6 +25,7 @@
             <div class="header-content">
                 <h1>📡 The Signal Today</h1>
                 <div class="header-actions">
+                    <span id="source-health-badge" class="source-health-badge hidden" title=""></span>
                     <span id="reading-time" class="reading-badge">~0 min unread</span>
                     <button id="refresh-btn" class="btn btn-primary" title="Refresh (R)">
                         <span class="refresh-icon">↻</span> Refresh
@@ -128,6 +129,19 @@
                         <div id="signals-content" class="card-body">
                             <p class="card-description">Topics covered by multiple independent sources - higher signal, lower noise</p>
                             <div id="signals-list"></div>
+                        </div>
+                    </section>
+
+                    <!-- Multi-Day Trending — topics rising across the 7-day IDB corpus -->
+                    <section id="trending-section" class="card trending-card hidden">
+                        <div class="card-header card-header--collapsible" onclick="toggleSection('trending')">
+                            <h2>📈 Trending Topics</h2>
+                            <span id="trending-count" class="badge badge-orange">0</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="trending-content" class="card-body">
+                            <p class="card-description">Topics appearing across multiple days and sources — sustained signals, not one-day noise</p>
+                            <div id="trending-list"></div>
                         </div>
                     </section>
 

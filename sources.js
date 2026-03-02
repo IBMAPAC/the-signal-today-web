@@ -768,15 +768,6 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Red Hat Blog",
-        url: "https://www.redhat.com/en/blog/rss.xml",
-        category: "Architecture & Platform",
-        priority: 1,
-        credibilityScore: 0.85,
-        digestType: "both",
-        enabled: true
-    },
-    {
         name: "SemiAnalysis",
         url: "https://semianalysis.substack.com/feed",
         category: "Architecture & Platform",
@@ -905,7 +896,7 @@ const DEFAULT_SOURCES = [
     // ============================================
     {
         name: "IBM Research Blog",
-        url: "https://research.ibm.com/blog/rss",
+        url: "https://research.ibm.com/rss",
         category: "IBM & Partners",
         priority: 1,
         credibilityScore: 0.90,
@@ -931,11 +922,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "IBM watsonx Blog",
-        url: "https://www.ibm.com/blog/category/watsonx/feed/",
+        name: "SiliconANGLE",
+        url: "https://siliconangle.com/feed/",
         category: "IBM & Partners",
         priority: 1,
-        credibilityScore: 0.85,
+        credibilityScore: 0.82,
         digestType: "both",
         enabled: true
     },

@@ -2,6 +2,213 @@
 // The Signal Today - Web Application
 // =============================================
 
+// =============================================
+// SignalDB — IndexedDB persistence layer
+// Stores a 7-day rolling article corpus and
+// 14-day digest history. Survives localStorage
+// quota limits (~5 MB) and enables trend
+// detection across multiple refresh cycles.
+// =============================================
+
+class SignalDB {
+    static DB_NAME    = 'signal-today-db';
+    static DB_VERSION = 1;
+    static STORES     = { ARTICLES: 'articles', DIGESTS: 'digests', READ_STATE: 'readState' };
+    static ARTICLE_TTL_DAYS = 7;
+    static DIGEST_TTL_DAYS  = 14;
+
+    constructor() {
+        this._db = null; // IDBDatabase instance, set after open()
+    }
+
+    // Open (or create) the database and run migrations
+    open() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(SignalDB.DB_NAME, SignalDB.DB_VERSION);
+
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                // articles store: keyed by article id, indexed by publishedDate for TTL purge
+                if (!db.objectStoreNames.contains(SignalDB.STORES.ARTICLES)) {
+                    const store = db.createObjectStore(SignalDB.STORES.ARTICLES, { keyPath: 'id' });
+                    store.createIndex('publishedDate', 'publishedDate', { unique: false });
+                    store.createIndex('savedAt', 'savedAt', { unique: false });
+                }
+                // digests store: keyed by date string YYYY-MM-DD
+                if (!db.objectStoreNames.contains(SignalDB.STORES.DIGESTS)) {
+                    db.createObjectStore(SignalDB.STORES.DIGESTS, { keyPath: 'date' });
+                }
+                // readState store: keyed by articleId
+                if (!db.objectStoreNames.contains(SignalDB.STORES.READ_STATE)) {
+                    db.createObjectStore(SignalDB.STORES.READ_STATE, { keyPath: 'articleId' });
+                }
+            };
+
+            req.onsuccess = (e) => {
+                this._db = e.target.result;
+                // Purge stale records on every open (non-blocking)
+                this._purgeOldArticles();
+                this._purgeOldDigests();
+                resolve(this);
+            };
+
+            req.onerror = (e) => {
+                console.warn('SignalDB: failed to open IndexedDB', e.target.error);
+                resolve(this); // Resolve (not reject) so app still works without IDB
+            };
+        });
+    }
+
+    // ── Internal helpers ──────────────────────────────────────────────────────
+
+    _tx(storeName, mode = 'readonly') {
+        if (!this._db) return null;
+        try {
+            return this._db.transaction(storeName, mode).objectStore(storeName);
+        } catch (e) {
+            console.warn('SignalDB: transaction error', e);
+            return null;
+        }
+    }
+
+    _promisify(req) {
+        return new Promise((resolve, reject) => {
+            req.onsuccess = () => resolve(req.result);
+            req.onerror  = () => reject(req.error);
+        });
+    }
+
+    _purgeOldArticles() {
+        const store = this._tx(SignalDB.STORES.ARTICLES, 'readwrite');
+        if (!store) return;
+        const cutoff = new Date(Date.now() - SignalDB.ARTICLE_TTL_DAYS * 86400000).toISOString();
+        const idx = store.index('publishedDate');
+        const range = IDBKeyRange.upperBound(cutoff);
+        idx.openCursor(range).onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) { cursor.delete(); cursor.continue(); }
+        };
+    }
+
+    _purgeOldDigests() {
+        const store = this._tx(SignalDB.STORES.DIGESTS, 'readwrite');
+        if (!store) return;
+        const cutoffDate = new Date(Date.now() - SignalDB.DIGEST_TTL_DAYS * 86400000);
+        const cutoffKey = cutoffDate.toISOString().slice(0, 10); // YYYY-MM-DD
+        const range = IDBKeyRange.upperBound(cutoffKey);
+        store.openCursor(range).onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) { cursor.delete(); cursor.continue(); }
+        };
+    }
+
+    // ── Articles ──────────────────────────────────────────────────────────────
+
+    // Save (upsert) an array of articles. Strips scoreBreakdown to save space.
+    async saveArticles(articles) {
+        const store = this._tx(SignalDB.STORES.ARTICLES, 'readwrite');
+        if (!store) return;
+        const now = new Date().toISOString();
+        for (const a of articles) {
+            // Omit scoreBreakdown from persisted record (large, recomputed on next score)
+            const { scoreBreakdown, ...slim } = a;
+            slim.savedAt = now;
+            store.put(slim);
+        }
+    }
+
+    // Load all articles from the rolling corpus (up to 7 days old)
+    async loadArticles() {
+        const store = this._tx(SignalDB.STORES.ARTICLES, 'readonly');
+        if (!store) return [];
+        try {
+            return await this._promisify(store.getAll());
+        } catch (e) {
+            console.warn('SignalDB: loadArticles error', e);
+            return [];
+        }
+    }
+
+    // ── Digests ───────────────────────────────────────────────────────────────
+
+    // Save today's digest keyed by YYYY-MM-DD
+    async saveDigest(digest) {
+        if (!digest) return;
+        const store = this._tx(SignalDB.STORES.DIGESTS, 'readwrite');
+        if (!store) return;
+        const record = { ...digest, date: new Date().toISOString().slice(0, 10) };
+        store.put(record);
+    }
+
+    // Load the most recent digest (highest date key)
+    async loadLatestDigest() {
+        const store = this._tx(SignalDB.STORES.DIGESTS, 'readonly');
+        if (!store) return null;
+        try {
+            // Open cursor in descending order to get the latest
+            return await new Promise((resolve) => {
+                const req = store.openCursor(null, 'prev');
+                req.onsuccess = (e) => resolve(e.target.result ? e.target.result.value : null);
+                req.onerror   = () => resolve(null);
+            });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Load all digests (for trend detection in Phase 6)
+    async loadAllDigests() {
+        const store = this._tx(SignalDB.STORES.DIGESTS, 'readonly');
+        if (!store) return [];
+        try {
+            return await this._promisify(store.getAll());
+        } catch (e) {
+            return [];
+        }
+    }
+
+    // ── Read State ────────────────────────────────────────────────────────────
+
+    // Mark an article as read
+    async markRead(articleId) {
+        const store = this._tx(SignalDB.STORES.READ_STATE, 'readwrite');
+        if (!store) return;
+        store.put({ articleId, readAt: new Date().toISOString() });
+    }
+
+    // Load the full set of read article IDs as a Set<string>
+    async loadReadIds() {
+        const store = this._tx(SignalDB.STORES.READ_STATE, 'readonly');
+        if (!store) return new Set();
+        try {
+            const all = await this._promisify(store.getAllKeys());
+            return new Set(all.map(String));
+        } catch (e) {
+            return new Set();
+        }
+    }
+
+    // ── Migration ─────────────────────────────────────────────────────────────
+
+    // One-time migration: import articles from localStorage into IDB, then remove the key
+    async migrateFromLocalStorage() {
+        const raw = localStorage.getItem('signal_articles');
+        if (!raw) return 0;
+        try {
+            const articles = JSON.parse(raw);
+            if (Array.isArray(articles) && articles.length > 0) {
+                await this.saveArticles(articles);
+                localStorage.removeItem('signal_articles');
+                console.log(`SignalDB: migrated ${articles.length} articles from localStorage → IDB`);
+                return articles.length;
+            }
+        } catch (e) {
+            console.warn('SignalDB: migration error', e);
+        }
+        return 0;
+    }
+}
+
 const CORS_PROXIES = [
     'https://api.allorigins.win/raw?url=',
     'https://corsproxy.io/?',
@@ -52,12 +259,49 @@ class SignalApp {
         this.autoRefreshTimer = null;
         this.articleRatings = {};   // { articleId: 1 (👍) | -1 (👎) }
         this.sourceScoreDrift = {}; // { sourceName: delta } — accumulated from ratings
+        this.failedSources = [];    // Sources that failed to fetch in the last refresh
+        this.debugMode = new URLSearchParams(location.search).get('debug') === '1';
+        this.db = new SignalDB();   // IndexedDB persistence layer (Phase 5)
         
         this.init();
     }
 
     async init() {
+        // Open IndexedDB first (non-blocking fallback if unavailable)
+        await this.db.open();
+
+        // Load settings, sources, clients, industries, ratings, drift from localStorage
         this.loadFromStorage();
+
+        // Migrate any articles still in localStorage → IDB (one-time)
+        await this.db.migrateFromLocalStorage();
+
+        // Load rolling article corpus from IDB (up to 7 days)
+        const idbArticles = await this.db.loadArticles();
+        if (idbArticles.length > 0) {
+            // Merge IDB articles with any already loaded from localStorage
+            // (after migration localStorage articles are gone, but guard anyway)
+            const existingIds = new Set(this.articles.map(a => a.id));
+            for (const a of idbArticles) {
+                if (!existingIds.has(a.id)) this.articles.push(a);
+            }
+            console.log(`SignalDB: loaded ${idbArticles.length} articles from IDB corpus`);
+        }
+
+        // Apply persisted read state from IDB to all articles
+        const readIds = await this.db.loadReadIds();
+        if (readIds.size > 0) {
+            for (const a of this.articles) {
+                if (readIds.has(a.id)) a.isRead = true;
+            }
+        }
+
+        // Load latest digest from IDB if not already in localStorage
+        if (!this.digest) {
+            this.digest = await this.db.loadLatestDigest();
+            if (this.digest) console.log('SignalDB: restored digest from IDB');
+        }
+
         this.updateUI();
         this.bindEvents();
         this.updateDate();
@@ -100,13 +344,10 @@ class SignalApp {
             this.clients = [...DEFAULT_CLIENTS];
         }
         
-        // Load articles
-        const savedArticles = localStorage.getItem(STORAGE_KEYS.ARTICLES);
-        this.articles = savedArticles ? JSON.parse(savedArticles) : [];
-        
-        // Load digest
-        const savedDigest = localStorage.getItem(STORAGE_KEYS.DIGEST);
-        this.digest = savedDigest ? JSON.parse(savedDigest) : null;
+        // NOTE: articles and digest are no longer stored in localStorage.
+        // They are loaded from IndexedDB in init() after this.db.open().
+        // Legacy signal_articles key is migrated to IDB on first run by
+        // migrateFromLocalStorage() and then removed.
         
         // Load settings
         const savedSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
@@ -123,16 +364,18 @@ class SignalApp {
     }
 
     saveToStorage() {
+        // localStorage: settings, sources, clients, industries, ratings, drift
+        // (articles and digest now live in IndexedDB — no longer written to localStorage)
         localStorage.setItem(STORAGE_KEYS.SOURCES, JSON.stringify(this.sources));
         localStorage.setItem(STORAGE_KEYS.INDUSTRIES, JSON.stringify(this.industries));
         localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(this.clients));
-        localStorage.setItem(STORAGE_KEYS.ARTICLES, JSON.stringify(this.articles));
         localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(this.settings));
         localStorage.setItem(STORAGE_KEYS.ARTICLE_RATINGS, JSON.stringify(this.articleRatings));
         localStorage.setItem(STORAGE_KEYS.SOURCE_SCORE_DRIFT, JSON.stringify(this.sourceScoreDrift));
-        if (this.digest) {
-            localStorage.setItem(STORAGE_KEYS.DIGEST, JSON.stringify(this.digest));
-        }
+
+        // IndexedDB: rolling article corpus + digest history (fire-and-forget)
+        this.db.saveArticles(this.articles);
+        if (this.digest) this.db.saveDigest(this.digest);
     }
 
     // ==========================================
@@ -348,6 +591,22 @@ class SignalApp {
         this.updateDate();
         this.updateReadingTime();
         this.updateLastRefreshed();
+        this.updateSourceHealthBadge();
+    }
+
+    updateSourceHealthBadge() {
+        const badge = document.getElementById('source-health-badge');
+        if (!badge) return;
+        const count = this.failedSources.length;
+        if (count === 0) {
+            badge.classList.add('hidden');
+            badge.removeAttribute('title');
+            return;
+        }
+        badge.classList.remove('hidden');
+        badge.textContent = `⚠️ ${count} source${count > 1 ? 's' : ''} failed`;
+        const names = this.failedSources.map(s => `• ${s.name}`).join('\n');
+        badge.title = `Failed to fetch:\n${names}`;
     }
 
     updateDate() {
@@ -417,6 +676,7 @@ class SignalApp {
     async refresh(quickMode = false) {
         if (this.isLoading) return;
         this.isLoading = true;
+        this.failedSources = []; // Reset failure list for this refresh run
 
         const startTime = performance.now();
 
@@ -430,10 +690,14 @@ class SignalApp {
             const fetchedArticles = await this.fetchArticles(enabledSources);
             console.log(`📰 Fetched ${fetchedArticles.length} articles in ${Math.round(performance.now() - startTime)}ms`);
             
-            this.showLoading(`Scoring ${fetchedArticles.length} articles...`);
+            // Deduplicate before scoring — removes same story from multiple sources
+            const dedupedArticles = this.deduplicateArticles(fetchedArticles);
+            console.log(`🔁 ${fetchedArticles.length - dedupedArticles.length} duplicates removed → ${dedupedArticles.length} unique articles`);
+            
+            this.showLoading(`Scoring ${dedupedArticles.length} articles...`);
             
             // Score articles
-            const scoredArticles = this.scoreArticles(fetchedArticles);
+            const scoredArticles = this.scoreArticles(dedupedArticles);
             this.articles = scoredArticles
                 .filter(a => a.relevanceScore >= 0.1)
                 .sort((a, b) => b.relevanceScore - a.relevanceScore)
@@ -447,8 +711,35 @@ class SignalApp {
             // Generate AI digest if API key available (skip in quick mode)
             const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
             if (apiKey && !quickMode) {
-                this.showLoading('Generating AI-powered digest...');
-                await this.generateAIDigest(apiKey);
+                // Phase 7: compute article fingerprint to detect new articles since last digest
+                const fingerprint = this.computeArticleFingerprint(this.dailyArticles);
+                const cachedFingerprint = this.digest?.articleFingerprint;
+                const cachedContext = this.digest?.thisWeekContext;
+                const contextChanged = this.settings.thisWeekContext !== (cachedContext || '');
+
+                if (cachedFingerprint && fingerprint === cachedFingerprint && !contextChanged) {
+                    // No new articles and context unchanged — reuse cached digest
+                    console.log('💾 Digest cache hit — no new articles, skipping API call');
+                    this.showLoading('✅ Digest up to date (no new articles)');
+                    // digest already loaded from IDB in init(); nothing to do
+                } else {
+                    // Identify new articles not seen in the last digest
+                    const cachedIds = new Set(this.digest?.seenArticleIds || []);
+                    const newArticles = this.dailyArticles.filter(a => !cachedIds.has(a.id));
+                    const newCount = newArticles.length;
+
+                    if (cachedFingerprint && newCount > 0 && newCount < 8 && !contextChanged) {
+                        // Delta mode: only a few new articles — merge into existing digest
+                        console.log(`🔄 Delta refresh: ${newCount} new articles → merging into existing digest`);
+                        this.showLoading(`Updating digest with ${newCount} new articles...`);
+                        await this.mergeDeltaDigest(apiKey, newArticles);
+                    } else {
+                        // Full regeneration: first run, many new articles, or context changed
+                        console.log(`🤖 Full digest generation (${newCount} new articles, contextChanged=${contextChanged})`);
+                        this.showLoading('Generating AI-powered digest...');
+                        await this.generateAIDigest(apiKey);
+                    }
+                }
             } else {
                 this.digest = this.createBasicDigest();
             }
@@ -544,10 +835,104 @@ class SignalApp {
             
             return articles;
         } catch (error) {
-            // All proxies failed
+            // All proxies failed — record for source health badge
             console.warn(`All proxies failed for ${source.name}`);
+            this.failedSources.push({ name: source.name, url: source.url });
             return [];
         }
+    }
+
+    // ==========================================
+    // Deduplication
+    // ==========================================
+
+    /**
+     * Remove duplicate articles from a flat array.
+     * Two articles are considered duplicates if:
+     *   (a) their normalised URLs are identical, OR
+     *   (b) their title bigram Jaccard similarity is >= 0.6
+     * When a duplicate pair is found, keep the article from the higher-priority
+     * source (lower priority number = higher priority; tie-break on credibilityScore).
+     */
+    deduplicateArticles(articles) {
+        const normaliseUrl = (url) => {
+            try {
+                const u = new URL(url);
+                // Remove tracking params
+                ['utm_source','utm_medium','utm_campaign','utm_content','utm_term',
+                 'ref','source','via','mc_cid','mc_eid','fbclid','gclid'].forEach(p => u.searchParams.delete(p));
+                // Normalise: strip www., lowercase host, remove trailing slash
+                u.hostname = u.hostname.replace(/^www\./, '');
+                u.protocol = 'https:';
+                let norm = u.toString().replace(/\/$/, '');
+                return norm.toLowerCase();
+            } catch {
+                return url.toLowerCase().replace(/\/$/, '');
+            }
+        };
+
+        const titleBigrams = (title) => {
+            const words = title.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(Boolean);
+            const bigrams = new Set();
+            for (let i = 0; i < words.length - 1; i++) {
+                bigrams.add(words[i] + '_' + words[i + 1]);
+            }
+            // Also add unigrams for short titles (< 4 words)
+            if (words.length < 4) words.forEach(w => bigrams.add(w));
+            return bigrams;
+        };
+
+        const jaccardSimilarity = (setA, setB) => {
+            if (setA.size === 0 && setB.size === 0) return 1;
+            if (setA.size === 0 || setB.size === 0) return 0;
+            let intersection = 0;
+            setA.forEach(item => { if (setB.has(item)) intersection++; });
+            return intersection / (setA.size + setB.size - intersection);
+        };
+
+        const betterArticle = (a, b) => {
+            // Lower priority number = higher priority source
+            if (a.priority !== b.priority) return a.priority < b.priority ? a : b;
+            return (a.credibilityScore || 0) >= (b.credibilityScore || 0) ? a : b;
+        };
+
+        // Pass 1: URL deduplication (O(n), fast)
+        const urlMap = new Map(); // normalisedUrl → article
+        for (const article of articles) {
+            const normUrl = normaliseUrl(article.url);
+            if (urlMap.has(normUrl)) {
+                urlMap.set(normUrl, betterArticle(urlMap.get(normUrl), article));
+            } else {
+                urlMap.set(normUrl, article);
+            }
+        }
+        const urlDeduped = Array.from(urlMap.values());
+
+        // Pass 2: Title similarity deduplication (O(n²) but n is small after pass 1)
+        // Pre-compute bigrams for all articles
+        const bigramCache = urlDeduped.map(a => ({
+            article: a,
+            bigrams: titleBigrams(a.title || '')
+        }));
+
+        const kept = [];
+        const dropped = new Set();
+
+        for (let i = 0; i < bigramCache.length; i++) {
+            if (dropped.has(i)) continue;
+            let winner = bigramCache[i].article;
+            for (let j = i + 1; j < bigramCache.length; j++) {
+                if (dropped.has(j)) continue;
+                const sim = jaccardSimilarity(bigramCache[i].bigrams, bigramCache[j].bigrams);
+                if (sim >= 0.6) {
+                    winner = betterArticle(winner, bigramCache[j].article);
+                    dropped.add(j);
+                }
+            }
+            kept.push(winner);
+        }
+
+        return kept;
     }
 
     parseFeed(xmlText, source) {
@@ -929,59 +1314,71 @@ class SignalApp {
             const allClients = this.detectAllClients(text);
             const crossRefBoost = this.getCrossRefBoost(article, this.crossRefs);
             
-            // Enhanced scoring formula
-            let score = 0.20; // Lower base score
+            // ── Score components (tracked individually for debug mode) ──
+            const bd = {}; // scoreBreakdown accumulator
+
+            // Base score
+            bd.base = 0.20;
+            let score = bd.base;
             
-            // Priority boost (unchanged)
-            if (article.priority === 1) score += 0.20;
-            else if (article.priority === 2) score += 0.10;
+            // Priority boost
+            bd.priority = article.priority === 1 ? 0.20 : article.priority === 2 ? 0.10 : 0;
+            score += bd.priority;
             
-            // Credibility (increased weight, wider range)
-            // Old: (credibility - 0.7) * 0.3 = max +0.075
-            // New: (credibility - 0.5) * 0.4 = max +0.18
-            score += (article.credibilityScore - 0.5) * 0.4;
+            // Credibility boost: (credibility - 0.5) * 0.4 → max +0.18
+            bd.credibility = parseFloat(((article.credibilityScore - 0.5) * 0.4).toFixed(3));
+            score += bd.credibility;
             
-            // Category weight (NEW)
+            // Category weight multiplier
             const categoryWeight = CATEGORIES[article.category]?.weight || 1.0;
+            bd.categoryMult = categoryWeight;
             score *= categoryWeight;
             
-            // Recency boost (NEW)
+            // Recency boost
             const hoursOld = (Date.now() - new Date(article.publishedDate).getTime()) / 3600000;
-            if (hoursOld < 4) score += 0.12;        // Breaking news (< 4 hours)
-            else if (hoursOld < 8) score += 0.08;   // Very recent (< 8 hours)
-            else if (hoursOld < 12) score += 0.05;  // Same day morning/afternoon
-            else if (hoursOld < 24) score += 0.02;  // Within 24 hours
-            // No boost for older articles
+            bd.recency = hoursOld < 4 ? 0.12 : hoursOld < 8 ? 0.08 : hoursOld < 12 ? 0.05 : hoursOld < 24 ? 0.02 : 0;
+            bd.hoursOld = Math.round(hoursOld * 10) / 10;
+            score += bd.recency;
             
-            // Industry match (unchanged)
+            // Industry match
+            bd.industry = 0;
             if (industryMatch) {
                 const tierBoost = { 1: 0.30, 2: 0.20, 3: 0.10 };
-                score += tierBoost[industryMatch.tier] || 0;
+                bd.industry = tierBoost[industryMatch.tier] || 0;
+                bd.industryName = industryMatch.name;
+                score += bd.industry;
                 article.matchedIndustry = industryMatch.name;
             }
             
             // Client match - tier-weighted boost
+            bd.client = 0;
             if (allClients.length > 0) {
                 const topClient = allClients[0];
                 const clientObj = this.clients.find(c => (typeof c === 'string' ? c : c.name) === topClient);
                 const clientTier = (clientObj && typeof clientObj === 'object') ? clientObj.tier : 2;
-                const tierBoost = { 1: 0.35, 2: 0.25, 3: 0.15 }[clientTier] || 0.25;
-                score += tierBoost;
+                bd.client = { 1: 0.35, 2: 0.25, 3: 0.15 }[clientTier] || 0.25;
+                bd.clientName = topClient;
+                score += bd.client;
                 article.matchedClient = topClient;
                 article.allMatchedClients = allClients;
             }
             
             // Cross-reference boost
-            score += crossRefBoost;
+            bd.crossRef = parseFloat(crossRefBoost.toFixed(3));
+            score += bd.crossRef;
             
             // Deal relevance scoring layer
             const dealBoost = this.calculateDealRelevance(text, allClients);
-            score += dealBoost;
+            bd.deal = parseFloat(dealBoost.toFixed(3));
+            score += bd.deal;
             
-            // Feedback loop: apply accumulated source score drift from 👍/👎 ratings
-            // Drift is capped at ±0.15 to prevent runaway amplification
+            // Feedback drift (capped ±0.15)
             const drift = this.sourceScoreDrift[article.sourceName] || 0;
-            score += Math.max(-0.15, Math.min(0.15, drift));
+            bd.drift = parseFloat(Math.max(-0.15, Math.min(0.15, drift)).toFixed(3));
+            score += bd.drift;
+            
+            bd.total = parseFloat(Math.min(1, score).toFixed(3));
+            article.scoreBreakdown = bd;
             
             // Signal type classification
             article.signalType = this.classifySignalType(text, allClients);
@@ -990,7 +1387,7 @@ class SignalApp {
             const wordCount = (article.summary || '').split(/\s+/).length;
             article.estimatedReadingMinutes = Math.max(1, Math.min(10, Math.ceil(wordCount / 150)));
             
-            article.relevanceScore = Math.min(1, score);
+            article.relevanceScore = bd.total;
             return article;
         });
     }
@@ -1279,6 +1676,114 @@ class SignalApp {
     // AI Digest Generation
     // ==========================================
 
+    // ==========================================
+    // Prompt Caching (Phase 7)
+    // ==========================================
+
+    /**
+     * Compute a stable fingerprint for the current daily article set.
+     * Uses sorted article IDs joined and hashed — fast, deterministic.
+     */
+    computeArticleFingerprint(articles) {
+        const ids = articles.map(a => a.id).sort().join('|');
+        // FNV-1a 32-bit hash — fast, no crypto needed
+        let hash = 0x811c9dc5;
+        for (let i = 0; i < ids.length; i++) {
+            hash ^= ids.charCodeAt(i);
+            hash = (hash * 0x01000193) >>> 0;
+        }
+        return hash.toString(36);
+    }
+
+    /**
+     * Delta-merge: send only new articles to Claude and ask it to update
+     * the existing digest rather than regenerate from scratch.
+     * Reduces token usage by ~70% on typical mid-day refreshes.
+     */
+    async mergeDeltaDigest(apiKey, newArticles) {
+        if (!this.digest || newArticles.length === 0) return;
+
+        const newArticleList = newArticles.map((a, i) => {
+            const clientTag = a.matchedClient ? ` | Client: ${a.matchedClient}` : '';
+            const industryTag = a.matchedIndustry ? ` | Industry: ${a.matchedIndustry}` : '';
+            const signalTag = (a.signalType && a.signalType !== 'background') ? ` | Signal: ${a.signalType}` : '';
+            return `[${i + 1}] Source: ${a.sourceName}${clientTag}${industryTag}${signalTag} | URL: ${a.url}\nTitle: ${a.title}\nSummary: ${a.summary?.substring(0, 200) || 'No summary'}`;
+        }).join('\n\n');
+
+        const contextBlock = this.settings.thisWeekContext
+            ? `\nTHIS WEEK'S CONTEXT: ${this.settings.thisWeekContext}\n`
+            : '';
+
+        const deltaPrompt = `You are the intelligence briefer for the Field CTO of IBM Asia Pacific.
+${contextBlock}
+EXISTING DIGEST (generated earlier today):
+Executive Summary: ${this.digest.executiveSummary}
+
+NEW ARTICLES SINCE LAST DIGEST (${newArticles.length} articles):
+${newArticleList}
+
+TASK: Update the existing digest to incorporate the new articles.
+- If a new article adds a significant new signal, update executiveSummary and the relevant section
+- If a new article matches a watchlist client, surface it in executiveSummary
+- Keep all existing content that is still valid
+- Add new conversationStarters only if the new articles provide genuinely new talking points
+- Apply the same [AI WAVE] / [SOVEREIGNTY WAVE] tagging and citation rules as the original digest
+- Return ONLY valid JSON with the same structure as the original digest
+
+Return ONLY valid JSON, no markdown fences:
+{
+    "executiveSummary": "Updated 3-4 sentences incorporating new signals",
+    "sections": [same structure as original, updated where relevant],
+    "conversationStarters": [updated list, max 3],
+    "industrySignals": [updated list, omit industries with no signal]
+}`;
+
+        try {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 2000,
+                    messages: [{ role: 'user', content: deltaPrompt }]
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error?.message || `API error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            const text = data.content[0].text;
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                const updated = JSON.parse(jsonMatch[0]);
+                // Preserve fingerprint metadata from the merge
+                this.digest = {
+                    ...updated,
+                    generatedAt: this.digest.generatedAt,
+                    updatedAt: new Date().toISOString(),
+                    articleFingerprint: this.computeArticleFingerprint(this.dailyArticles),
+                    seenArticleIds: this.dailyArticles.map(a => a.id),
+                    thisWeekContext: this.settings.thisWeekContext || '',
+                    deltaCount: (this.digest.deltaCount || 0) + newArticles.length,
+                };
+                console.log(`✅ Delta merge complete — ${newArticles.length} new articles incorporated`);
+            } else {
+                throw new Error('Could not parse delta merge response');
+            }
+        } catch (error) {
+            console.error('Delta merge failed, falling back to full generation:', error);
+            await this.generateAIDigest(apiKey);
+        }
+    }
+
     async generateAIDigest(apiKey) {
         // Category-aware sampling: take top articles by score, but guarantee at least
         // 1 article per active category so regulatory/ASEAN signals aren't dropped.
@@ -1446,6 +1951,10 @@ ${articleList}`;
             if (jsonMatch) {
                 this.digest = JSON.parse(jsonMatch[0]);
                 this.digest.generatedAt = new Date().toISOString();
+                // Phase 7: store fingerprint + seen IDs for delta detection on next refresh
+                this.digest.articleFingerprint = this.computeArticleFingerprint(this.dailyArticles);
+                this.digest.seenArticleIds = this.dailyArticles.map(a => a.id);
+                this.digest.thisWeekContext = this.settings.thisWeekContext || '';
             } else {
                 throw new Error('Could not parse AI response');
             }
@@ -1525,9 +2034,150 @@ ${articleList}`;
         // 6. Cross-Source Signals — keyword-matched multi-source themes (supporting context)
         // Use cached crossRefs computed during scoring (avoids recomputing O(articles×themes×keywords))
         this.renderCrossSourceSignals(this.crossRefs);
+
+        // 7. Multi-Day Trending — topics rising across the 7-day IDB corpus
+        this.renderTrending();
         
-        // 7. All Daily Articles — full reference list
+        // 8. All Daily Articles — full reference list
         this.renderDailyArticles();
+    }
+
+    // ==========================================
+    // Trend Detection (Phase 6)
+    // ==========================================
+
+    /**
+     * Extract meaningful unigrams and bigrams from an article title.
+     * Filters out stop words and very short tokens.
+     */
+    extractTrendTerms(title) {
+        const STOP = new Set([
+            'a','an','the','and','or','but','in','on','at','to','for','of','with',
+            'is','are','was','were','be','been','has','have','had','will','would',
+            'can','could','should','may','might','do','does','did','not','no',
+            'it','its','this','that','these','those','by','as','from','into',
+            'how','why','what','when','where','who','which','new','says','said',
+            'report','reports','via','over','up','out','about','after','before',
+            'more','than','than','just','also','now','all','one','two','three',
+        ]);
+        const tokens = title.toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, ' ')
+            .split(/\s+/)
+            .filter(t => t.length >= 4 && !STOP.has(t));
+        
+        const terms = [...tokens]; // unigrams
+        // bigrams
+        for (let i = 0; i < tokens.length - 1; i++) {
+            terms.push(`${tokens[i]} ${tokens[i + 1]}`);
+        }
+        return terms;
+    }
+
+    /**
+     * Detect trending topics from the rolling IDB corpus.
+     * A trend requires: ≥2 distinct calendar days AND ≥2 distinct sources.
+     * Returns top 8 trends sorted by (dayCount × sourceCount) descending.
+     */
+    detectTrends(currentArticles, historicalArticles) {
+        // Combine current + historical, deduplicate by id
+        const allById = new Map();
+        for (const a of [...historicalArticles, ...currentArticles]) {
+            allById.set(a.id, a);
+        }
+        const all = [...allById.values()];
+
+        // Build term → { days: Set<dateStr>, sources: Set<sourceName>, articles: [] }
+        const termMap = new Map();
+        const today = new Date().toISOString().slice(0, 10);
+
+        for (const article of all) {
+            const dateStr = new Date(article.publishedDate).toISOString().slice(0, 10);
+            const terms = this.extractTrendTerms(article.title || '');
+            for (const term of terms) {
+                if (!termMap.has(term)) {
+                    termMap.set(term, { days: new Set(), sources: new Set(), articles: [] });
+                }
+                const entry = termMap.get(term);
+                entry.days.add(dateStr);
+                entry.sources.add(article.sourceName);
+                // Keep up to 3 representative articles (prefer today's)
+                if (entry.articles.length < 3) entry.articles.push(article);
+                else if (dateStr === today && !entry.articles.some(a => a.id === article.id)) {
+                    entry.articles[2] = article; // Replace oldest with today's
+                }
+            }
+        }
+
+        // Filter: must span ≥2 days AND ≥2 sources
+        const trends = [];
+        for (const [term, data] of termMap) {
+            if (data.days.size >= 2 && data.sources.size >= 2) {
+                const dayCount = data.days.size;
+                const sourceCount = data.sources.size;
+                const hasToday = data.days.has(today);
+                // Velocity: hot = today + 3+ sources, rising = today + 2+ days, sustained = older
+                const velocity = (hasToday && sourceCount >= 3) ? 'hot'
+                               : (hasToday && dayCount >= 2)    ? 'rising'
+                               : 'sustained';
+                trends.push({
+                    term,
+                    dayCount,
+                    sourceCount,
+                    velocity,
+                    score: dayCount * sourceCount + (hasToday ? 2 : 0),
+                    articles: data.articles,
+                });
+            }
+        }
+
+        // Sort by score desc, return top 8
+        return trends.sort((a, b) => b.score - a.score).slice(0, 8);
+    }
+
+    async renderTrending() {
+        const section = document.getElementById('trending-section');
+        if (!section) return;
+
+        // Need historical articles from IDB to detect multi-day trends
+        const historicalArticles = await this.db.loadArticles();
+        const distinctDays = new Set(
+            historicalArticles.map(a => new Date(a.publishedDate).toISOString().slice(0, 10))
+        );
+
+        // Need at least 2 distinct days in the corpus to show trends
+        if (distinctDays.size < 2) {
+            section.classList.add('hidden');
+            return;
+        }
+
+        const trends = this.detectTrends(this.dailyArticles, historicalArticles);
+        if (trends.length === 0) {
+            section.classList.add('hidden');
+            return;
+        }
+
+        section.classList.remove('hidden');
+        const countEl = document.getElementById('trending-count');
+        if (countEl) countEl.textContent = trends.length;
+
+        const list = document.getElementById('trending-list');
+        list.innerHTML = trends.map(trend => {
+            const velocityBadge = trend.velocity === 'hot'      ? '<span class="trend-badge trend-hot">🔥 Hot</span>'
+                                : trend.velocity === 'rising'   ? '<span class="trend-badge trend-rising">📈 Rising</span>'
+                                : '<span class="trend-badge trend-sustained">📊 Sustained</span>';
+            const articleLinks = trend.articles.map(a =>
+                `<a class="trend-article-link" href="${this.escapeAttr(a.url)}" target="_blank" rel="noopener noreferrer">${this.escapeHtml(a.title)}</a>`
+            ).join('');
+            return `
+                <div class="trend-item">
+                    <div class="trend-item-header">
+                        <span class="trend-term">${this.escapeHtml(trend.term)}</span>
+                        ${velocityBadge}
+                        <span class="trend-meta">${trend.dayCount}d · ${trend.sourceCount} sources</span>
+                    </div>
+                    <div class="trend-articles">${articleLinks}</div>
+                </div>`;
+        }).join('');
     }
 
     renderIndustrySignals() {
@@ -1940,6 +2590,30 @@ ${articleList}`;
                         : drift < -0.04 ? ` title="You've downrated this source — it ranks lower"`
                         : '';
         
+        // Score debug panel — only rendered when ?debug=1 is in the URL
+        let debugPanel = '';
+        if (this.debugMode && article.scoreBreakdown) {
+            const b = article.scoreBreakdown;
+            const rows = [
+                ['Base',       b.base],
+                ['Priority',   b.priority],
+                ['Credibility',b.credibility],
+                [`Cat ×${b.categoryMult}`, '—'],
+                [`Recency (${b.hoursOld}h)`, b.recency],
+                [b.industryName ? `Industry: ${b.industryName}` : 'Industry', b.industry],
+                [b.clientName  ? `Client: ${b.clientName}`   : 'Client',   b.client],
+                ['Cross-ref',  b.crossRef],
+                ['Deal',       b.deal],
+                ['Drift',      b.drift],
+                ['<b>Total</b>', `<b>${b.total}</b>`],
+            ].map(([label, val]) =>
+                `<tr><td>${label}</td><td>${val}</td></tr>`
+            ).join('');
+            debugPanel = `<div class="score-debug" onclick="event.stopPropagation()">
+                <table>${rows}</table>
+            </div>`;
+        }
+        
         return `
             <div class="article-item${readClass}" data-article-id="${safeId}" onclick="app.openArticle('${safeId}')">
                 <div class="article-item-header">
@@ -1953,6 +2627,7 @@ ${articleList}`;
                 </div>
                 <div class="article-item-title">${this.escapeHtml(article.title)}</div>
                 <div class="article-item-summary">${this.escapeHtml(article.summary?.substring(0, 150) || '')}</div>
+                ${debugPanel}
             </div>
         `;
     }
@@ -1976,8 +2651,9 @@ ${articleList}`;
         document.getElementById('article-summary').innerHTML = this.escapeHtml(article.summary || 'No summary available.');
         document.getElementById('article-link').href = article.url;
         
-        // Mark as read
+        // Mark as read — persist to IDB read-state store (survives re-fetches)
         article.isRead = true;
+        this.db.markRead(id);
         this.saveToStorage();
         this.updateReadingTime();
         
