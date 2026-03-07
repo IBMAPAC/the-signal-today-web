@@ -400,6 +400,18 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .tier-btn.tier-1.active { background: var(--cds-support-error); border-color: var(--cds-support-error); }
 .tier-btn.tier-2.active { background: var(--cds-support-warning); border-color: var(--cds-support-warning); color: var(--cds-text-inverse); }
 .tier-btn.tier-3.active { background: var(--cds-support-success); border-color: var(--cds-support-success); }
+/* Disabled Sources (Phase 8) */
+.disabled-sources-section { margin-bottom: var(--cds-spacing-07); padding: var(--cds-spacing-06); background: var(--cds-notification-background-warning); border-left: 3px solid var(--cds-support-warning); }
+.disabled-sources-section h3 { margin-bottom: var(--cds-spacing-04); padding-bottom: var(--cds-spacing-03); border-bottom: 1px solid var(--cds-border-subtle-01); font-size: var(--cds-heading-02); color: var(--cds-text-primary); }
+.disabled-sources-section .help-text { font-size: 0.875rem; color: var(--cds-text-secondary); margin-bottom: var(--cds-spacing-05); line-height: 1.5; }
+.disabled-source-card { display: flex; justify-content: space-between; align-items: center; padding: var(--cds-spacing-04); background: var(--cds-layer-01); border: 1px solid var(--cds-border-subtle-01); margin-bottom: var(--cds-spacing-03); gap: var(--cds-spacing-04); min-height: var(--touch-min); }
+.disabled-source-card:last-of-type { margin-bottom: var(--cds-spacing-05); }
+.disabled-source-card .source-info { flex: 1; min-width: 0; }
+.disabled-source-card .source-info strong { display: block; font-weight: 600; color: var(--cds-text-primary); margin-bottom: var(--cds-spacing-02); overflow: hidden; text-overflow: ellipsis; }
+.disabled-source-card .failure-info { font-size: 0.75rem; color: var(--cds-text-secondary); }
+.disabled-source-card .source-actions { display: flex; gap: var(--cds-spacing-02); flex-shrink: 0; }
+.btn-sm { padding: var(--cds-spacing-02) var(--cds-spacing-04); min-height: 32px; font-size: 0.875rem; }
+
 
 /* Article Modal */
 .article-meta { display: flex; flex-wrap: wrap; gap: var(--cds-spacing-04); margin-bottom: var(--cds-spacing-05); font-size: var(--cds-body-01); }

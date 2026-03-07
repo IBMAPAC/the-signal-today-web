@@ -798,6 +798,13 @@ class SignalApp {
     }
 
     async fetchFeedWithTimeout(source, timeout) {
+        // Check if source is auto-disabled
+        const failures = this.getSourceFailures();
+        if (failures[source.url]?.disabled) {
+            console.log(`⏭️ Skipping auto-disabled source: ${source.name}`);
+            return [];
+        }
+        
         // Check cache first
         const cacheKey = source.url;
         const cached = feedCache.get(cacheKey);
@@ -832,13 +839,26 @@ class SignalApp {
             // Promise.any returns first successful result
             const articles = await Promise.any(fetchPromises);
             
+            // ✅ Success - reset failure count
+            this.resetSourceFailure(source.url);
+            
             // Cache successful result
             feedCache.set(cacheKey, { articles, timestamp: Date.now() });
             
             return articles;
         } catch (error) {
             // All proxies failed — record for source health badge
-            console.warn(`All proxies failed for ${source.name}`);
+            console.warn(`❌ All proxies failed for ${source.name}`);
+            
+            // Increment failure count
+            const newCount = this.incrementSourceFailure(source.url, source.name);
+            
+            // Auto-disable after 3 consecutive failures
+            if (newCount >= 3) {
+                this.disableSource(source.url, source.name);
+                console.warn(`🚫 Auto-disabled ${source.name} after ${newCount} consecutive failures`);
+            }
+            
             this.failedSources.push({ name: source.name, url: source.url });
             return [];
         }
@@ -847,6 +867,182 @@ class SignalApp {
     // ==========================================
     // Deduplication
     // ==========================================
+    // ==========================================
+    // Source Failure Tracking (Phase 8)
+    // ==========================================
+
+    getSourceFailures() {
+        const stored = localStorage.getItem('source-failures');
+        return stored ? JSON.parse(stored) : {};
+    }
+
+    incrementSourceFailure(url, name) {
+        const failures = this.getSourceFailures();
+        if (!failures[url]) {
+            failures[url] = { count: 0, name };
+        }
+        failures[url].count++;
+        failures[url].lastFailed = new Date().toISOString();
+        localStorage.setItem('source-failures', JSON.stringify(failures));
+        return failures[url].count;
+    }
+
+    resetSourceFailure(url) {
+        const failures = this.getSourceFailures();
+        if (failures[url]) {
+            delete failures[url];
+            localStorage.setItem('source-failures', JSON.stringify(failures));
+        }
+    }
+
+    disableSource(url, name) {
+        const failures = this.getSourceFailures();
+        if (!failures[url]) {
+            failures[url] = { count: 3, name };
+        }
+        failures[url].disabled = true;
+        failures[url].lastFailed = new Date().toISOString();
+        localStorage.setItem('source-failures', JSON.stringify(failures));
+        
+        // Also mark in sources array
+        const source = this.sources.find(s => s.url === url);
+        if (source) {
+            source.enabled = false;
+            this.saveToStorage();
+        }
+    }
+
+    enableSource(url) {
+        const failures = this.getSourceFailures();
+        if (failures[url]) {
+            delete failures[url];
+            localStorage.setItem('source-failures', JSON.stringify(failures));
+        }
+        
+        // Mark as enabled in sources array
+        const source = this.sources.find(s => s.url === url);
+        if (source) {
+            source.enabled = true;
+            this.saveToStorage();
+        }
+        
+        // Re-render settings if modal is open
+        if (!document.getElementById('settings-modal').classList.contains('hidden')) {
+            this.renderDisabledSources();
+            renderSourcesList();
+            updateSourcesCount();
+        }
+    }
+
+    enableAllSources() {
+        const failures = this.getSourceFailures();
+        const disabledUrls = Object.keys(failures).filter(url => failures[url].disabled);
+        
+        disabledUrls.forEach(url => {
+            const source = this.sources.find(s => s.url === url);
+            if (source) {
+                source.enabled = true;
+            }
+        });
+        
+        // Clear all failure data
+        localStorage.removeItem('source-failures');
+        this.saveToStorage();
+        
+        // Re-render settings if modal is open
+        if (!document.getElementById('settings-modal').classList.contains('hidden')) {
+            this.renderDisabledSources();
+            renderSourcesList();
+            updateSourcesCount();
+        }
+    }
+
+    removeDisabledSource(url) {
+        // Remove from failures tracking
+        const failures = this.getSourceFailures();
+        if (failures[url]) {
+            delete failures[url];
+            localStorage.setItem('source-failures', JSON.stringify(failures));
+        }
+        
+        // Remove from sources array
+        this.sources = this.sources.filter(s => s.url !== url);
+        this.saveToStorage();
+        
+        // Re-render settings if modal is open
+        if (!document.getElementById('settings-modal').classList.contains('hidden')) {
+            this.renderDisabledSources();
+            renderSourcesList();
+            updateSourcesCount();
+        }
+    }
+
+    formatTimeSince(isoString) {
+        const date = new Date(isoString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return 'just now';
+        if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+        return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    }
+
+    renderDisabledSources() {
+        const container = document.getElementById('disabled-sources-container');
+        if (!container) return;
+        
+        const failures = this.getSourceFailures();
+        const disabled = Object.entries(failures).filter(([url, data]) => data.disabled);
+        
+        if (disabled.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="disabled-sources-section">
+                <h3>⚠️ Auto-Disabled Sources (${disabled.length})</h3>
+                <p class="help-text">
+                    These sources failed 3+ consecutive times and were automatically disabled 
+                    to improve refresh performance. You can re-enable them below.
+                </p>
+                
+                ${disabled.map(([url, data]) => {
+                    const timeSince = this.formatTimeSince(data.lastFailed);
+                    const escapedUrl = this.escapeAttr(url);
+                    return `
+                        <div class="disabled-source-card">
+                            <div class="source-info">
+                                <strong>${this.escapeHtml(data.name)}</strong>
+                                <span class="failure-info">
+                                    Failed ${data.count} times, last: ${timeSince}
+                                </span>
+                            </div>
+                            <div class="source-actions">
+                                <button onclick="app.enableSource('${escapedUrl}')" 
+                                        class="btn-secondary btn-sm">
+                                    Re-enable
+                                </button>
+                                <button onclick="app.removeDisabledSource('${escapedUrl}')" 
+                                        class="btn-danger btn-sm">
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+                
+                <button onclick="app.enableAllSources()" class="btn-primary" style="margin-top: 1rem;">
+                    Re-enable All (${disabled.length})
+                </button>
+            </div>
+        `;
+    }
+
 
     /**
      * Remove duplicate articles from a flat array.
@@ -3312,6 +3508,9 @@ TOP ARTICLES
         
         // Render industry settings
         this.renderIndustrySettings();
+        
+        // Render disabled sources (Phase 8)
+        this.renderDisabledSources();
         
         // Render sources list
         currentSourceFilter = 'all';
