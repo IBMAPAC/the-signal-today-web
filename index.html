@@ -25,11 +25,11 @@
                 <h1>📡 The Signal Today</h1>
                 <div class="header-actions">
                     <span id="source-health-badge" class="source-health-badge hidden"></span>
-                    <button id="refresh-btn" class="btn btn-primary" title="Refresh (R)">
+                    <button id="refresh-btn" class="btn btn-primary" title="Refresh (R)" onclick="refreshApp()">
                         <span class="refresh-icon">↻</span> Refresh
                     </button>
                     <button id="clients-btn" class="btn btn-secondary" title="Manage Clients" onclick="openClientManager()">👥 Clients</button>
-                    <button id="settings-btn" class="btn btn-secondary" title="Settings">⚙️</button>
+                    <button id="settings-btn" class="btn btn-secondary" title="Settings" onclick="openAppSettings()">⚙️</button>
                 </div>
             </div>
             <div class="header-meta">
@@ -47,7 +47,7 @@
 
             <div id="error" class="error-state hidden">
                 <p id="error-message"></p>
-                <button class="btn btn-primary" onclick="app.refresh()">Try Again</button>
+                <button class="btn btn-primary" onclick="refreshApp()">Try Again</button>
             </div>
 
             <div id="digest-content" class="digest-content hidden">
@@ -95,7 +95,7 @@
                 <section id="atl-enablement-section" class="card atl-enablement-card">
                     <div class="card-header">
                         <h2>📢 ATL Enablement</h2>
-                        <button class="btn btn-sm btn-secondary" onclick="app.copyAllATLBriefs()" title="Copy all">📋 Copy All</button>
+                        <button class="btn btn-sm btn-secondary" onclick="copyAllATLBriefs()" title="Copy all">📋 Copy All</button>
                     </div>
                     <div class="card-body">
                         <p class="card-description">Key talking points for your 115 ATLs — copy to Slack</p>
@@ -117,8 +117,8 @@
                 </section>
 
                 <div class="export-actions">
-                    <button class="btn btn-secondary" onclick="app.exportBrief()">📤 Export Brief</button>
-                    <button class="btn btn-primary" onclick="app.openGTMDigest()">📧 GTM Digest</button>
+                    <button class="btn btn-secondary" onclick="exportBrief()">📤 Export Brief</button>
+                    <button class="btn btn-primary" onclick="openGTMDigest()">📧 GTM Digest</button>
                 </div>
             </div>
 
@@ -126,7 +126,7 @@
                 <div class="empty-icon">📡</div>
                 <h2>Welcome to The Signal Today</h2>
                 <p>Field CTO Intelligence Briefing for IBM Asia Pacific</p>
-                <button class="btn btn-primary btn-large" onclick="app.refresh()">Generate Your First Digest</button>
+                <button class="btn btn-primary btn-large" onclick="refreshApp()">Generate Your First Digest</button>
                 <p class="empty-hint">Configure your Claude API key in Settings for AI summaries.</p>
             </div>
         </main>
@@ -341,7 +341,7 @@
                 </div>
                 <div class="modal-footer article-actions">
                     <a id="article-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Read Article</a>
-                    <button id="deep-read-btn" class="btn btn-secondary hidden" onclick="app.deepReadArticle(document.getElementById('article-modal').dataset.articleId)">🤖 Deep Read</button>
+                    <button id="deep-read-btn" class="btn btn-secondary hidden" onclick="deepReadArticle(document.getElementById('article-modal').dataset.articleId)">🤖 Deep Read</button>
                     <button class="btn btn-secondary" onclick="saveToInstapaper()">📥 Save</button>
                     <button class="btn btn-secondary" onclick="copyArticleLink()">🔗 Copy</button>
                 </div>

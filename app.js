@@ -273,7 +273,8 @@ class SignalApp {
         this.articleRatings = {};
         this.sourceScoreDrift = {};
         this.failedSources = [];
-        this.debugMode = new URLSearchParams(location.search).get('debug') === '1';
+        this.debugMode = (typeof window !== 'undefined' && window.location) ? 
+            new URLSearchParams(window.location.search).get('debug') === '1' : false;
         this.db = new SignalDB();
         
         // New: Market filtering state
@@ -286,54 +287,58 @@ class SignalApp {
     }
 
     async init() {
-        // Open IndexedDB first (non-blocking fallback if unavailable)
-        await this.db.open();
+        try {
+            // Open IndexedDB first (non-blocking fallback if unavailable)
+            await this.db.open();
 
-        // Load settings, sources, clients, industries, ratings, drift from localStorage
-        this.loadFromStorage();
+            // Load settings, sources, clients, industries, ratings, drift from localStorage
+            this.loadFromStorage();
 
-        // Migrate any articles still in localStorage → IDB (one-time)
-        await this.db.migrateFromLocalStorage();
+            // Migrate any articles still in localStorage → IDB (one-time)
+            await this.db.migrateFromLocalStorage();
 
-        // Load rolling article corpus from IDB (up to 7 days)
-        const idbArticles = await this.db.loadArticles();
-        if (idbArticles.length > 0) {
-            // Merge IDB articles with any already loaded from localStorage
-            // (after migration localStorage articles are gone, but guard anyway)
-            const existingIds = new Set(this.articles.map(a => a.id));
-            for (const a of idbArticles) {
-                if (!existingIds.has(a.id)) this.articles.push(a);
+            // Load rolling article corpus from IDB (up to 7 days)
+            const idbArticles = await this.db.loadArticles();
+            if (idbArticles.length > 0) {
+                const existingIds = new Set(this.articles.map(a => a.id));
+                for (const a of idbArticles) {
+                    if (!existingIds.has(a.id)) this.articles.push(a);
+                }
+                console.log(`SignalDB: loaded ${idbArticles.length} articles from IDB corpus`);
             }
-            console.log(`SignalDB: loaded ${idbArticles.length} articles from IDB corpus`);
-        }
 
-        // Apply persisted read state from IDB to all articles
-        const readIds = await this.db.loadReadIds();
-        if (readIds.size > 0) {
-            for (const a of this.articles) {
-                if (readIds.has(a.id)) a.isRead = true;
+            // Apply persisted read state from IDB to all articles
+            const readIds = await this.db.loadReadIds();
+            if (readIds.size > 0) {
+                for (const a of this.articles) {
+                    if (readIds.has(a.id)) a.isRead = true;
+                }
             }
-        }
 
-        // Load latest digest from IDB if not already in localStorage
-        if (!this.digest) {
-            this.digest = await this.db.loadLatestDigest();
-            if (this.digest) console.log('SignalDB: restored digest from IDB');
-        }
+            // Load latest digest from IDB if not already in localStorage
+            if (!this.digest) {
+                this.digest = await this.db.loadLatestDigest();
+                if (this.digest) console.log('SignalDB: restored digest from IDB');
+            }
 
-        this.updateUI();
-        this.bindEvents();
-        this.updateDate();
-        this.initKeyboardShortcuts();
-        this.initAutoRefresh();
-        
-        // Show cached content if available
-        if (this.digest || this.articles.length > 0) {
-            this.categorizeArticles();
-            this.renderDigest();
+            this.updateUI();
+            this.bindEvents();
+            this.updateDate();
+            this.initKeyboardShortcuts();
+            this.initAutoRefresh();
+            
+            // Show cached content if available
+            if (this.digest || this.articles.length > 0) {
+                this.categorizeArticles();
+                this.renderDigest();
+            }
+            
+            console.log(`📡 The Signal Today initialized with ${this.sources.length} sources`);
+        } catch (err) {
+            console.error('Init error:', err);
+            // Ensure buttons still work even if init fails
+            this.bindEvents();
         }
-        
-        console.log(`📡 The Signal Today initialized with ${this.sources.length} sources`);
     }
 
     // ==========================================
@@ -470,10 +475,16 @@ class SignalApp {
     // ==========================================
 
     bindEvents() {
-        document.getElementById('refresh-btn').addEventListener('click', () => this.refresh());
-        document.getElementById('settings-btn').addEventListener('click', () => this.openSettings());
-        
+        const refreshBtn = document.getElementById('refresh-btn');
+        const settingsBtn = document.getElementById('settings-btn');
         const exportBtn = document.getElementById('export-btn');
+        
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => this.refresh());
+        }
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', () => this.openSettings());
+        }
         if (exportBtn) {
             exportBtn.addEventListener('click', () => this.exportBrief());
         }
@@ -621,17 +632,20 @@ class SignalApp {
     }
 
     updateDate() {
+        const el = document.getElementById('current-date');
+        if (!el) return;
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-        document.getElementById('current-date').textContent = new Date().toLocaleDateString('en-US', options);
+        el.textContent = new Date().toLocaleDateString('en-US', options);
     }
 
     updateReadingTime() {
+        const badge = document.getElementById('reading-time');
+        if (!badge) return; // Element removed in v2 layout
+        
         const totalMinutes = this.dailyArticles
             .filter(a => !a.isRead)
             .reduce((sum, a) => sum + (a.estimatedReadingMinutes || 2), 0);
         
-        const badge = document.getElementById('reading-time');
-        // Show unread time vs budget so user knows how far over/under budget they are
         badge.textContent = `~${totalMinutes} min unread`;
         badge.classList.toggle('over-budget', totalMinutes > this.settings.dailyMinutes);
     }
@@ -639,6 +653,7 @@ class SignalApp {
     updateLastRefreshed() {
         const lastRefresh = localStorage.getItem(STORAGE_KEYS.LAST_REFRESH);
         const el = document.getElementById('last-updated');
+        if (!el) return;
         
         if (lastRefresh) {
             const date = new Date(lastRefresh);
@@ -1032,11 +1047,11 @@ class SignalApp {
                                 </span>
                             </div>
                             <div class="source-actions">
-                                <button onclick="app.enableSource('${escapedUrl}')" 
+                                <button onclick="enableSource('${escapedUrl}')" 
                                         class="btn-secondary btn-sm">
                                     Re-enable
                                 </button>
-                                <button onclick="app.removeDisabledSource('${escapedUrl}')" 
+                                <button onclick="removeDisabledSource('${escapedUrl}')" 
                                         class="btn-danger btn-sm">
                                     Remove
                                 </button>
@@ -1045,7 +1060,7 @@ class SignalApp {
                     `;
                 }).join('')}
                 
-                <button onclick="app.enableAllSources()" class="btn-primary" style="margin-top: 1rem;">
+                <button onclick="enableAllSources()" class="btn-primary" style="margin-top: 1rem;">
                     Re-enable All (${disabled.length})
                 </button>
             </div>
@@ -2431,7 +2446,7 @@ ${articleList}`;
                 const thumbDownClass = rating === -1 ? ' rating-active' : '';
                 
                 return `
-                    <div class="weekly-top3-item${readClass}" data-article-id="${safeId}" onclick="app.openArticle('${safeId}')">
+                    <div class="weekly-top3-item${readClass}" data-article-id="${safeId}" onclick="openArticle('${safeId}')">
                         <div class="weekly-top3-medal">${medals[i]}</div>
                         <div class="weekly-top3-body">
                             <div class="weekly-top3-meta">
@@ -2444,8 +2459,8 @@ ${articleList}`;
                             <div class="weekly-top3-summary">${this.escapeHtml(article.summary?.substring(0, 200) || '')}</div>
                             <div class="weekly-top3-actions">
                                 <a href="${this.escapeAttr(article.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" onclick="event.stopPropagation()">Read →</a>
-                                <button class="rating-btn thumb-up${thumbUpClass}" onclick="app.rateArticle('${safeId}', 1, event)" title="👍 Good article">👍</button>
-                                <button class="rating-btn thumb-down${thumbDownClass}" onclick="app.rateArticle('${safeId}', -1, event)" title="👎 Not useful">👎</button>
+                                <button class="rating-btn thumb-up${thumbUpClass}" onclick="rateArticle('${safeId}', 1, event)" title="👍 Good article">👍</button>
+                                <button class="rating-btn thumb-down${thumbDownClass}" onclick="rateArticle('${safeId}', -1, event)" title="👎 Not useful">👎</button>
                                 <button class="quick-save-btn" onclick="quickSaveToInstapaper('${safeId}', event)" title="Save to Instapaper">📥</button>
                             </div>
                         </div>
@@ -2655,7 +2670,7 @@ ${articleList}`;
                         <div class="client-name-row">
                             ${tierLabel}
                             <span class="client-name">${this.escapeHtml(clientName)}</span>
-                            <button class="btn-meeting-brief" onclick="app.openMeetingBrief('${safeClientName}')" title="Meeting Brief">📋</button>
+                            <button class="btn-meeting-brief" onclick="openMeetingBrief('${safeClientName}')" title="Meeting Brief">📋</button>
                         </div>
                         <div class="client-no-coverage-text">No recent coverage</div>
                     </div>`;
@@ -2676,7 +2691,7 @@ ${articleList}`;
                         ${tierLabel}
                         <span class="client-name">${this.escapeHtml(clientName)}</span>
                         <span class="signal-type-badge ${badge.cssClass}">${badge.emoji} ${badge.label}</span>
-                        <button class="btn-meeting-brief" onclick="app.openMeetingBrief('${safeClientName}')" title="Meeting Brief">📋</button>
+                        <button class="btn-meeting-brief" onclick="openMeetingBrief('${safeClientName}')" title="Meeting Brief">📋</button>
                     </div>
                     <div class="client-articles">
                         ${articles.slice(0, 3).map(a => {
@@ -2688,7 +2703,7 @@ ${articleList}`;
                             <div class="client-article">
                                 <span class="client-article-source">${this.escapeHtml(a.sourceName)}</span>
                                 <span class="client-article-signal" title="${artBadge.label}">${artBadge.emoji}</span>
-                                <span class="client-article-title" onclick="app.openArticle('${safeId}')" title="${this.escapeAttr(a.title)}">${highlightedTitle}</span>
+                                <span class="client-article-title" onclick="openArticle('${safeId}')" title="${this.escapeAttr(a.title)}">${highlightedTitle}</span>
                             </div>`;
                         }).join('')}
                     </div>
@@ -2758,7 +2773,7 @@ ${articleList}`;
         list.innerHTML = starters.map((starter, i) => `
             <div class="starter-item">
                 <div class="starter-text">${this.formatMarkdownLinks(starter)}</div>
-                <button class="starter-copy" onclick="app.copyStarter(${i})" title="Copy">📋</button>
+                <button class="starter-copy" onclick="copyStarter(${i})" title="Copy">📋</button>
             </div>
         `).join('');
     }
@@ -2810,12 +2825,12 @@ ${articleList}`;
         }
         
         return `
-            <div class="article-item${readClass}" data-article-id="${safeId}" onclick="app.openArticle('${safeId}')">
+            <div class="article-item${readClass}" data-article-id="${safeId}" onclick="openArticle('${safeId}')">
                 <div class="article-item-header">
                     <span class="article-item-source"${driftHint}>${this.escapeHtml(article.sourceName)}</span>
                     <div class="article-item-actions">
-                        <button class="rating-btn thumb-up${thumbUpClass}" onclick="app.rateArticle('${safeId}', 1, event)" title="👍 Good article — rank this source higher">👍</button>
-                        <button class="rating-btn thumb-down${thumbDownClass}" onclick="app.rateArticle('${safeId}', -1, event)" title="👎 Not useful — rank this source lower">👎</button>
+                        <button class="rating-btn thumb-up${thumbUpClass}" onclick="rateArticle('${safeId}', 1, event)" title="👍 Good article — rank this source higher">👍</button>
+                        <button class="rating-btn thumb-down${thumbDownClass}" onclick="rateArticle('${safeId}', -1, event)" title="👎 Not useful — rank this source lower">👎</button>
                         <button class="quick-save-btn" onclick="quickSaveToInstapaper('${safeId}', event)" title="Save to Instapaper">📥</button>
                         <span class="article-item-score ${scoreClass}">${Math.round(article.relevanceScore * 100)}%</span>
                     </div>
@@ -3274,6 +3289,25 @@ Return ONLY valid JSON, no markdown fences:
     }
 
     // ==========================================
+    // ATL Briefs Copy All
+    // ==========================================
+
+    copyAllATLBriefs() {
+        const briefs = document.querySelectorAll('.atl-brief-content');
+        if (briefs.length === 0) {
+            showToast('No ATL briefs to copy');
+            return;
+        }
+        
+        const allText = Array.from(briefs).map(el => el.textContent.trim()).join('\n\n---\n\n');
+        navigator.clipboard.writeText(allText).then(() => {
+            showToast('All ATL briefs copied to clipboard');
+        }).catch(() => {
+            showToast('Failed to copy');
+        });
+    }
+
+    // ==========================================
     // GTM Weekly Digest (Phase 3)
     // ==========================================
 
@@ -3520,11 +3554,11 @@ TOP ARTICLES
                 <span class="industry-name">${industry.emoji} ${industry.name}</span>
                 <div class="industry-tier">
                     <button class="tier-btn tier-1 ${industry.tier === 1 ? 'active' : ''}" 
-                            onclick="app.setIndustryTier(${i}, 1)">T1</button>
+                            onclick="setIndustryTier(${i}, 1)">T1</button>
                     <button class="tier-btn tier-2 ${industry.tier === 2 ? 'active' : ''}" 
-                            onclick="app.setIndustryTier(${i}, 2)">T2</button>
+                            onclick="setIndustryTier(${i}, 2)">T2</button>
                     <button class="tier-btn tier-3 ${industry.tier === 3 ? 'active' : ''}" 
-                            onclick="app.setIndustryTier(${i}, 3)">T3</button>
+                            onclick="setIndustryTier(${i}, 3)">T3</button>
                 </div>
             </div>
         `).join('');
@@ -4930,3 +4964,26 @@ function formatRelativeDate(date) {
 
 // Initialize app
 const app = new SignalApp();
+
+// Debug: verify app loaded
+console.log('📡 App created:', typeof app.refresh, typeof app.openSettings);
+
+// Expose to global scope for onclick handlers
+window.app = app;
+
+// Expose all interactive methods for onclick handlers
+// These ensure onclick="methodName()" works reliably across all browsers
+window.refreshApp = function() { app.refresh(); };
+window.openAppSettings = function() { app.openSettings(); };
+window.copyAllATLBriefs = function() { app.copyAllATLBriefs(); };
+window.exportBrief = function() { app.exportBrief(); };
+window.openGTMDigest = function() { app.openGTMDigest(); };
+window.deepReadArticle = function(id) { app.deepReadArticle(id); };
+window.openArticle = function(id) { app.openArticle(id); };
+window.rateArticle = function(id, rating, event) { app.rateArticle(id, rating, event); };
+window.openMeetingBrief = function(name) { app.openMeetingBrief(name); };
+window.setIndustryTier = function(i, tier) { app.setIndustryTier(i, tier); };
+window.enableSource = function(url) { app.enableSource(url); };
+window.removeDisabledSource = function(url) { app.removeDisabledSource(url); };
+window.enableAllSources = function() { app.enableAllSources(); };
+window.copyStarter = function(i) { app.copyStarter(i); };
