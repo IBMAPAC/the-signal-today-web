@@ -234,9 +234,6 @@ const STORAGE_KEYS = {
     TREND_HISTORY: 'signal_trend_history',
     ARTICLE_RATINGS: 'signal_article_ratings',   // Per-article 👍/👎 feedback
     SOURCE_SCORE_DRIFT: 'signal_score_drift'      // Accumulated score drift per source
-    // INSTAPAPER_EMAIL and INSTAPAPER_PASSWORD removed: storing passwords in localStorage
-    // exposes them to XSS and was transmitted via third-party CORS proxies in plaintext.
-    // Instapaper integration now uses the bookmarklet URL only (no credentials needed).
 };
 
 // Utility: Escape HTML entities to prevent XSS
@@ -1614,6 +1611,10 @@ class SignalApp {
             const wordCount = (article.summary || '').split(/\s+/).length;
             article.estimatedReadingMinutes = Math.max(1, Math.min(10, Math.ceil(wordCount / 150)));
             
+            // Normalize property names for rendering consistency
+            article.source = article.sourceName; // Alias for rendering
+            article.date = article.publishedDate; // Alias for filtering
+            
             article.relevanceScore = bd.total;
             return article;
         });
@@ -2481,7 +2482,6 @@ ${articleList}`;
                                 <a href="${this.escapeAttr(article.url)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" onclick="event.stopPropagation()">Read →</a>
                                 <button class="rating-btn thumb-up${thumbUpClass}" onclick="rateArticle('${safeId}', 1, event)" title="👍 Good article">👍</button>
                                 <button class="rating-btn thumb-down${thumbDownClass}" onclick="rateArticle('${safeId}', -1, event)" title="👎 Not useful">👎</button>
-                                <button class="quick-save-btn" onclick="quickSaveToInstapaper('${safeId}', event)" title="Save to Instapaper">📥</button>
                             </div>
                         </div>
                     </div>
@@ -2851,7 +2851,6 @@ ${articleList}`;
                     <div class="article-item-actions">
                         <button class="rating-btn thumb-up${thumbUpClass}" onclick="rateArticle('${safeId}', 1, event)" title="👍 Good article — rank this source higher">👍</button>
                         <button class="rating-btn thumb-down${thumbDownClass}" onclick="rateArticle('${safeId}', -1, event)" title="👎 Not useful — rank this source lower">👎</button>
-                        <button class="quick-save-btn" onclick="quickSaveToInstapaper('${safeId}', event)" title="Save to Instapaper">📥</button>
                         <span class="article-item-score ${scoreClass}">${Math.round(article.relevanceScore * 100)}%</span>
                     </div>
                 </div>
@@ -3547,10 +3546,6 @@ TOP ARTICLES
         const autoRefreshEl = document.getElementById('auto-refresh-time');
         if (autoRefreshEl) autoRefreshEl.value = this.settings.autoRefreshTime || '';
         
-        // Clean up any legacy Instapaper credentials that may have been stored by older versions
-        localStorage.removeItem('signal_instapaper_email');
-        localStorage.removeItem('signal_instapaper_password');
-        
         // Render industry settings
         this.renderIndustrySettings();
         
@@ -3733,50 +3728,6 @@ function copyArticleLink() {
     if (article) {
         navigator.clipboard.writeText(article.url);
         showToast('Link copied to clipboard');
-    }
-}
-
-function saveToInstapaper() {
-    const articleId = document.getElementById('article-modal').dataset.articleId;
-    const article = findArticleById(articleId);
-    if (article) {
-        saveArticleToInstapaper(article.url, article.title);
-    } else {
-        showToast('Article not found');
-    }
-}
-
-// Instapaper integration uses the bookmarklet-style URL only.
-// Credential-based API calls through third-party CORS proxies were removed because
-// they exposed the user's password to proxy operators in plaintext GET query strings.
-function saveArticleToInstapaper(url, title) {
-    const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
-    window.open(instapaperUrl, '_blank', 'noopener,noreferrer,width=500,height=600');
-}
-
-function quickSaveToInstapaper(articleId, event) {
-    // Prevent opening the article modal
-    if (event) {
-        event.stopPropagation();
-    }
-    
-    const article = findArticleById(articleId);
-    if (!article) {
-        showToast('Article not found');
-        return;
-    }
-    
-    saveArticleToInstapaper(article.url, article.title);
-    
-    // Visual feedback
-    const btn = event?.target;
-    if (btn) {
-        btn.textContent = '✓';
-        btn.classList.add('saved');
-        setTimeout(() => {
-            btn.textContent = '📥';
-            btn.classList.remove('saved');
-        }, 2000);
     }
 }
 
@@ -4344,8 +4295,10 @@ function renderClientRadar() {
     // Get articles with client matches
     const clientArticles = {};
     const allArticles = [...app.dailyArticles, ...app.articles.filter(a => {
-        const age = Date.now() - new Date(a.date).getTime();
-        return age < 24 * 60 * 60 * 1000;
+        const articleDate = a.date || a.publishedDate;
+        if (!articleDate) return true; // Include if no date
+        const age = Date.now() - new Date(articleDate).getTime();
+        return age < 48 * 60 * 60 * 1000; // 48 hours for better coverage
     })];
     
     allArticles.forEach(article => {
@@ -4625,12 +4578,27 @@ function renderATLEnablement() {
         .filter(([_, signals]) => signals.length > 0)
         .map(([market, signals]) => {
             const topSignals = signals.slice(0, 4);
-            const content = topSignals.map(s => {
+            // Build HTML content with clickable links
+            const contentHtml = topSignals.map(s => {
+                const article = s.articles[0];
+                const sourceName = article.source || article.sourceName || 'Source';
                 const prefix = s.client ? `🎯 ${s.client}` : `📌 ${s.industry}`;
-                return `${prefix}: ${s.articles[0].title} (${s.articles[0].source})`;
+                return `<div class="atl-brief-signal">
+                    <span class="atl-brief-prefix">${prefix}</span>
+                    <a class="atl-brief-link" href="${article.url || '#'}" target="_blank">${escapeHtml(article.title)}</a>
+                    <span class="atl-brief-source">(${escapeHtml(sourceName)})</span>
+                </div>`;
+            }).join('');
+            
+            // Plain text for copying
+            const contentText = topSignals.map(s => {
+                const article = s.articles[0];
+                const sourceName = article.source || article.sourceName || 'Source';
+                const prefix = s.client ? `🎯 ${s.client}` : `📌 ${s.industry}`;
+                return `${prefix}: ${article.title} (${sourceName})\n${article.url || ''}`;
             }).join('\n\n');
             
-            return { market, content, signalCount: signals.length };
+            return { market, contentHtml, contentText, signalCount: signals.length };
         });
     
     // Update count badge
@@ -4642,20 +4610,21 @@ function renderATLEnablement() {
         return;
     }
     
-    list.innerHTML = briefs.map(({ market, content, signalCount }) => `
-        <div class="atl-brief">
+    list.innerHTML = briefs.map(({ market, contentHtml, contentText, signalCount }) => `
+        <div class="atl-brief" data-copy-text="${escapeHtml(contentText)}">
             <div class="atl-brief-header">
                 <span class="atl-brief-market">${market}</span>
                 <span class="atl-brief-count">${signalCount} signals</span>
                 <button class="atl-brief-copy" onclick="copyATLBrief(this, '${market}')" title="Copy to clipboard">📋</button>
             </div>
-            <div class="atl-brief-content">${escapeHtml(content)}</div>
+            <div class="atl-brief-content">${contentHtml}</div>
         </div>
     `).join('');
 }
 
 function copyATLBrief(btn, market) {
-    const content = btn.closest('.atl-brief').querySelector('.atl-brief-content').textContent;
+    const brief = btn.closest('.atl-brief');
+    const content = brief.dataset.copyText || brief.querySelector('.atl-brief-content').textContent;
     navigator.clipboard.writeText(content).then(() => {
         btn.textContent = '✓';
         btn.classList.add('copied');
@@ -4891,9 +4860,12 @@ function cacheSignals(signals, rawSignals) {
 }
 
 function renderSynthesizedSignal(signal, rawSignal) {
-    const sourcesHtml = rawSignal.articles?.map(a => 
-        `<a class="signal-card-source" href="${a.url || '#'}" target="_blank" onclick="event.stopPropagation(); openArticle('${a.id}')">${escapeHtml(a.source)}</a>`
-    ).join(' • ') || '';
+    const articles = rawSignal.articles || [];
+    const sourcesHtml = articles.length > 0 
+        ? articles.map(a => 
+            `<a class="signal-card-source" href="${a.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(a.source || a.sourceName || 'Source')}</a>`
+        ).join(' • ')
+        : (rawSignal.sources || []).map(s => `<span class="signal-card-source">${escapeHtml(s)}</span>`).join(' • ');
     
     return `
         <div class="signal-card">
@@ -4907,15 +4879,18 @@ function renderSynthesizedSignal(signal, rawSignal) {
             ${signal.context ? `<div class="signal-card-context">${escapeHtml(signal.context)}</div>` : ''}
             <div class="signal-card-body"><strong>Action:</strong> ${escapeHtml(signal.action)}</div>
             <div class="signal-card-ibm"><strong>IBM Angle:</strong> ${escapeHtml(signal.ibmAngle)}</div>
-            <div class="signal-card-sources">Sources: ${sourcesHtml}</div>
+            <div class="signal-card-sources">Sources: ${sourcesHtml || 'N/A'}</div>
         </div>
     `;
 }
 
 function renderCachedSignal(signal, articleData) {
-    const sourcesHtml = articleData?.articles?.map(a => 
-        `<a class="signal-card-source" href="${a.url || '#'}" target="_blank" onclick="event.stopPropagation(); openArticle('${a.id}')">${escapeHtml(a.source)}</a>`
-    ).join(' • ') || '';
+    const articles = articleData?.articles || [];
+    const sourcesHtml = articles.length > 0
+        ? articles.map(a => 
+            `<a class="signal-card-source" href="${a.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(a.source || a.sourceName || 'Source')}</a>`
+        ).join(' • ')
+        : '';
     
     return `
         <div class="signal-card">
@@ -4929,21 +4904,24 @@ function renderCachedSignal(signal, articleData) {
             ${signal.context ? `<div class="signal-card-context">${escapeHtml(signal.context)}</div>` : ''}
             ${signal.action ? `<div class="signal-card-body"><strong>Action:</strong> ${escapeHtml(signal.action)}</div>` : ''}
             ${signal.ibmAngle ? `<div class="signal-card-ibm"><strong>IBM Angle:</strong> ${escapeHtml(signal.ibmAngle)}</div>` : ''}
-            <div class="signal-card-sources">Sources: ${sourcesHtml}</div>
+            <div class="signal-card-sources">Sources: ${sourcesHtml || 'N/A'}</div>
         </div>
     `;
 }
 
 function renderBasicSignal(signal) {
     const tagHtml = [
-        ...signal.industries.map(t => `<span class="signal-card-tag industry">${escapeHtml(t)}</span>`),
-        ...signal.clients.map(c => `<span class="signal-card-tag client">${escapeHtml(c)}</span>`),
+        ...(signal.industries || []).map(t => `<span class="signal-card-tag industry">${escapeHtml(t)}</span>`),
+        ...(signal.clients || []).map(c => `<span class="signal-card-tag client">${escapeHtml(c)}</span>`),
         signal.type === 'competitive' ? '<span class="signal-card-tag competitive">⚔️ Competitive</span>' : ''
     ].join('');
     
-    const sourcesHtml = signal.articles?.map(a => 
-        `<a class="signal-card-source" href="${a.url || '#'}" target="_blank" onclick="event.stopPropagation(); openArticle('${a.id}')">${escapeHtml(a.source)}</a>`
-    ).join(' • ') || '';
+    const articles = signal.articles || [];
+    const sourcesHtml = articles.length > 0
+        ? articles.map(a => 
+            `<a class="signal-card-source" href="${a.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(a.source || a.sourceName || 'Source')}</a>`
+        ).join(' • ')
+        : (signal.sources || []).map(s => `<span class="signal-card-source">${escapeHtml(s)}</span>`).join(' • ');
     
     return `
         <div class="signal-card">
@@ -4952,7 +4930,7 @@ function renderBasicSignal(signal) {
                 <div class="signal-card-tags">${tagHtml}</div>
             </div>
             ${signal.summary ? `<div class="signal-card-context">${escapeHtml(signal.summary.substring(0, 200))}</div>` : ''}
-            <div class="signal-card-sources">Sources: ${sourcesHtml}</div>
+            <div class="signal-card-sources">Sources: ${sourcesHtml || 'N/A'}</div>
         </div>
     `;
 }
