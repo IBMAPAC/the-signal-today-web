@@ -71,178 +71,89 @@
                 <!-- Daily Digest Tab -->
                 <div id="daily-tab" class="digest-tab-content">
 
-                    <!-- Executive Brief — synthesised headline with industry insights, read this first -->
+                    <!-- Action Brief — synthesised headline, read this first -->
                     <section id="summary-section" class="card summary-card">
                         <div class="card-header">
-                            <h2>⚡ Executive Brief</h2>
-                            <span class="card-subtitle">Action-oriented intelligence for today</span>
+                            <h2>⚡ Action Brief</h2>
                         </div>
                         <div id="summary-content" class="card-body">
                             <p id="executive-summary">Pull to refresh to generate your daily digest.</p>
-                            <!-- Industry Signals will be merged here -->
-                            <div id="industry-signals-inline" class="industry-signals-inline hidden"></div>
                         </div>
                     </section>
 
-                    <!-- Account Intelligence — client mentions with embedded conversation starters -->
+                    <!-- Client Watch — account-specific intel (highest urgency: meeting prep) -->
                     <section id="clients-section" class="card clients-card hidden">
                         <div class="card-header card-header--collapsible" onclick="toggleSection('clients')">
-                            <h2>🎯 Account Intelligence</h2>
+                            <h2>👁️ Client Watch</h2>
                             <span id="clients-count" class="badge badge-purple">0</span>
-                            <button class="btn btn-atl-enablement" onclick="app.generateATLBriefs(event)" title="Generate talking points for all ATLs">
-                                👥 ATL Enablement Pack
-                            </button>
                             <span class="chevron">▼</span>
                         </div>
                         <div id="clients-content" class="card-body">
-                            <p class="card-description">Recent coverage of your 343 accounts — organized by tier for meeting prep and competitive intel. Click "ATL Enablement Pack" to generate Slack-ready briefs for your 115 ATLs.</p>
+                            <p class="card-description">Recent coverage of your watchlist accounts - useful for meeting prep and competitive intel</p>
                             <div id="clients-list"></div>
-                            <!-- Conversation starters will be embedded per client -->
                         </div>
                     </section>
 
-                    <!-- Market Pulse — geographic intelligence for 5 APAC regions -->
-                    <section id="market-pulse-section" class="card market-pulse-card hidden">
+                    <!-- Conversation Starters — talking points, contextualised by Client Watch above -->
+                    <section id="starters-section" class="card starters-card hidden">
                         <div class="card-header">
-                            <h2>🌏 Market Pulse</h2>
-                            <span class="card-subtitle">Regional intelligence across your 5 APAC markets</span>
+                            <h2>💬 Conversation Openers</h2>
+                        </div>
+                        <div id="starters-content" class="card-body">
+                            <div id="starters-list"></div>
+                        </div>
+                    </section>
+
+                    <!-- Industry Signals — AI-generated per-industry strategic guidance -->
+                    <section id="industry-signals-section" class="card industry-signals-card hidden">
+                        <div class="card-header">
+                            <h2>📊 Industry Signals</h2>
+                            <span id="industry-signals-count" class="badge badge-blue">0</span>
                         </div>
                         <div class="card-body">
-                            <div class="market-tabs">
-                                <button class="market-tab active" data-market="ANZ" onclick="switchMarketTab('ANZ')">
-                                    🇦🇺 ANZ
-                                    <span class="market-tab-count" id="anz-count">0</span>
-                                </button>
-                                <button class="market-tab" data-market="ASEAN" onclick="switchMarketTab('ASEAN')">
-                                    🇸🇬 ASEAN
-                                    <span class="market-tab-count" id="asean-count">0</span>
-                                </button>
-                                <button class="market-tab" data-market="GCG" onclick="switchMarketTab('GCG')">
-                                    🇨🇳 GCG
-                                    <span class="market-tab-count" id="gcg-count">0</span>
-                                </button>
-                                <button class="market-tab" data-market="ISA" onclick="switchMarketTab('ISA')">
-                                    🇮🇳 ISA
-                                    <span class="market-tab-count" id="isa-count">0</span>
-                                </button>
-                                <button class="market-tab" data-market="KOREA" onclick="switchMarketTab('KOREA')">
-                                    🇰🇷 KOREA
-                                    <span class="market-tab-count" id="korea-count">0</span>
-                                </button>
-                            </div>
-                            
-                            <div id="market-content">
-                                <!-- Market-specific content will be rendered here -->
-                                <div id="anz-market" class="market-tab-content">
-                                    <div class="market-stats">
-                                        <div class="market-stat">
-                                            <span class="market-stat-label">ATLs</span>
-                                            <span class="market-stat-value">23</span>
-                                        </div>
-                                        <div class="market-stat">
-                                            <span class="market-stat-label">Accounts</span>
-                                            <span class="market-stat-value">68</span>
-                                        </div>
-                                    </div>
-                                    <div id="anz-articles"></div>
-                                </div>
-                                
-                                <div id="asean-market" class="market-tab-content hidden">
-                                    <div class="market-stats">
-                                        <div class="market-stat">
-                                            <span class="market-stat-label">ATLs</span>
-                                            <span class="market-stat-value">31</span>
-                                        </div>
-                                        <div class="market-stat">
-                                            <span class="market-stat-label">Accounts</span>
-                                            <span class="market-stat-value">89</span>
-                                        </div>
-                                    </div>
-                                    <div id="asean-articles"></div>
-                                </div>
-                                
-                                <div id="gcg-market" class="market-tab-content hidden">
-                                    <div class="market-stats">
-                                        <div class="market-stat">
-                                            <span class="market-stat-label">ATLs</span>
-                                            <span class="market-stat-value">19</span>
-                                        </div>
-                                        <div class="market-stat">
-                                            <span class="market-stat-label">Accounts</span>
-                                            <span class="market-stat-value">54</span>
-                                        </div>
-                                    </div>
-                                    <div id="gcg-articles"></div>
-                                </div>
-                                
-                                <div id="isa-market" class="market-tab-content hidden">
-                                    <div class="market-stats">
-                                        <div class="market-stat">
-                                            <span class="market-stat-label">ATLs</span>
-                                            <span class="market-stat-value">28</span>
-                                        </div>
-                                        <div class="market-stat">
-                                            <span class="market-stat-label">Accounts</span>
-                                            <span class="market-stat-value">87</span>
-                                        </div>
-                                    </div>
-                                    <div id="isa-articles"></div>
-                                </div>
-                                
-                                <div id="korea-market" class="market-tab-content hidden">
-                                    <div class="market-stats">
-                                        <div class="market-stat">
-                                            <span class="market-stat-label">ATLs</span>
-                                            <span class="market-stat-value">14</span>
-                                        </div>
-                                        <div class="market-stat">
-                                            <span class="market-stat-label">Accounts</span>
-                                            <span class="market-stat-value">45</span>
-                                        </div>
-                                    </div>
-                                    <div id="korea-articles"></div>
-                                </div>
-                            </div>
+                            <p class="card-description">AI-generated strategic signal per industry — IBM angle and sales action for your ATL team</p>
+                            <div id="industry-signals-list"></div>
                         </div>
                     </section>
 
-                    <!-- Digest Sections — AI thematic deep-dives (Competitive Alerts, etc.) -->
+                    <!-- Digest Sections — AI thematic deep-dives -->
                     <div id="digest-sections"></div>
 
-                    <!-- Pattern Detection — merged cross-source + trending (collapsed by default) -->
-                    <section id="patterns-section" class="card patterns-card hidden">
-                        <div class="card-header card-header--collapsible" onclick="toggleSection('patterns')">
-                            <h2>🔥 Pattern Detection</h2>
-                            <span id="patterns-count" class="badge">0</span>
+                    <!-- Cross-Source Signals — keyword-matched multi-source themes (supporting context) -->
+                    <section id="signals-section" class="card signals-card hidden">
+                        <div class="card-header card-header--collapsible" onclick="toggleSection('signals')">
+                            <h2>🔥 Cross-Source Signals</h2>
+                            <span id="signals-count" class="badge">0</span>
                             <span class="chevron">▼</span>
                         </div>
-                        <div id="patterns-content" class="card-body collapsed">
-                            <p class="card-description">Topics appearing across multiple sources and days — sustained signals worth monitoring</p>
-                            
-                            <!-- Cross-Source Signals (same-day, multiple sources) -->
-                            <div id="cross-source-patterns" class="pattern-group hidden">
-                                <h3 class="pattern-group-title">📊 Today's Cross-Source Topics</h3>
-                                <div id="signals-list"></div>
-                            </div>
-                            
-                            <!-- Multi-Day Trending (across 7-day corpus) -->
-                            <div id="trending-patterns" class="pattern-group hidden">
-                                <h3 class="pattern-group-title">📈 Multi-Day Trending</h3>
-                                <div id="trending-list"></div>
-                            </div>
+                        <div id="signals-content" class="card-body">
+                            <p class="card-description">Topics covered by multiple independent sources - higher signal, lower noise</p>
+                            <div id="signals-list"></div>
                         </div>
                     </section>
 
-                    <!-- Deep Context — optional reference (collapsed by default) -->
-                    <section id="deep-context-section" class="card deep-context-card hidden">
-                        <div class="card-header card-header--collapsible" onclick="toggleSection('deep-context')">
-                            <h2>📚 Deep Context</h2>
-                            <span id="deep-context-count" class="badge">0</span>
+                    <!-- Multi-Day Trending — topics rising across the 7-day IDB corpus -->
+                    <section id="trending-section" class="card trending-card hidden">
+                        <div class="card-header card-header--collapsible" onclick="toggleSection('trending')">
+                            <h2>📈 Trending Topics</h2>
+                            <span id="trending-count" class="badge badge-orange">0</span>
                             <span class="chevron">▼</span>
                         </div>
-                        <div id="deep-context-content" class="card-body collapsed">
-                            <p class="card-description">Source articles for citations and deeper research — only if needed</p>
-                            <div id="deep-context-list"></div>
+                        <div id="trending-content" class="card-body">
+                            <p class="card-description">Topics appearing across multiple days and sources — sustained signals, not one-day noise</p>
+                            <div id="trending-list"></div>
+                        </div>
+                    </section>
+
+                    <!-- All Daily Articles — full reference list -->
+                    <section id="articles-section" class="card">
+                        <div class="card-header card-header--collapsible" onclick="toggleSection('articles')">
+                            <h2>📰 All Daily Articles</h2>
+                            <span id="articles-count" class="badge">0</span>
+                            <span class="chevron">▼</span>
+                        </div>
+                        <div id="articles-content" class="card-body">
+                            <div id="articles-list"></div>
                         </div>
                     </section>
                 </div>
@@ -488,27 +399,6 @@
                     <button class="btn btn-primary hidden" id="copy-gtm-btn" onclick="app.copyGTMDigest()">📋 Copy to Clipboard</button>
                 </div>
             </div>
-
-        <!-- ATL Enablement Pack Modal -->
-        <div id="atl-enablement-modal" class="modal hidden">
-            <div class="modal-backdrop" onclick="closeATLEnablement()"></div>
-            <div class="modal-content modal-large">
-                <div class="modal-header">
-                    <h2>👥 ATL Enablement Pack</h2>
-                    <button class="modal-close" onclick="closeATLEnablement()">×</button>
-                </div>
-                <div class="modal-body">
-                    <p class="form-hint">Slack-ready talking points for your 115 ATLs — organized by market and client tier. Each brief includes situation summary, talking points, and a ready-to-send Slack message.</p>
-                    <div id="atl-enablement-body">
-                        <div class="meeting-brief-loading">Generating ATL briefs...</div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" onclick="closeATLEnablement()">Close</button>
-                    <button class="btn btn-primary hidden" id="copy-atl-btn" onclick="app.copyATLBriefs()">📋 Copy All Briefs</button>
-                </div>
-            </div>
-        </div>
         </div>
 
         <!-- Source Editor Modal -->
