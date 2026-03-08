@@ -264,14 +264,6 @@ class SignalApp {
         this.failedSources = [];    // Sources that failed to fetch in the last refresh
         this.debugMode = new URLSearchParams(location.search).get('debug') === '1';
         this.db = new SignalDB();   // IndexedDB persistence layer (Phase 5)
-        this.cryptoService = new CryptoService(); // Encryption service for sensitive data
-        this.errorHandler = new FeedErrorHandler(); // Enhanced error handling with circuit breaker
-        this.lazyLoaders = {}; // Lazy loaders for article lists
-        this.a11y = new AccessibilityManager(this); // Accessibility manager
-        this.clientWatchlist = new ClientWatchlist(); // Client tier management system
-        this.meetingPrep = new MeetingPrep(); // Meeting prep system
-        this.executiveScorer = new ExecutiveScorer(this.clientWatchlist); // Executive relevance scoring
-        this.currentMeetingId = null; // Track current meeting for signal addition
         
         this.init();
     }
@@ -279,9 +271,6 @@ class SignalApp {
     async init() {
         // Open IndexedDB first (non-blocking fallback if unavailable)
         await this.db.open();
-
-        // Migrate plaintext API key to encrypted format (one-time)
-        await this.migrateAPIKeyToEncrypted();
 
         // Load settings, sources, clients, industries, ratings, drift from localStorage
         this.loadFromStorage();
@@ -328,80 +317,6 @@ class SignalApp {
         }
         
         console.log(`📡 The Signal Today initialized with ${this.sources.length} sources`);
-    }
-
-    // ==========================================
-    // API Key Encryption (Phase 1)
-    // ==========================================
-
-    /**
-     * Migrates plaintext API key to encrypted format (one-time operation)
-     * @returns {Promise<void>}
-     */
-    async migrateAPIKeyToEncrypted() {
-        try {
-            const storedKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
-            if (!storedKey) return; // No key to migrate
-
-            // Check if already encrypted
-            if (this.cryptoService.isEncrypted(storedKey)) {
-                console.log('🔒 API key already encrypted');
-                return;
-            }
-
-            // Migrate to encrypted format
-            console.log('🔐 Migrating API key to encrypted format...');
-            const encryptedKey = await this.cryptoService.encrypt(storedKey);
-            localStorage.setItem(STORAGE_KEYS.API_KEY, encryptedKey);
-            console.log('✅ API key migration complete');
-        } catch (error) {
-            console.error('❌ API key migration failed:', error);
-            // Don't throw - allow app to continue with plaintext key
-        }
-    }
-
-    /**
-     * Gets the decrypted API key
-     * @returns {Promise<string|null>} Decrypted API key or null
-     */
-    async getAPIKey() {
-        try {
-            const storedKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
-            if (!storedKey) return null;
-
-            // Check if encrypted
-            if (this.cryptoService.isEncrypted(storedKey)) {
-                return await this.cryptoService.decrypt(storedKey);
-            }
-
-            // Legacy plaintext key - return as-is but log warning
-            console.warn('⚠️ API key is not encrypted. It will be encrypted on next save.');
-            return storedKey;
-        } catch (error) {
-            console.error('❌ Failed to decrypt API key:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Saves the API key in encrypted format
-     * @param {string} apiKey - Plaintext API key to encrypt and save
-     * @returns {Promise<void>}
-     */
-    async saveAPIKey(apiKey) {
-        try {
-            if (!apiKey) {
-                localStorage.removeItem(STORAGE_KEYS.API_KEY);
-                return;
-            }
-
-            const encryptedKey = await this.cryptoService.encrypt(apiKey);
-            localStorage.setItem(STORAGE_KEYS.API_KEY, encryptedKey);
-            console.log('🔒 API key saved (encrypted)');
-        } catch (error) {
-            console.error('❌ Failed to encrypt API key:', error);
-            throw error;
-        }
     }
 
     // ==========================================
@@ -742,11 +657,6 @@ class SignalApp {
         document.getElementById('digest-content').classList.add('hidden');
         document.getElementById('error').classList.add('hidden');
         document.getElementById('refresh-btn').disabled = true;
-        
-        // Announce to screen readers
-        if (this.a11y) {
-            this.a11y.announceLoading(message);
-        }
     }
 
     hideLoading() {
@@ -759,11 +669,6 @@ class SignalApp {
         document.getElementById('error-message').textContent = message;
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('empty-state').classList.add('hidden');
-        
-        // Announce error to screen readers
-        if (this.a11y) {
-            this.a11y.announceError(message);
-        }
     }
 
     // ==========================================
@@ -793,11 +698,11 @@ class SignalApp {
             
             this.showLoading(`Scoring ${dedupedArticles.length} articles...`);
             
-            // Score articles with executive relevance algorithm
-            const scoredArticles = this.executiveScorer.scoreArticles(dedupedArticles);
+            // Score articles
+            const scoredArticles = this.scoreArticles(dedupedArticles);
             this.articles = scoredArticles
-                .filter(a => a.score >= 30) // Minimum 30% relevance
-                .sort((a, b) => b.score - a.score)
+                .filter(a => a.relevanceScore >= 0.1)
+                .sort((a, b) => b.relevanceScore - a.relevanceScore)
                 .slice(0, 200); // Keep top 200
             
             console.log(`🎯 ${this.articles.length} relevant articles`);
@@ -806,7 +711,7 @@ class SignalApp {
             this.categorizeArticles();
             
             // Generate AI digest if API key available (skip in quick mode)
-            const apiKey = await this.getAPIKey();
+            const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
             if (apiKey && !quickMode) {
                 // Phase 7: compute article fingerprint to detect new articles since last digest
                 const fingerprint = this.computeArticleFingerprint(this.dailyArticles);
@@ -893,9 +798,10 @@ class SignalApp {
     }
 
     async fetchFeedWithTimeout(source, timeout) {
-        // Check circuit breaker
-        if (this.errorHandler.isCircuitOpen(source.url)) {
-            console.log(`⏭️ Circuit breaker open for ${source.name} - skipping`);
+        // Check if source is auto-disabled
+        const failures = this.getSourceFailures();
+        if (failures[source.url]?.disabled) {
+            console.log(`⏭️ Skipping auto-disabled source: ${source.name}`);
             return [];
         }
         
@@ -906,56 +812,54 @@ class SignalApp {
             return cached.articles;
         }
         
-        // Use error handler with retry logic
+        // Try all proxies in parallel, use first successful response
+        const fetchPromises = CORS_PROXIES.map(async (proxy) => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+            
+            try {
+                const response = await fetch(proxy + encodeURIComponent(source.url), {
+                    headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' },
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const text = await response.text();
+                return this.parseFeed(text, source);
+            } catch (error) {
+                clearTimeout(timeoutId);
+                throw error; // Let Promise.any handle it
+            }
+        });
+        
         try {
-            const articles = await this.errorHandler.fetchWithRetry(
-                async () => {
-                    // Try all proxies in parallel, use first successful response
-                    const fetchPromises = CORS_PROXIES.map(async (proxy) => {
-                        const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), timeout);
-                        
-                        try {
-                            const response = await fetch(proxy + encodeURIComponent(source.url), {
-                                headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' },
-                                signal: controller.signal
-                            });
-                            
-                            clearTimeout(timeoutId);
-                            
-                            if (!response.ok) {
-                                const error = new Error(`HTTP ${response.status}`);
-                                error.response = response;
-                                throw error;
-                            }
-                            
-                            const text = await response.text();
-                            return this.parseFeed(text, source);
-                        } catch (error) {
-                            clearTimeout(timeoutId);
-                            throw error;
-                        }
-                    });
-                    
-                    // Promise.any returns first successful result
-                    return await Promise.any(fetchPromises);
-                },
-                source.url,
-                source.name
-            );
+            // Promise.any returns first successful result
+            const articles = await Promise.any(fetchPromises);
+            
+            // ✅ Success - reset failure count
+            this.resetSourceFailure(source.url);
             
             // Cache successful result
             feedCache.set(cacheKey, { articles, timestamp: Date.now() });
             
             return articles;
         } catch (error) {
-            // Error handler already logged and tracked the failure
-            this.failedSources.push({
-                name: source.name,
-                url: source.url,
-                error: error.message,
-                type: error.type || 'unknown'
-            });
+            // All proxies failed — record for source health badge
+            console.warn(`❌ All proxies failed for ${source.name}`);
+            
+            // Increment failure count
+            const newCount = this.incrementSourceFailure(source.url, source.name);
+            
+            // Auto-disable after 3 consecutive failures
+            if (newCount >= 3) {
+                this.disableSource(source.url, source.name);
+                console.warn(`🚫 Auto-disabled ${source.name} after ${newCount} consecutive failures`);
+            }
+            
+            this.failedSources.push({ name: source.name, url: source.url });
             return [];
         }
     }
@@ -964,16 +868,56 @@ class SignalApp {
     // Deduplication
     // ==========================================
     // ==========================================
-    // Enhanced Source Error Management
+    // Source Failure Tracking (Phase 8)
     // ==========================================
 
-    /**
-     * Enables a source and resets its circuit breaker
-     * @param {string} url - Source URL
-     */
+    getSourceFailures() {
+        const stored = localStorage.getItem('source-failures');
+        return stored ? JSON.parse(stored) : {};
+    }
+
+    incrementSourceFailure(url, name) {
+        const failures = this.getSourceFailures();
+        if (!failures[url]) {
+            failures[url] = { count: 0, name };
+        }
+        failures[url].count++;
+        failures[url].lastFailed = new Date().toISOString();
+        localStorage.setItem('source-failures', JSON.stringify(failures));
+        return failures[url].count;
+    }
+
+    resetSourceFailure(url) {
+        const failures = this.getSourceFailures();
+        if (failures[url]) {
+            delete failures[url];
+            localStorage.setItem('source-failures', JSON.stringify(failures));
+        }
+    }
+
+    disableSource(url, name) {
+        const failures = this.getSourceFailures();
+        if (!failures[url]) {
+            failures[url] = { count: 3, name };
+        }
+        failures[url].disabled = true;
+        failures[url].lastFailed = new Date().toISOString();
+        localStorage.setItem('source-failures', JSON.stringify(failures));
+        
+        // Also mark in sources array
+        const source = this.sources.find(s => s.url === url);
+        if (source) {
+            source.enabled = false;
+            this.saveToStorage();
+        }
+    }
+
     enableSource(url) {
-        // Reset circuit breaker
-        this.errorHandler.manualReset(url);
+        const failures = this.getSourceFailures();
+        if (failures[url]) {
+            delete failures[url];
+            localStorage.setItem('source-failures', JSON.stringify(failures));
+        }
         
         // Mark as enabled in sources array
         const source = this.sources.find(s => s.url === url);
@@ -990,20 +934,19 @@ class SignalApp {
         }
     }
 
-    /**
-     * Enables all sources and resets all circuit breakers
-     */
     enableAllSources() {
-        const disabled = this.errorHandler.getDisabledSources();
+        const failures = this.getSourceFailures();
+        const disabledUrls = Object.keys(failures).filter(url => failures[url].disabled);
         
-        disabled.forEach(({ url }) => {
-            this.errorHandler.manualReset(url);
+        disabledUrls.forEach(url => {
             const source = this.sources.find(s => s.url === url);
             if (source) {
                 source.enabled = true;
             }
         });
         
+        // Clear all failure data
+        localStorage.removeItem('source-failures');
         this.saveToStorage();
         
         // Re-render settings if modal is open
@@ -1048,61 +991,44 @@ class SignalApp {
         return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
     }
 
-    /**
-     * Renders disabled sources section in settings
-     */
     renderDisabledSources() {
         const container = document.getElementById('disabled-sources-container');
         if (!container) return;
         
-        const disabled = this.errorHandler.getDisabledSources();
+        const failures = this.getSourceFailures();
+        const disabled = Object.entries(failures).filter(([url, data]) => data.disabled);
         
         if (disabled.length === 0) {
             container.innerHTML = '';
             return;
         }
         
-        // Get source names from sources array
-        const disabledWithNames = disabled.map(d => {
-            const source = this.sources.find(s => s.url === d.url);
-            return {
-                ...d,
-                name: source?.name || 'Unknown Source'
-            };
-        });
-        
         container.innerHTML = `
             <div class="disabled-sources-section">
-                <h3>⚠️ Circuit Breaker: Disabled Sources (${disabled.length})</h3>
+                <h3>⚠️ Auto-Disabled Sources (${disabled.length})</h3>
                 <p class="help-text">
-                    These sources failed 3+ consecutive times and were automatically disabled
-                    to improve refresh performance. Circuit breakers reset automatically after 24 hours,
-                    or you can manually re-enable them below.
+                    These sources failed 3+ consecutive times and were automatically disabled 
+                    to improve refresh performance. You can re-enable them below.
                 </p>
                 
-                ${disabledWithNames.map(data => {
-                    const timeSince = this.formatTimeSince(data.openedAt);
-                    const escapedUrl = this.escapeAttr(data.url);
-                    const errorType = data.lastError?.type || 'unknown';
-                    const errorMsg = data.lastError?.message || 'Unknown error';
+                ${disabled.map(([url, data]) => {
+                    const timeSince = this.formatTimeSince(data.lastFailed);
+                    const escapedUrl = this.escapeAttr(url);
                     return `
                         <div class="disabled-source-card">
                             <div class="source-info">
                                 <strong>${this.escapeHtml(data.name)}</strong>
                                 <span class="failure-info">
-                                    ${data.failures} consecutive failures • Circuit opened ${timeSince}
-                                    <br><small style="opacity: 0.7;">Last error: ${errorType} - ${this.escapeHtml(errorMsg)}</small>
+                                    Failed ${data.count} times, last: ${timeSince}
                                 </span>
                             </div>
                             <div class="source-actions">
-                                <button onclick="app.enableSource('${escapedUrl}')"
-                                        class="btn-secondary btn-sm"
-                                        title="Reset circuit breaker and re-enable">
-                                    Reset & Enable
+                                <button onclick="app.enableSource('${escapedUrl}')" 
+                                        class="btn-secondary btn-sm">
+                                    Re-enable
                                 </button>
-                                <button onclick="app.removeDisabledSource('${escapedUrl}')"
-                                        class="btn-danger btn-sm"
-                                        title="Permanently remove this source">
+                                <button onclick="app.removeDisabledSource('${escapedUrl}')" 
+                                        class="btn-danger btn-sm">
                                     Remove
                                 </button>
                             </div>
@@ -1111,7 +1037,7 @@ class SignalApp {
                 }).join('')}
                 
                 <button onclick="app.enableAllSources()" class="btn-primary" style="margin-top: 1rem;">
-                    Reset All Circuit Breakers (${disabled.length})
+                    Re-enable All (${disabled.length})
                 </button>
             </div>
         `;
@@ -2131,7 +2057,8 @@ FRAMING RULES (strictly enforced):
 
 CLIENT INTELLIGENCE RULES:
 - Articles tagged with a Client name are watchlist client signals
-- For Tier 1 clients (${this.clientWatchlist.getTier1Clients().map(c => c.name).join(', ')}):
+- For Tier 1 clients (DBS, Commonwealth Bank, ANZ, Westpac, NAB, Samsung, Reliance,
+  HDFC, ICICI, CIMB, Maybank, Petronas, Singtel, Starhub, Telstra, SK Telecom):
   flag their signals explicitly in executiveSummary or the relevant section
 - If thisWeekContext mentions a client by name, that client's signals are MEETING PREP —
   surface them first in executiveSummary
@@ -2569,33 +2496,8 @@ ${articleList}`;
         
         // All weekly articles (full list, including top 3, for reference)
         document.getElementById('weekly-articles-count').textContent = this.weeklyArticles.length;
-        
-        const weeklyList = document.getElementById('weekly-articles-list');
-        
-        // Use lazy loading for lists with more than 20 articles
-        if (this.weeklyArticles.length > 20) {
-            // Destroy existing lazy loader if present
-            if (this.lazyLoaders.weeklyArticles) {
-                this.lazyLoaders.weeklyArticles.destroy();
-            }
-            
-            // Create new lazy loader
-            this.lazyLoaders.weeklyArticles = new LazyLoader(
-                weeklyList,
-                this.weeklyArticles,
-                (article) => this.renderArticleItem(article),
-                {
-                    initialBatch: 20,
-                    batchSize: 10,
-                    rootMargin: '200px'
-                }
-            );
-            
-            console.log(`📚 Lazy loading ${this.weeklyArticles.length} weekly articles (20 initial, 10 per batch)`);
-        } else {
-            // For small lists, render all at once
-            weeklyList.innerHTML = this.weeklyArticles.map(a => this.renderArticleItem(a)).join('');
-        }
+        document.getElementById('weekly-articles-list').innerHTML =
+            this.weeklyArticles.map(a => this.renderArticleItem(a)).join('');
     }
 
     renderCrossSourceSignals(crossRefs) {
@@ -2870,30 +2772,7 @@ ${articleList}`;
         
         count.textContent = this.dailyArticles.length;
         
-        // Use lazy loading for lists with more than 30 articles
-        if (this.dailyArticles.length > 30) {
-            // Destroy existing lazy loader if present
-            if (this.lazyLoaders.dailyArticles) {
-                this.lazyLoaders.dailyArticles.destroy();
-            }
-            
-            // Create new lazy loader
-            this.lazyLoaders.dailyArticles = new LazyLoader(
-                list,
-                this.dailyArticles,
-                (article) => this.renderArticleItem(article),
-                {
-                    initialBatch: 30,
-                    batchSize: 20,
-                    rootMargin: '200px'
-                }
-            );
-            
-            console.log(`📊 Lazy loading ${this.dailyArticles.length} daily articles (30 initial, 20 per batch)`);
-        } else {
-            // For small lists, render all at once
-            list.innerHTML = this.dailyArticles.map(article => this.renderArticleItem(article)).join('');
-        }
+        list.innerHTML = this.dailyArticles.slice(0, 30).map(article => this.renderArticleItem(article)).join('');
     }
 
     renderArticleItem(article) {
@@ -2955,7 +2834,7 @@ ${articleList}`;
     // Article Modal
     // ==========================================
 
-    async openArticle(id) {
+    openArticle(id) {
         // Search all article pools: this.articles is the master list (top 200),
         // but weekly articles are also a subset so this covers both tabs.
         const article = this.articles.find(a => a.id === id)
@@ -2966,36 +2845,9 @@ ${articleList}`;
         document.getElementById('article-title').textContent = article.title;
         document.getElementById('article-source').textContent = article.sourceName;
         document.getElementById('article-date').textContent = new Date(article.publishedDate).toLocaleDateString();
-        
-        // Show executive relevance score with breakdown
-        const scoreEl = document.getElementById('article-score');
-        scoreEl.textContent = `${article.score || 0}% relevant`;
-        scoreEl.className = `article-score ${this.getScoreClass(article.score)}`;
-        
-        // Add score breakdown tooltip
-        if (article.scoreReasons && article.scoreReasons.length > 0) {
-            scoreEl.title = `Why this scored ${article.score}%:\n${article.scoreReasons.join('\n')}`;
-            scoreEl.style.cursor = 'help';
-        }
-        
+        document.getElementById('article-score').textContent = `${Math.round(article.relevanceScore * 100)}% relevant`;
         document.getElementById('article-summary').innerHTML = this.escapeHtml(article.summary || 'No summary available.');
         document.getElementById('article-link').href = article.url;
-        
-        // Show score breakdown if available
-        const scoreBreakdownEl = document.getElementById('score-breakdown');
-        if (scoreBreakdownEl && article.scoreReasons) {
-            scoreBreakdownEl.innerHTML = `
-                <div class="score-breakdown-content">
-                    <h4>Relevance Factors:</h4>
-                    <ul class="score-reasons">
-                        ${article.scoreReasons.map(reason => `<li>${this.escapeHtml(reason)}</li>`).join('')}
-                    </ul>
-                </div>
-            `;
-            scoreBreakdownEl.classList.remove('hidden');
-        } else if (scoreBreakdownEl) {
-            scoreBreakdownEl.classList.add('hidden');
-        }
         
         // Mark as read — persist to IDB read-state store (survives re-fetches)
         article.isRead = true;
@@ -3004,8 +2856,7 @@ ${articleList}`;
         this.updateReadingTime();
         
         // Show/hide Deep Read button based on API key availability
-        const apiKey = await this.getAPIKey();
-        const hasApiKey = !!apiKey;
+        const hasApiKey = !!localStorage.getItem(STORAGE_KEYS.API_KEY);
         const deepReadBtn = document.getElementById('deep-read-btn');
         if (deepReadBtn) deepReadBtn.classList.toggle('hidden', !hasApiKey);
         
@@ -3026,7 +2877,7 @@ ${articleList}`;
             || this.dailyArticles.find(a => a.id === id);
         if (!article) return;
         
-        const apiKey = await this.getAPIKey();
+        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
         if (!apiKey) return;
         
         const deepReadContent = document.getElementById('deep-read-content');
@@ -3156,7 +3007,7 @@ Return ONLY valid JSON, no markdown fences:
     }
 
     async generateMeetingBrief(clientName) {
-        const apiKey = await this.getAPIKey();
+        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
         const bodyEl = document.getElementById('meeting-brief-body');
         if (!bodyEl) return;
 
@@ -3449,7 +3300,7 @@ Return ONLY valid JSON, no markdown fences:
     }
 
     async generateGTMDigest() {
-        const apiKey = await this.getAPIKey();
+        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
         const bodyEl = document.getElementById('gtm-digest-body');
         const copyBtn = document.getElementById('copy-gtm-btn');
         if (!bodyEl) return;
@@ -3634,10 +3485,9 @@ TOP ARTICLES
     // Settings
     // ==========================================
 
-    async openSettings() {
-        // Populate settings - decrypt API key for display
-        const apiKey = await this.getAPIKey();
-        document.getElementById('api-key').value = apiKey || '';
+    openSettings() {
+        // Populate settings
+        document.getElementById('api-key').value = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
         document.getElementById('daily-minutes').value = this.settings.dailyMinutes;
         document.getElementById('weekly-articles').value = this.settings.weeklyArticles;
         
@@ -3661,12 +3511,6 @@ TOP ARTICLES
         
         // Render disabled sources (Phase 8)
         this.renderDisabledSources();
-        
-        // Render client watchlist (Phase 1)
-        renderClientWatchlist();
-        
-        // Load scoring weights (Phase 3)
-        this.loadScoringWeights();
         
         // Render sources list
         currentSourceFilter = 'all';
@@ -3751,14 +3595,8 @@ function switchDigestTab(tab) {
     });
     
     // Update tab content
-    document.getElementById('command-tab').classList.toggle('hidden', tab !== 'command');
     document.getElementById('daily-tab').classList.toggle('hidden', tab !== 'daily');
     document.getElementById('weekly-tab').classList.toggle('hidden', tab !== 'weekly');
-    
-    // Render Command Center when switching to it
-    if (tab === 'command') {
-        app.renderCommandCenter();
-    }
     
     app.currentTab = tab;
 }
@@ -3775,7 +3613,7 @@ function closeSettings() {
     document.getElementById('settings-modal').classList.add('hidden');
 }
 
-async function saveSettings() {
+function saveSettings() {
     const apiKey = document.getElementById('api-key').value.trim();
 
     // Clamp daily minutes between 5 and 60 (JS-side validation in addition to HTML min/max)
@@ -3788,13 +3626,11 @@ async function saveSettings() {
 
     const clientsInput = document.getElementById('clients-input').value;
     
-    // Save API key encrypted using Web Crypto API
-    try {
-        await app.saveAPIKey(apiKey);
-    } catch (error) {
-        console.error('Failed to save API key:', error);
-        alert('Failed to save API key. Please try again.');
-        return;
+    // Save API key to localStorage (NOTE: stored unencrypted - user was warned in Settings UI)
+    if (apiKey) {
+        localStorage.setItem(STORAGE_KEYS.API_KEY, apiKey);
+    } else {
+        localStorage.removeItem(STORAGE_KEYS.API_KEY);
     }
     
     // Save settings
@@ -3826,9 +3662,6 @@ async function saveSettings() {
         return { name, tier: 2, country: '' };
     });
     
-    // Save scoring weights (Phase 3)
-    app.saveScoringWeights();
-    
     // Save to storage
     app.saveToStorage();
     
@@ -3836,781 +3669,6 @@ async function saveSettings() {
     app.updateUI();
     
     console.log('✅ Settings saved');
-
-// =============================================
-// Client Watchlist Management Methods
-// =============================================
-
-/**
- * Render client watchlist in settings
- */
-function renderClientWatchlist() {
-    const stats = app.clientWatchlist.getStatistics();
-    
-    // Update statistics
-    document.getElementById('tier1-count').textContent = stats.tier1Count;
-    document.getElementById('tier2-count').textContent = stats.tier2Count;
-    document.getElementById('tier3-count').textContent = stats.tier3Count;
-    
-    // Render each tier
-    renderTierClients('tier1', app.clientWatchlist.clients.tier1);
-    renderTierClients('tier2', app.clientWatchlist.clients.tier2);
-    renderTierClients('tier3', app.clientWatchlist.clients.tier3);
-}
-
-/**
- * Render clients for a specific tier
- */
-function renderTierClients(tier, clients) {
-    const container = document.getElementById(`${tier}-clients`);
-    if (!clients || clients.length === 0) {
-        container.innerHTML = '<p class="empty-message">No clients in this tier</p>';
-        return;
-    }
-    
-    container.innerHTML = clients.map(client => `
-        <div class="client-card" data-client-id="${client.id}">
-            <div class="client-header">
-                <h4>${app.escapeHtml(client.name)}</h4>
-                <span class="client-market">${client.market}</span>
-            </div>
-            <div class="client-details">
-                <p><strong>ATL:</strong> ${app.escapeHtml(client.atl)}</p>
-                <p><strong>Signals:</strong> ${client.signalCount} 
-                   ${client.lastSignalDate ? `(Last: ${new Date(client.lastSignalDate).toLocaleDateString()})` : '(None yet)'}
-                </p>
-                ${client.notes ? `<p class="client-notes">${app.escapeHtml(client.notes)}</p>` : ''}
-            </div>
-            <div class="client-actions">
-                ${tier !== 'tier1' ? `<button onclick="app.moveTier('${client.id}', ${parseInt(tier.slice(-1)) - 1})" title="Move up">⬆️</button>` : ''}
-                ${tier !== 'tier3' ? `<button onclick="app.moveTier('${client.id}', ${parseInt(tier.slice(-1)) + 1})" title="Move down">⬇️</button>` : ''}
-                <button onclick="app.editClient('${client.id}')" title="Edit">✏️</button>
-                <button onclick="app.deleteClient('${client.id}')" title="Delete">🗑️</button>
-            </div>
-        </div>
-    `).join('');
-}
-
-/**
- * Open add client dialog
- */
-app.addClientDialog = function() {
-    document.getElementById('add-client-modal').classList.remove('hidden');
-    document.getElementById('client-name').focus();
-};
-
-/**
- * Close add client modal
- */
-app.closeAddClientModal = function() {
-    document.getElementById('add-client-modal').classList.add('hidden');
-    document.getElementById('add-client-form').reset();
-};
-
-/**
- * Submit add client form
- */
-app.submitAddClient = function(event) {
-    event.preventDefault();
-    
-    const name = document.getElementById('client-name').value;
-    const tier = document.getElementById('client-tier').value;
-    const market = document.getElementById('client-market').value;
-    const atl = document.getElementById('client-atl').value;
-    const notes = document.getElementById('client-notes').value;
-    
-    this.clientWatchlist.addClient(name, tier, market, atl, notes);
-    renderClientWatchlist();
-    this.closeAddClientModal();
-    showToast(`✅ Added ${name} to Tier ${tier}`);
-};
-
-/**
- * Move client to different tier
- */
-app.moveTier = function(clientId, newTier) {
-    const client = this.clientWatchlist.moveTier(clientId, newTier);
-    if (client) {
-        renderClientWatchlist();
-        showToast(`✅ Moved ${client.name} to Tier ${newTier}`);
-    }
-};
-
-/**
- * Edit client (opens add dialog with pre-filled data)
- */
-app.editClient = function(clientId) {
-    const client = this.clientWatchlist.findClient(clientId);
-    if (client) {
-        document.getElementById('client-name').value = client.name;
-        document.getElementById('client-tier').value = client.tier;
-        document.getElementById('client-market').value = client.market;
-        document.getElementById('client-atl').value = client.atl;
-        document.getElementById('client-notes').value = client.notes || '';
-        
-        // Delete old client on submit
-        const form = document.getElementById('add-client-form');
-        form.onsubmit = (e) => {
-            e.preventDefault();
-            this.clientWatchlist.deleteClient(clientId);
-            this.submitAddClient(e);
-            form.onsubmit = (e) => this.submitAddClient(e); // Reset handler
-        };
-        
-        this.addClientDialog();
-    }
-};
-
-/**
- * Delete client
- */
-app.deleteClient = function(clientId) {
-    const client = this.clientWatchlist.findClient(clientId);
-    if (client && confirm(`Delete ${client.name}?`)) {
-        this.clientWatchlist.deleteClient(clientId);
-        renderClientWatchlist();
-        showToast(`✅ Deleted ${client.name}`);
-    }
-};
-
-/**
- * Export clients to CSV
- */
-app.exportClients = function() {
-    const csv = this.clientWatchlist.exportToCSV();
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `client-watchlist-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('✅ Exported client watchlist');
-};
-
-/**
- * Open import CSV dialog
- */
-app.importClientsDialog = function() {
-    document.getElementById('import-csv-modal').classList.remove('hidden');
-    document.getElementById('csv-input').focus();
-};
-
-/**
- * Close import modal
- */
-app.closeImportModal = function() {
-    document.getElementById('import-csv-modal').classList.add('hidden');
-    document.getElementById('csv-input').value = '';
-};
-
-/**
- * Import clients from CSV
- */
-app.importCSV = function() {
-    const csvText = document.getElementById('csv-input').value;
-    if (!csvText.trim()) {
-        alert('Please paste CSV data');
-        return;
-    }
-    
-    const imported = this.clientWatchlist.importFromCSV(csvText);
-    renderClientWatchlist();
-    this.closeImportModal();
-    showToast(`✅ Imported ${imported.length} clients`);
-};
-
-/**
- * Search clients
- */
-app.searchClients = function(query) {
-    if (!query || query.trim() === '') {
-        renderClientWatchlist();
-        return;
-    }
-    
-    const results = this.clientWatchlist.searchClients(query);
-    
-    // Group results by tier
-    const tier1Results = results.filter(c => c.tier === 1);
-    const tier2Results = results.filter(c => c.tier === 2);
-    const tier3Results = results.filter(c => c.tier === 3);
-    
-    renderTierClients('tier1', tier1Results);
-    renderTierClients('tier2', tier2Results);
-    renderTierClients('tier3', tier3Results);
-    
-    // Update counts
-    document.getElementById('tier1-count').textContent = tier1Results.length;
-    document.getElementById('tier2-count').textContent = tier2Results.length;
-    document.getElementById('tier3-count').textContent = tier3Results.length;
-};
-
-/**
- * Toggle Tier 3 section
- */
-
-/**
- * Show toast notification
- */
-function showToast(message, type = 'success') {
-    const toast = document.getElementById('toast');
-    if (!toast) {
-        // Create toast element if it doesn't exist
-
-// =============================================
-// Command Center Methods (Phase 2)
-// =============================================
-
-/**
- * Render Command Center view
- */
-app.renderCommandCenter = function() {
-    this.extractPriorities();
-    this.renderTopSignals();
-    this.renderDeepRead();
-    this.renderCompetitivePulse();
-    this.renderMeetings();
-};
-
-/**
- * Extract top priorities from AI digest
- */
-app.extractPriorities = function() {
-    const container = document.getElementById('priorities-list');
-    const summary = document.getElementById('executive-summary')?.textContent || '';
-    
-    // Extract action items from summary (look for ACTION:, ALERT:, etc.)
-    const priorities = [];
-    const lines = summary.split('\n');
-    
-    for (const line of lines) {
-        if (line.match(/ACTION:|ALERT:|PRIORITY:|⚠️|🚨|⚡/i)) {
-            priorities.push({
-                text: line.trim(),
-                type: line.match(/ALERT|🚨/) ? 'alert' : 
-                      line.match(/PRIORITY|⚡/) ? 'priority' : 'action'
-            });
-        }
-    }
-    
-    // Limit to top 5
-    const topPriorities = priorities.slice(0, 5);
-    
-    if (topPriorities.length === 0) {
-        container.innerHTML = '<p class="empty-message">No priority actions identified yet. Refresh to generate digest.</p>';
-        document.getElementById('priorities-count').textContent = '0';
-        return;
-    }
-    
-    container.innerHTML = topPriorities.map((priority, index) => `
-        <div class="priority-item priority-${priority.type}">
-            <div class="priority-number">${index + 1}</div>
-            <div class="priority-content">${this.escapeHtml(priority.text)}</div>
-        </div>
-    `).join('');
-    
-    document.getElementById('priorities-count').textContent = topPriorities.length;
-};
-
-/**
- * Render top 10 signals with filters
- */
-app.renderTopSignals = function() {
-    const tierFilter = document.getElementById('tier-filter')?.value || 'all';
-    const marketFilter = document.getElementById('market-filter')?.value || 'all';
-    
-    let filtered = this.articles.slice();
-    
-    // Filter by tier (if client mentioned)
-    if (tierFilter !== 'all') {
-        const tier = parseInt(tierFilter);
-        const tierClients = this.clientWatchlist.clients[`tier${tier}`] || [];
-        const tierClientNames = tierClients.map(c => c.name.toLowerCase());
-        
-        filtered = filtered.filter(article => {
-            const title = (article.title || '').toLowerCase();
-            const summary = (article.summary || '').toLowerCase();
-            return tierClientNames.some(name => 
-                title.includes(name) || summary.includes(name)
-            );
-        });
-    }
-    
-    // Filter by market
-    if (marketFilter !== 'all') {
-        const marketClients = this.clientWatchlist.filterByMarket(marketFilter);
-        const marketClientNames = marketClients.map(c => c.name.toLowerCase());
-        
-        filtered = filtered.filter(article => {
-            const title = (article.title || '').toLowerCase();
-            const summary = (article.summary || '').toLowerCase();
-            return marketClientNames.some(name => 
-                title.includes(name) || summary.includes(name)
-            );
-        });
-    }
-    
-    // Sort by score and take top 10
-    const topSignals = filtered
-        .sort((a, b) => (b.score || 0) - (a.score || 0))
-        .slice(0, 10);
-    
-    const container = document.getElementById('top-signals-list');
-    
-    if (topSignals.length === 0) {
-        container.innerHTML = '<p class="empty-message">No signals match your filters.</p>';
-        return;
-    }
-    
-    container.innerHTML = topSignals.map((article, index) => `
-        <div class="signal-card" data-article-id="${article.id}">
-            <div class="signal-rank">${index + 1}</div>
-            <div class="signal-content">
-                <h4 class="signal-title" onclick="app.openArticle('${article.id}')">${this.escapeHtml(article.title)}</h4>
-                <div class="signal-meta">
-                    <span class="signal-source">${this.escapeHtml(article.source)}</span>
-                    <span class="signal-score ${this.getScoreClass(article.score)}">${article.score}%</span>
-                </div>
-                <p class="signal-summary">${this.escapeHtml(article.summary || '')}</p>
-                <div class="signal-actions">
-                    <button class="btn btn-sm btn-ghost" onclick="app.addToMeeting('${article.id}')" title="Add to meeting">📅 Meeting</button>
-                    <button class="btn btn-sm btn-ghost" onclick="app.toggleBookmark('${article.id}')" title="Save">
-                        ${article.saved ? '★' : '☆'}
-                    </button>
-                    <button class="btn btn-sm btn-ghost" onclick="app.openArticle('${article.id}')" title="Read">📖 Read</button>
-                </div>
-            </div>
-        </div>
-    `).join('');
-};
-
-/**
- * Filter signals by tier/market
- */
-app.filterSignals = function() {
-    this.renderTopSignals();
-};
-
-/**
- * Render deep read of the week
- */
-app.renderDeepRead = function() {
-    const container = document.getElementById('deepread-content');
-    
-    // Get highest scoring article from weekly articles
-    const weeklyArticles = this.articles.filter(a => a.weeklyDigest);
-    if (weeklyArticles.length === 0) {
-        container.innerHTML = '<p class="empty-message">No deep read available yet. Check Weekly Deep Reads tab.</p>';
-        return;
-    }
-    
-    const deepRead = weeklyArticles.sort((a, b) => (b.score || 0) - (a.score || 0))[0];
-    
-    container.innerHTML = `
-        <div class="deepread-card" onclick="app.openArticle('${deepRead.id}')">
-            <h3 class="deepread-title">${this.escapeHtml(deepRead.title)}</h3>
-            <div class="deepread-meta">
-                <span class="deepread-source">${this.escapeHtml(deepRead.source)}</span>
-                <span class="deepread-time">${deepRead.readingTime || 5} min read</span>
-            </div>
-            <p class="deepread-summary">${this.escapeHtml(deepRead.summary || '')}</p>
-            <button class="btn btn-primary">📖 Read Full Article</button>
-        </div>
-    `;
-};
-
-/**
- * Render competitive pulse (7-day trends)
- */
-app.renderCompetitivePulse = function() {
-    const container = document.getElementById('competitive-pulse');
-    
-    // Get articles from last 7 days
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const recentArticles = this.articles.filter(a => 
-        new Date(a.pubDate) >= sevenDaysAgo
-    );
-    
-    // Track competitor mentions
-    const competitors = ['Microsoft', 'AWS', 'Amazon', 'Google', 'Oracle', 'SAP', 'Salesforce'];
-    const competitorCounts = {};
-    
-    competitors.forEach(comp => {
-        competitorCounts[comp] = recentArticles.filter(a => {
-            const text = `${a.title} ${a.summary}`.toLowerCase();
-            return text.includes(comp.toLowerCase());
-        }).length;
-    });
-    
-    // Sort by count
-    const sorted = Object.entries(competitorCounts)
-        .sort((a, b) => b[1] - a[1])
-        .filter(([_, count]) => count > 0);
-    
-    if (sorted.length === 0) {
-        container.innerHTML = '<p class="empty-message">No competitive mentions in the past 7 days.</p>';
-        return;
-    }
-    
-    const maxCount = sorted[0][1];
-    
-    container.innerHTML = sorted.map(([competitor, count]) => {
-        const percentage = (count / maxCount) * 100;
-        return `
-            <div class="competitive-item">
-                <div class="competitive-name">${competitor}</div>
-                <div class="competitive-bar-container">
-                    <div class="competitive-bar" style="width: ${percentage}%"></div>
-                </div>
-                <div class="competitive-count">${count} mentions</div>
-            </div>
-        `;
-    }).join('');
-};
-
-/**
- * Render meetings list
- */
-app.renderMeetings = function() {
-    const container = document.getElementById('meetings-list');
-    const meetings = this.meetingPrep.getUpcomingMeetings();
-    
-    if (meetings.length === 0) {
-        container.innerHTML = '<p class="empty-message">No upcoming meetings. Click "+ New Meeting" to create one.</p>';
-        document.getElementById('meetings-count').textContent = '0';
-        return;
-    }
-    
-    container.innerHTML = meetings.map(meeting => {
-        const date = new Date(meeting.date);
-        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        const daysUntil = Math.ceil((date - new Date()) / (1000 * 60 * 60 * 24));
-        
-        return `
-            <div class="meeting-card" onclick="app.openMeetingDetail('${meeting.id}')">
-                <div class="meeting-date">
-                    <div class="meeting-day">${dateStr}</div>
-                    <div class="meeting-countdown">${daysUntil} days</div>
-                </div>
-                <div class="meeting-info">
-                    <h4 class="meeting-client">${this.escapeHtml(meeting.clientName)}</h4>
-                    ${meeting.purpose ? `<p class="meeting-purpose">${this.escapeHtml(meeting.purpose)}</p>` : ''}
-                    <div class="meeting-signals-count">${meeting.signals.length} signals collected</div>
-                </div>
-                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deleteMeetingConfirm('${meeting.id}')">🗑️</button>
-            </div>
-        `;
-    }).join('');
-    
-    document.getElementById('meetings-count').textContent = meetings.length;
-};
-
-/**
- * Create meeting dialog
- */
-app.createMeetingDialog = function() {
-    document.getElementById('create-meeting-modal').classList.remove('hidden');
-    document.getElementById('meeting-client').focus();
-};
-
-/**
- * Close meeting dialog
- */
-app.closeMeetingDialog = function() {
-    document.getElementById('create-meeting-modal').classList.add('hidden');
-    document.getElementById('create-meeting-form').reset();
-};
-
-/**
- * Submit create meeting form
- */
-app.submitCreateMeeting = function(event) {
-    event.preventDefault();
-    
-    const clientName = document.getElementById('meeting-client').value;
-    const date = document.getElementById('meeting-date').value;
-    const purpose = document.getElementById('meeting-purpose').value;
-    const attendees = document.getElementById('meeting-attendees').value;
-    
-    this.meetingPrep.createMeeting(clientName, date, purpose, attendees);
-    this.closeMeetingDialog();
-    this.renderMeetings();
-    showToast(`✅ Meeting created for ${clientName}`);
-};
-
-/**
- * Open meeting detail
- */
-app.openMeetingDetail = function(meetingId) {
-    const meeting = this.meetingPrep.getMeeting(meetingId);
-    if (!meeting) return;
-    
-    this.currentMeetingId = meetingId;
-    
-    const date = new Date(meeting.date).toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-    
-    document.getElementById('meeting-detail-title').textContent = `📅 ${meeting.clientName}`;
-    
-    let content = `
-        <div class="meeting-detail">
-            <div class="meeting-detail-header">
-                <p><strong>Date:</strong> ${date}</p>
-                ${meeting.purpose ? `<p><strong>Purpose:</strong> ${this.escapeHtml(meeting.purpose)}</p>` : ''}
-                ${meeting.attendees ? `<p><strong>Attendees:</strong> ${this.escapeHtml(meeting.attendees)}</p>` : ''}
-            </div>
-            
-            <h3>Signals (${meeting.signals.length})</h3>
-    `;
-    
-    if (meeting.signals.length > 0) {
-        content += '<div class="meeting-signals">';
-        meeting.signals.forEach(signal => {
-            content += `
-                <div class="meeting-signal-item">
-                    <h4>${this.escapeHtml(signal.title)}</h4>
-                    <p class="signal-source">${this.escapeHtml(signal.source)}</p>
-                    <p>${this.escapeHtml(signal.summary)}</p>
-                    ${signal.relevance ? `<p class="signal-relevance"><strong>Relevance:</strong> ${this.escapeHtml(signal.relevance)}</p>` : ''}
-                    <button class="btn btn-sm btn-ghost" onclick="app.removeSignalFromMeeting('${meetingId}', '${signal.articleId}')">Remove</button>
-                </div>
-            `;
-        });
-        content += '</div>';
-    } else {
-        content += '<p class="empty-message">No signals added yet. Add signals from Top 10 Signals section.</p>';
-    }
-    
-    content += '</div>';
-    
-    document.getElementById('meeting-detail-content').innerHTML = content;
-    document.getElementById('meeting-detail-modal').classList.remove('hidden');
-};
-
-/**
- * Close meeting detail
- */
-app.closeMeetingDetail = function() {
-    document.getElementById('meeting-detail-modal').classList.add('hidden');
-    this.currentMeetingId = null;
-};
-
-/**
- * Add article to meeting
- */
-app.addToMeeting = function(articleId) {
-    const article = this.articles.find(a => a.id === articleId);
-    if (!article) return;
-    
-    const meetings = this.meetingPrep.getUpcomingMeetings();
-    if (meetings.length === 0) {
-        showToast('⚠️ Create a meeting first', 'warning');
-        return;
-    }
-    
-    // Show meeting selection modal
-    const container = document.getElementById('meeting-select-list');
-    container.innerHTML = meetings.map(meeting => {
-        const date = new Date(meeting.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        return `
-            <div class="meeting-select-item" onclick="app.addSignalToMeeting('${meeting.id}', '${articleId}')">
-                <div class="meeting-select-date">${date}</div>
-                <div class="meeting-select-info">
-                    <strong>${this.escapeHtml(meeting.clientName)}</strong>
-                    ${meeting.purpose ? `<p>${this.escapeHtml(meeting.purpose)}</p>` : ''}
-                </div>
-            </div>
-        `;
-    }).join('');
-    
-    document.getElementById('add-signal-modal').classList.remove('hidden');
-};
-
-/**
- * Add signal to specific meeting
- */
-app.addSignalToMeeting = function(meetingId, articleId) {
-    const article = this.articles.find(a => a.id === articleId);
-    if (!article) return;
-    
-    const signal = {
-        articleId: article.id,
-        title: article.title,
-        source: article.source,
-        url: article.url,
-        summary: article.summary,
-        relevance: ''
-    };
-    
-    const success = this.meetingPrep.addSignal(meetingId, signal);
-    if (success) {
-        showToast('✅ Signal added to meeting');
-        this.closeAddSignalModal();
-        this.renderMeetings();
-    } else {
-        showToast('⚠️ Signal already in meeting', 'warning');
-    }
-};
-
-/**
- * Close add signal modal
- */
-app.closeAddSignalModal = function() {
-    document.getElementById('add-signal-modal').classList.add('hidden');
-};
-
-/**
- * Remove signal from meeting
- */
-app.removeSignalFromMeeting = function(meetingId, articleId) {
-    if (confirm('Remove this signal from the meeting?')) {
-        this.meetingPrep.removeSignal(meetingId, articleId);
-        this.openMeetingDetail(meetingId); // Refresh
-        this.renderMeetings();
-        showToast('✅ Signal removed');
-
-// =============================================
-// Executive Scoring Methods (Phase 3)
-// =============================================
-
-/**
- * Load scoring weights into settings UI
- */
-app.loadScoringWeights = function() {
-    const weights = this.executiveScorer.weights;
-    
-    document.getElementById('weight-tier1').value = weights.tier1Client;
-    document.getElementById('weight-tier1-value').textContent = weights.tier1Client;
-    
-    document.getElementById('weight-tier2').value = weights.tier2Client;
-    document.getElementById('weight-tier2-value').textContent = weights.tier2Client;
-    
-    document.getElementById('weight-tier3').value = weights.tier3Client;
-    document.getElementById('weight-tier3-value').textContent = weights.tier3Client;
-    
-    document.getElementById('weight-competitive').value = weights.competitive;
-    document.getElementById('weight-competitive-value').textContent = weights.competitive;
-    
-    document.getElementById('weight-regulatory').value = weights.regulatory;
-    document.getElementById('weight-regulatory-value').textContent = weights.regulatory;
-    
-    document.getElementById('weight-strategic').value = weights.strategic;
-    document.getElementById('weight-strategic-value').textContent = weights.strategic;
-    
-    document.getElementById('weight-recency').value = weights.recency;
-    document.getElementById('weight-recency-value').textContent = weights.recency;
-    
-    document.getElementById('weight-source').value = weights.sourceQuality;
-    document.getElementById('weight-source-value').textContent = weights.sourceQuality;
-};
-
-/**
- * Save scoring weights from settings UI
- */
-app.saveScoringWeights = function() {
-    const newWeights = {
-        tier1Client: parseInt(document.getElementById('weight-tier1').value),
-        tier2Client: parseInt(document.getElementById('weight-tier2').value),
-        tier3Client: parseInt(document.getElementById('weight-tier3').value),
-        competitive: parseInt(document.getElementById('weight-competitive').value),
-        regulatory: parseInt(document.getElementById('weight-regulatory').value),
-        strategic: parseInt(document.getElementById('weight-strategic').value),
-        recency: parseInt(document.getElementById('weight-recency').value),
-        sourceQuality: parseInt(document.getElementById('weight-source').value)
-    };
-    
-    this.executiveScorer.updateWeights(newWeights);
-    showToast('✅ Scoring weights updated');
-};
-
-/**
- * Reset scoring weights to defaults
- */
-app.resetScoringWeights = function() {
-    if (confirm('Reset scoring weights to defaults?')) {
-        this.executiveScorer.resetWeights();
-        this.loadScoringWeights();
-        showToast('✅ Scoring weights reset to defaults');
-    }
-};
-
-    }
-};
-
-/**
- * Delete meeting with confirmation
- */
-app.deleteMeetingConfirm = function(meetingId) {
-    const meeting = this.meetingPrep.getMeeting(meetingId);
-    if (meeting && confirm(`Delete meeting with ${meeting.clientName}?`)) {
-        this.meetingPrep.deleteMeeting(meetingId);
-        this.renderMeetings();
-        showToast('✅ Meeting deleted');
-    }
-};
-
-/**
- * Export meeting briefing
- */
-app.exportMeetingBrief = function() {
-    if (!this.currentMeetingId) return;
-    
-    const { blob, filename } = this.meetingPrep.exportBriefing(this.currentMeetingId);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('✅ Meeting brief exported');
-};
-
-/**
- * Get score class for styling
- */
-app.getScoreClass = function(score) {
-    if (score >= 80) return 'high';
-    if (score >= 50) return 'medium';
-    return 'low';
-};
-
-        const toastEl = document.createElement('div');
-        toastEl.id = 'toast';
-        toastEl.className = 'toast';
-        document.body.appendChild(toastEl);
-    }
-    
-    const toastElement = document.getElementById('toast');
-    toastElement.textContent = message;
-    toastElement.className = `toast ${type}`;
-    toastElement.classList.add('show');
-    
-    setTimeout(() => {
-        toastElement.classList.remove('show');
-    }, 3000);
-}
-
-app.toggleTier3 = function() {
-    const section = document.querySelector('.tier3-section');
-    const clientList = document.getElementById('tier3-clients');
-    const icon = section.querySelector('.toggle-icon');
-    
-    if (section.classList.contains('collapsed')) {
-        section.classList.remove('collapsed');
-        clientList.style.display = 'block';
-        icon.textContent = '▲';
-    } else {
-        section.classList.add('collapsed');
-        clientList.style.display = 'none';
-        icon.textContent = '▼';
-    }
-};
-
 }
 
 function resetSources() {
@@ -4654,33 +3712,10 @@ function copyArticleLink() {
 }
 
 function saveToInstapaper() {
-    try {
-        const modal = document.getElementById('article-modal');
-        if (!modal) {
-            throw new Error('Modal not found');
-        }
-        
-        const articleId = modal.dataset.articleId;
-        if (!articleId) {
-            throw new Error('No article ID in modal');
-        }
-        
-        const article = app.articles.find(a => a.id === articleId);
-        if (!article) {
-            throw new Error('Article not found');
-        }
-        
-        if (!article.url) {
-            throw new Error('Article URL missing');
-        }
-        
-        const success = saveArticleToInstapaper(article.url, article.title);
-        if (success) {
-            showToast('📥 Saved to Instapaper');
-        }
-    } catch (error) {
-        console.error('❌ Failed to save to Instapaper:', error);
-        showToast(`❌ ${error.message}`);
+    const articleId = document.getElementById('article-modal').dataset.articleId;
+    const article = app.articles.find(a => a.id === articleId);
+    if (article) {
+        saveArticleToInstapaper(article.url, article.title);
     }
 }
 
@@ -4688,77 +3723,31 @@ function saveToInstapaper() {
 // Credential-based API calls through third-party CORS proxies were removed because
 // they exposed the user's password to proxy operators in plaintext GET query strings.
 function saveArticleToInstapaper(url, title) {
-    try {
-        // Validate URL
-        if (!url || typeof url !== 'string') {
-            throw new Error('Invalid article URL');
-        }
-        
-        // Ensure title is a string
-        const safeTitle = title || 'Untitled Article';
-        
-        // Build Instapaper URL
-        const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(safeTitle)}`;
-        
-        // Open in new window
-        const popup = window.open(instapaperUrl, '_blank', 'noopener,noreferrer,width=500,height=600');
-        
-        // Check if popup was blocked
-        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-            throw new Error('Popup blocked - please allow popups for this site');
-        }
-        
-        console.log('✅ Opened Instapaper save dialog:', safeTitle);
-        return true;
-    } catch (error) {
-        console.error('❌ Failed to save to Instapaper:', error);
-        showToast(`❌ ${error.message}`);
-        return false;
-    }
+    const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
+    window.open(instapaperUrl, '_blank', 'noopener,noreferrer,width=500,height=600');
 }
 
 function quickSaveToInstapaper(articleId, event) {
     // Prevent opening the article modal
     if (event) {
         event.stopPropagation();
-        event.preventDefault();
     }
     
-    // Find article in app.articles array
     const article = app.articles.find(a => a.id === articleId);
-    if (!article) {
-        console.error('Article not found:', articleId);
-        showToast('❌ Article not found');
-        return;
-    }
+    if (!article) return;
     
-    // Validate article has required fields
-    if (!article.url) {
-        console.error('Article missing URL:', article);
-        showToast('❌ Article URL missing');
-        return;
-    }
-    
-    // Save to Instapaper
-    saveArticleToInstapaper(article.url, article.title || 'Untitled');
+    saveArticleToInstapaper(article.url, article.title);
     
     // Visual feedback
     const btn = event?.target;
     if (btn) {
-        const originalText = btn.textContent;
         btn.textContent = '✓';
         btn.classList.add('saved');
-        btn.disabled = true;
-        
         setTimeout(() => {
-            btn.textContent = originalText;
+            btn.textContent = '📥';
             btn.classList.remove('saved');
-            btn.disabled = false;
         }, 2000);
     }
-    
-    // Show success toast
-    showToast('📥 Saved to Instapaper');
 }
 
 function showToast(message) {
