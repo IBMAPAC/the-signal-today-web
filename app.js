@@ -3406,17 +3406,14 @@ Return ONLY valid JSON, no markdown fences:
                         if (insight.timeHorizon) lines.push(`*${insight.timeHorizon} horizon*`);
                         lines.push('');
                         if (insight.strategicThesis) lines.push(`**💡 Strategic Thesis:** ${insight.strategicThesis}`);
-                        if (insight.boardQuestion) lines.push(`**🎯 Board Question:** "${insight.boardQuestion}"`);
-                        if (insight.atlEnablement) lines.push(`**📢 ATL Enablement:** ${insight.atlEnablement}`);
-                        if (insight.ibmNarrative) lines.push(`**🔵 IBM Narrative:** ${insight.ibmNarrative}`);
-                        if (insight.clientTypes) lines.push(`**🏢 Target Clients:** ${insight.clientTypes}`);
+                        if (insight.leadershipImplication) lines.push(`**📊 Leadership Implication:** ${insight.leadershipImplication}`);
+                        if (insight.cxoQuestion) lines.push(`**🎯 CxO Question:** "${insight.cxoQuestion}"`);
                         lines.push('');
                     }
                 }
             }
         } catch (e) { /* ignore cache errors */ }
         
-        // Competitive Landscape
         // Competitive Landscape - use DEAL_RELEVANCE_SIGNALS if available
         const competitorPattern = typeof DEAL_RELEVANCE_SIGNALS !== 'undefined'
             ? new RegExp(DEAL_RELEVANCE_SIGNALS.COMPETITOR_KEYWORDS.slice(0, 30).join('|'), 'i')
@@ -5650,19 +5647,16 @@ For each article, provide a JSON array with this structure:
   {
     "title": "Original article title",
     "strategicThesis": "The big idea in one powerful sentence — what market shift does this signal? (Think: 'The mainframe moment for AI governance' or 'Sovereignty becomes the new security')",
-    "boardQuestion": "A provocative question for board/CxO discussion that positions IBM favorably (e.g., 'What happens to your AI strategy when your cloud provider becomes your competitor?')",
-    "atlEnablement": "How should ATLs use this insight? Which client conversations does it unlock?",
-    "ibmNarrative": "How this connects to IBM's strategic positioning (watsonx, hybrid cloud, consulting-led transformation)",
-    "clientTypes": "Which client profiles should prioritize this (e.g., 'Tier 1 FSI with cloud concentration risk', 'Telcos evaluating GenAI monetization')",
+    "leadershipImplication": "What this means for technology leaders — the 'so what' for a CTO or CIO making investment decisions",
+    "cxoQuestion": "A provocative question for CxO discussion (e.g., 'What happens to your AI strategy when your cloud provider becomes your competitor?')",
     "timeHorizon": "6 months" or "12 months" or "2-3 years"
   }
 ]
 
 QUALITY RULES:
 - Strategic thesis must be memorable and quotable — something worth repeating in a keynote
-- Board questions must be genuinely thought-provoking, not leading/sales-y
-- ATL enablement must be actionable — name specific conversation types or client situations
-- IBM narrative must connect to real IBM strategy, not generic capabilities
+- Leadership implication must be concrete and actionable — not generic advice
+- CxO questions must be genuinely thought-provoking, not leading or sales-y
 
 Return ONLY valid JSON array, no markdown. Max 5 articles.`;
 
@@ -5738,10 +5732,8 @@ function renderSynthesizedDeepRead(insight, article) {
             <div class="deep-read-item-title">${escapeHtml(insight.title)}</div>
             <div class="deep-read-strategic">
                 <div class="deep-read-thesis"><strong>💡 Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
-                <div class="deep-read-board"><strong>🎯 Board Question:</strong> "${escapeHtml(insight.boardQuestion || insight.conversationTopic || '')}"</div>
-                <div class="deep-read-atl"><strong>📢 ATL Enablement:</strong> ${escapeHtml(insight.atlEnablement || insight.leadershipImplication || '')}</div>
-                <div class="deep-read-ibm"><strong>🔵 IBM Narrative:</strong> ${escapeHtml(insight.ibmNarrative || '')}</div>
-                ${insight.clientTypes ? `<div class="deep-read-clients"><strong>🏢 Target Clients:</strong> ${escapeHtml(insight.clientTypes)}</div>` : ''}
+                <div class="deep-read-implication"><strong>📊 Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication || '')}</div>
+                <div class="deep-read-question"><strong>🎯 CxO Question:</strong> "${escapeHtml(insight.cxoQuestion || '')}"</div>
             </div>
         </div>
     `;
@@ -5759,10 +5751,8 @@ function renderCachedDeepRead(insight, articleData) {
             ${insight.strategicThesis ? `
             <div class="deep-read-strategic">
                 <div class="deep-read-thesis"><strong>💡 Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
-                <div class="deep-read-board"><strong>🎯 Board Question:</strong> "${escapeHtml(insight.boardQuestion || insight.conversationTopic || '')}"</div>
-                <div class="deep-read-atl"><strong>📢 ATL Enablement:</strong> ${escapeHtml(insight.atlEnablement || insight.leadershipImplication || '')}</div>
-                ${insight.ibmNarrative ? `<div class="deep-read-ibm"><strong>🔵 IBM Narrative:</strong> ${escapeHtml(insight.ibmNarrative)}</div>` : ''}
-                ${insight.clientTypes ? `<div class="deep-read-clients"><strong>🏢 Target Clients:</strong> ${escapeHtml(insight.clientTypes)}</div>` : ''}
+                <div class="deep-read-implication"><strong>📊 Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication || '')}</div>
+                <div class="deep-read-question"><strong>🎯 CxO Question:</strong> "${escapeHtml(insight.cxoQuestion || '')}"</div>
             </div>
             ` : `<div class="deep-read-item-summary">${escapeHtml(insight.summary || article.summary || '')}</div>`}
         </div>
