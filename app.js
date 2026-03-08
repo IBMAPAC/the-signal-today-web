@@ -328,6 +328,12 @@ class SignalApp {
             
             // Show cached content if available
             if (this.digest || this.articles.length > 0) {
+                // Re-score articles to ensure matchedClients/matchedIndustries are set
+                // (articles from older IDB versions may not have these properties)
+                if (this.articles.length > 0) {
+                    console.log(`Re-scoring ${this.articles.length} cached articles for client matching...`);
+                    this.articles = this.scoreArticles(this.articles);
+                }
                 this.categorizeArticles();
                 this.renderDigest();
             }
@@ -4301,6 +4307,13 @@ function renderClientRadar() {
         return age < 48 * 60 * 60 * 1000; // 48 hours for better coverage
     })];
     
+    // Debug: check how many articles have matchedClients
+    const articlesWithClients = allArticles.filter(a => a.matchedClients && a.matchedClients.length > 0);
+    console.log(`Client Radar: ${allArticles.length} total articles, ${articlesWithClients.length} have matchedClients, ${app.clients.length} clients tracked`);
+    if (articlesWithClients.length > 0) {
+        console.log('Sample matched clients:', articlesWithClients.slice(0, 3).map(a => ({ title: a.title.substring(0, 50), clients: a.matchedClients })));
+    }
+    
     allArticles.forEach(article => {
         if (!article.matchedClients || article.matchedClients.length === 0) return;
         article.matchedClients.forEach(clientName => {
@@ -4353,9 +4366,9 @@ function renderClientRadar() {
             </div>
             <div class="client-radar-articles">
                 ${articles.slice(0, 3).map(a => `
-                    <div class="client-radar-article" onclick="openArticle('${a.id}')">
-                        <span class="client-radar-article-source">${escapeHtml(a.source)}</span>
-                        <span class="client-radar-article-title">${escapeHtml(a.title)}</span>
+                    <div class="client-radar-article">
+                        <a class="client-radar-article-link" href="${a.url || '#'}" target="_blank">${escapeHtml(a.title)}</a>
+                        <span class="client-radar-article-source">(${escapeHtml(a.source || a.sourceName || 'Source')})</span>
                     </div>
                 `).join('')}
             </div>
@@ -4862,10 +4875,14 @@ function cacheSignals(signals, rawSignals) {
 function renderSynthesizedSignal(signal, rawSignal) {
     const articles = rawSignal.articles || [];
     const sourcesHtml = articles.length > 0 
-        ? articles.map(a => 
-            `<a class="signal-card-source" href="${a.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(a.source || a.sourceName || 'Source')}</a>`
-        ).join(' • ')
-        : (rawSignal.sources || []).map(s => `<span class="signal-card-source">${escapeHtml(s)}</span>`).join(' • ');
+        ? articles.map(a => {
+            const sourceName = a.source || a.sourceName || 'Source';
+            return `<div class="signal-source-item">
+                <a class="signal-source-link" href="${a.url || '#'}" target="_blank">${escapeHtml(a.title || signal.headline)}</a>
+                <span class="signal-source-name">(${escapeHtml(sourceName)})</span>
+            </div>`;
+        }).join('')
+        : (rawSignal.sources || []).map(s => `<span class="signal-source-name">${escapeHtml(s)}</span>`).join(', ');
     
     return `
         <div class="signal-card">
@@ -4879,7 +4896,7 @@ function renderSynthesizedSignal(signal, rawSignal) {
             ${signal.context ? `<div class="signal-card-context">${escapeHtml(signal.context)}</div>` : ''}
             <div class="signal-card-body"><strong>Action:</strong> ${escapeHtml(signal.action)}</div>
             <div class="signal-card-ibm"><strong>IBM Angle:</strong> ${escapeHtml(signal.ibmAngle)}</div>
-            <div class="signal-card-sources">Sources: ${sourcesHtml || 'N/A'}</div>
+            <div class="signal-card-sources">${sourcesHtml || 'No sources'}</div>
         </div>
     `;
 }
@@ -4887,9 +4904,13 @@ function renderSynthesizedSignal(signal, rawSignal) {
 function renderCachedSignal(signal, articleData) {
     const articles = articleData?.articles || [];
     const sourcesHtml = articles.length > 0
-        ? articles.map(a => 
-            `<a class="signal-card-source" href="${a.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(a.source || a.sourceName || 'Source')}</a>`
-        ).join(' • ')
+        ? articles.map(a => {
+            const sourceName = a.source || a.sourceName || 'Source';
+            return `<div class="signal-source-item">
+                <a class="signal-source-link" href="${a.url || '#'}" target="_blank">${escapeHtml(a.title || signal.headline)}</a>
+                <span class="signal-source-name">(${escapeHtml(sourceName)})</span>
+            </div>`;
+        }).join('')
         : '';
     
     return `
@@ -4904,7 +4925,7 @@ function renderCachedSignal(signal, articleData) {
             ${signal.context ? `<div class="signal-card-context">${escapeHtml(signal.context)}</div>` : ''}
             ${signal.action ? `<div class="signal-card-body"><strong>Action:</strong> ${escapeHtml(signal.action)}</div>` : ''}
             ${signal.ibmAngle ? `<div class="signal-card-ibm"><strong>IBM Angle:</strong> ${escapeHtml(signal.ibmAngle)}</div>` : ''}
-            <div class="signal-card-sources">Sources: ${sourcesHtml || 'N/A'}</div>
+            <div class="signal-card-sources">${sourcesHtml || 'No sources'}</div>
         </div>
     `;
 }
@@ -4918,10 +4939,14 @@ function renderBasicSignal(signal) {
     
     const articles = signal.articles || [];
     const sourcesHtml = articles.length > 0
-        ? articles.map(a => 
-            `<a class="signal-card-source" href="${a.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(a.source || a.sourceName || 'Source')}</a>`
-        ).join(' • ')
-        : (signal.sources || []).map(s => `<span class="signal-card-source">${escapeHtml(s)}</span>`).join(' • ');
+        ? articles.map(a => {
+            const sourceName = a.source || a.sourceName || 'Source';
+            return `<div class="signal-source-item">
+                <a class="signal-source-link" href="${a.url || '#'}" target="_blank">${escapeHtml(a.title || signal.headline)}</a>
+                <span class="signal-source-name">(${escapeHtml(sourceName)})</span>
+            </div>`;
+        }).join('')
+        : (signal.sources || []).map(s => `<span class="signal-source-name">${escapeHtml(s)}</span>`).join(', ');
     
     return `
         <div class="signal-card">
@@ -4930,7 +4955,7 @@ function renderBasicSignal(signal) {
                 <div class="signal-card-tags">${tagHtml}</div>
             </div>
             ${signal.summary ? `<div class="signal-card-context">${escapeHtml(signal.summary.substring(0, 200))}</div>` : ''}
-            <div class="signal-card-sources">Sources: ${sourcesHtml || 'N/A'}</div>
+            <div class="signal-card-sources">${sourcesHtml || 'No sources'}</div>
         </div>
     `;
 }
