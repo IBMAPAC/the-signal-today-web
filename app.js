@@ -1,9 +1,213 @@
 // =============================================
 // The Signal Today - Web Application
 // =============================================
-// Modular architecture with dependency injection
-// Modules: db.js, scoring.js, ai.js, ui.js, clients.js
+
 // =============================================
+// SignalDB — IndexedDB persistence layer
+// Stores a 7-day rolling article corpus and
+// 14-day digest history. Survives localStorage
+// quota limits (~5 MB) and enables trend
+// detection across multiple refresh cycles.
+// =============================================
+
+class SignalDB {
+    static DB_NAME    = 'signal-today-db';
+    static DB_VERSION = 1;
+    static STORES     = { ARTICLES: 'articles', DIGESTS: 'digests', READ_STATE: 'readState' };
+    static ARTICLE_TTL_DAYS = 7;
+    static DIGEST_TTL_DAYS  = 14;
+
+    constructor() {
+        this._db = null; // IDBDatabase instance, set after open()
+    }
+
+    // Open (or create) the database and run migrations
+    open() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(SignalDB.DB_NAME, SignalDB.DB_VERSION);
+
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                // articles store: keyed by article id, indexed by publishedDate for TTL purge
+                if (!db.objectStoreNames.contains(SignalDB.STORES.ARTICLES)) {
+                    const store = db.createObjectStore(SignalDB.STORES.ARTICLES, { keyPath: 'id' });
+                    store.createIndex('publishedDate', 'publishedDate', { unique: false });
+                    store.createIndex('savedAt', 'savedAt', { unique: false });
+                }
+                // digests store: keyed by date string YYYY-MM-DD
+                if (!db.objectStoreNames.contains(SignalDB.STORES.DIGESTS)) {
+                    db.createObjectStore(SignalDB.STORES.DIGESTS, { keyPath: 'date' });
+                }
+                // readState store: keyed by articleId
+                if (!db.objectStoreNames.contains(SignalDB.STORES.READ_STATE)) {
+                    db.createObjectStore(SignalDB.STORES.READ_STATE, { keyPath: 'articleId' });
+                }
+            };
+
+            req.onsuccess = (e) => {
+                this._db = e.target.result;
+                // Purge stale records on every open (non-blocking)
+                this._purgeOldArticles();
+                this._purgeOldDigests();
+                resolve(this);
+            };
+
+            req.onerror = (e) => {
+                console.warn('SignalDB: failed to open IndexedDB', e.target.error);
+                resolve(this); // Resolve (not reject) so app still works without IDB
+            };
+        });
+    }
+
+    // ── Internal helpers ──────────────────────────────────────────────────────
+
+    _tx(storeName, mode = 'readonly') {
+        if (!this._db) return null;
+        try {
+            return this._db.transaction(storeName, mode).objectStore(storeName);
+        } catch (e) {
+            console.warn('SignalDB: transaction error', e);
+            return null;
+        }
+    }
+
+    _promisify(req) {
+        return new Promise((resolve, reject) => {
+            req.onsuccess = () => resolve(req.result);
+            req.onerror  = () => reject(req.error);
+        });
+    }
+
+    _purgeOldArticles() {
+        const store = this._tx(SignalDB.STORES.ARTICLES, 'readwrite');
+        if (!store) return;
+        const cutoff = new Date(Date.now() - SignalDB.ARTICLE_TTL_DAYS * 86400000).toISOString();
+        const idx = store.index('publishedDate');
+        const range = IDBKeyRange.upperBound(cutoff);
+        idx.openCursor(range).onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) { cursor.delete(); cursor.continue(); }
+        };
+    }
+
+    _purgeOldDigests() {
+        const store = this._tx(SignalDB.STORES.DIGESTS, 'readwrite');
+        if (!store) return;
+        const cutoffDate = new Date(Date.now() - SignalDB.DIGEST_TTL_DAYS * 86400000);
+        const cutoffKey = cutoffDate.toISOString().slice(0, 10); // YYYY-MM-DD
+        const range = IDBKeyRange.upperBound(cutoffKey);
+        store.openCursor(range).onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) { cursor.delete(); cursor.continue(); }
+        };
+    }
+
+    // ── Articles ──────────────────────────────────────────────────────────────
+
+    // Save (upsert) an array of articles. Strips scoreBreakdown to save space.
+    async saveArticles(articles) {
+        const store = this._tx(SignalDB.STORES.ARTICLES, 'readwrite');
+        if (!store) return;
+        const now = new Date().toISOString();
+        for (const a of articles) {
+            // Omit scoreBreakdown from persisted record (large, recomputed on next score)
+            const { scoreBreakdown, ...slim } = a;
+            slim.savedAt = now;
+            store.put(slim);
+        }
+    }
+
+    // Load all articles from the rolling corpus (up to 7 days old)
+    async loadArticles() {
+        const store = this._tx(SignalDB.STORES.ARTICLES, 'readonly');
+        if (!store) return [];
+        try {
+            return await this._promisify(store.getAll());
+        } catch (e) {
+            console.warn('SignalDB: loadArticles error', e);
+            return [];
+        }
+    }
+
+    // ── Digests ───────────────────────────────────────────────────────────────
+
+    // Save today's digest keyed by YYYY-MM-DD
+    async saveDigest(digest) {
+        if (!digest) return;
+        const store = this._tx(SignalDB.STORES.DIGESTS, 'readwrite');
+        if (!store) return;
+        const record = { ...digest, date: new Date().toISOString().slice(0, 10) };
+        store.put(record);
+    }
+
+    // Load the most recent digest (highest date key)
+    async loadLatestDigest() {
+        const store = this._tx(SignalDB.STORES.DIGESTS, 'readonly');
+        if (!store) return null;
+        try {
+            // Open cursor in descending order to get the latest
+            return await new Promise((resolve) => {
+                const req = store.openCursor(null, 'prev');
+                req.onsuccess = (e) => resolve(e.target.result ? e.target.result.value : null);
+                req.onerror   = () => resolve(null);
+            });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Load all digests (for trend detection in Phase 6)
+    async loadAllDigests() {
+        const store = this._tx(SignalDB.STORES.DIGESTS, 'readonly');
+        if (!store) return [];
+        try {
+            return await this._promisify(store.getAll());
+        } catch (e) {
+            return [];
+        }
+    }
+
+    // ── Read State ────────────────────────────────────────────────────────────
+
+    // Mark an article as read
+    async markRead(articleId) {
+        const store = this._tx(SignalDB.STORES.READ_STATE, 'readwrite');
+        if (!store) return;
+        store.put({ articleId, readAt: new Date().toISOString() });
+    }
+
+    // Load the full set of read article IDs as a Set<string>
+    async loadReadIds() {
+        const store = this._tx(SignalDB.STORES.READ_STATE, 'readonly');
+        if (!store) return new Set();
+        try {
+            const all = await this._promisify(store.getAllKeys());
+            return new Set(all.map(String));
+        } catch (e) {
+            return new Set();
+        }
+    }
+
+    // ── Migration ─────────────────────────────────────────────────────────────
+
+    // One-time migration: import articles from localStorage into IDB, then remove the key
+    async migrateFromLocalStorage() {
+        const raw = localStorage.getItem('signal_articles');
+        if (!raw) return 0;
+        try {
+            const articles = JSON.parse(raw);
+            if (Array.isArray(articles) && articles.length > 0) {
+                await this.saveArticles(articles);
+                localStorage.removeItem('signal_articles');
+                console.log(`SignalDB: migrated ${articles.length} articles from localStorage → IDB`);
+                return articles.length;
+            }
+        } catch (e) {
+            console.warn('SignalDB: migration error', e);
+        }
+        return 0;
+    }
+}
 
 const CORS_PROXIES = [
     'https://api.allorigins.win/raw?url=',
@@ -68,17 +272,11 @@ class SignalApp {
         this.articleRatings = {};
         this.sourceScoreDrift = {};
         this.failedSources = [];
-        this.debugMode = (typeof window !== 'undefined' && window.location) ?
+        this.debugMode = (typeof window !== 'undefined' && window.location) ? 
             new URLSearchParams(window.location.search).get('debug') === '1' : false;
-        
-        // Initialize modules with dependency injection
         this.db = new SignalDB();
-        this.scorer = new ScoringEngine(this);
-        this.ai = new AIService(this);
-        this.ui = new UIRenderer(this);
-        this.clientManager = new ClientManager(this);
         
-        // Market filtering state
+        // New: Market filtering state
         this.currentMarket = 'ALL';
         this.clientManagerMarket = 'ALL';
         this.selectedClients = new Set();
@@ -134,10 +332,10 @@ class SignalApp {
                 // (articles from older IDB versions may not have these properties)
                 if (this.articles.length > 0) {
                     console.log(`Re-scoring ${this.articles.length} cached articles for client matching...`);
-                    this.articles = this.scorer.scoreArticles(this.articles);
+                    this.articles = this.scoreArticles(this.articles);
                 }
                 this.categorizeArticles();
-                this.ui.renderDigest();
+                this.renderDigest();
             }
             
             console.log(`📡 The Signal Today initialized with ${this.sources.length} sources`);
@@ -290,10 +488,10 @@ class SignalApp {
             refreshBtn.addEventListener('click', () => this.refresh());
         }
         if (settingsBtn) {
-            settingsBtn.addEventListener('click', () => this.ui.openSettings());
+            settingsBtn.addEventListener('click', () => this.openSettings());
         }
         if (exportBtn) {
-            exportBtn.addEventListener('click', () => this.ui.exportBrief());
+            exportBtn.addEventListener('click', () => this.exportBrief());
         }
     }
 
@@ -322,11 +520,11 @@ class SignalApp {
                     break;
                 case 'c':
                 case 'C':
-                    if (!anyModalOpen) { e.preventDefault(); this.clientManager.openClientManager(); }
+                    if (!anyModalOpen) { e.preventDefault(); openClientManager(); }
                     break;
                 case 's':
                 case 'S':
-                    if (!anyModalOpen) { e.preventDefault(); this.ui.openSettings(); }
+                    if (!anyModalOpen) { e.preventDefault(); this.openSettings(); }
                     break;
                 case 'Escape':
                     e.preventDefault();
@@ -530,7 +728,7 @@ class SignalApp {
             this.showLoading(`Scoring ${dedupedArticles.length} articles...`);
             
             // Score articles
-            const scoredArticles = this.scorer.scoreArticles(dedupedArticles);
+            const scoredArticles = this.scoreArticles(dedupedArticles);
             this.articles = scoredArticles
                 .filter(a => a.relevanceScore >= 0.1)
                 .sort((a, b) => b.relevanceScore - a.relevanceScore)
@@ -565,12 +763,12 @@ class SignalApp {
                         // Delta mode: only a few new articles — merge into existing digest
                         console.log(`🔄 Delta refresh: ${newCount} new articles → merging into existing digest`);
                         this.showLoading(`Updating digest with ${newCount} new articles...`);
-                        await this.ai.mergeDeltaDigest(apiKey, newArticles);
+                        await this.mergeDeltaDigest(apiKey, newArticles);
                     } else {
                         // Full regeneration: first run, many new articles, or context changed
                         console.log(`🤖 Full digest generation (${newCount} new articles, contextChanged=${contextChanged})`);
                         this.showLoading('Generating AI-powered digest...');
-                        await this.ai.generateAIDigest(apiKey);
+                        await this.generateAIDigest(apiKey);
                     }
                 }
             } else {
@@ -580,7 +778,7 @@ class SignalApp {
             // Save and render (forceRefresh = true to regenerate AI synthesis)
             localStorage.setItem(STORAGE_KEYS.LAST_REFRESH, new Date().toISOString());
             this.saveToStorage();
-            this.ui.renderDigest(true);
+            this.renderDigest(true);
             this.updateUI();
             
             const totalTime = Math.round(performance.now() - startTime);
@@ -1475,7 +1673,7 @@ class SignalApp {
                 || this.dailyArticles.find(a => a.id === id)
                 || this.weeklyArticles.find(a => a.id === id);
             if (updatedArticle) {
-                articleEl.outerHTML = this.ui.renderArticleItem(updatedArticle);
+                articleEl.outerHTML = this.renderArticleItem(updatedArticle);
             }
         }
         
@@ -1849,7 +2047,7 @@ Return ONLY valid JSON, no markdown fences:
             }
         } catch (error) {
             console.error('Delta merge failed, falling back to full generation:', error);
-            await this.ai.generateAIDigest(apiKey);
+            await this.generateAIDigest(apiKey);
         }
     }
 
@@ -2078,7 +2276,7 @@ ${articleList}`;
         document.getElementById('digest-content').classList.remove('hidden');
         
         // Render the 4-section layout
-        this.ui.renderDailyTab(forceRefresh);
+        this.renderDailyTab(forceRefresh);
     }
 
     renderDailyTab(forceRefresh = false) {
@@ -2344,7 +2542,7 @@ ${articleList}`;
                             <span class="badge">${articles.length}</span>
                         </div>
                         <div class="weekly-category-articles">
-                            ${articles.map(a => this.ui.renderArticleItem(a)).join('')}
+                            ${articles.map(a => this.renderArticleItem(a)).join('')}
                         </div>
                     </div>
                 `;
@@ -2355,7 +2553,7 @@ ${articleList}`;
         // All weekly articles (full list, including top 3, for reference)
         document.getElementById('weekly-articles-count').textContent = this.weeklyArticles.length;
         document.getElementById('weekly-articles-list').innerHTML =
-            this.weeklyArticles.map(a => this.ui.renderArticleItem(a)).join('');
+            this.weeklyArticles.map(a => this.renderArticleItem(a)).join('');
     }
 
     renderCrossSourceSignals(crossRefs) {
@@ -2450,7 +2648,7 @@ ${articleList}`;
         const clientArticles = [];
         for (const article of this.dailyArticles) {
             const text = `${article.title} ${article.summary}`.toLowerCase();
-            const matchedClients = this.scorer.detectAllClients(text);
+            const matchedClients = this.detectAllClients(text);
             if (matchedClients.length > 0) {
                 clientArticles.push({ ...article, matchedClients });
             }
@@ -2630,7 +2828,7 @@ ${articleList}`;
         
         count.textContent = this.dailyArticles.length;
         
-        list.innerHTML = this.dailyArticles.slice(0, 30).map(article => this.ui.renderArticleItem(article)).join('');
+        list.innerHTML = this.dailyArticles.slice(0, 30).map(article => this.renderArticleItem(article)).join('');
     }
 
     renderArticleItem(article) {
@@ -3208,14 +3406,17 @@ Return ONLY valid JSON, no markdown fences:
                         if (insight.timeHorizon) lines.push(`*${insight.timeHorizon} horizon*`);
                         lines.push('');
                         if (insight.strategicThesis) lines.push(`**💡 Strategic Thesis:** ${insight.strategicThesis}`);
-                        if (insight.leadershipImplication) lines.push(`**📊 Leadership Implication:** ${insight.leadershipImplication}`);
-                        if (insight.cxoQuestion) lines.push(`**🎯 CxO Question:** "${insight.cxoQuestion}"`);
+                        if (insight.boardQuestion) lines.push(`**🎯 Board Question:** "${insight.boardQuestion}"`);
+                        if (insight.atlEnablement) lines.push(`**📢 ATL Enablement:** ${insight.atlEnablement}`);
+                        if (insight.ibmNarrative) lines.push(`**🔵 IBM Narrative:** ${insight.ibmNarrative}`);
+                        if (insight.clientTypes) lines.push(`**🏢 Target Clients:** ${insight.clientTypes}`);
                         lines.push('');
                     }
                 }
             }
         } catch (e) { /* ignore cache errors */ }
         
+        // Competitive Landscape
         // Competitive Landscape - use DEAL_RELEVANCE_SIGNALS if available
         const competitorPattern = typeof DEAL_RELEVANCE_SIGNALS !== 'undefined'
             ? new RegExp(DEAL_RELEVANCE_SIGNALS.COMPETITOR_KEYWORDS.slice(0, 30).join('|'), 'i')
@@ -3875,7 +4076,7 @@ function saveSettings() {
     
     // Re-render to apply any context changes
     if (app.articles.length > 0) {
-        app.ui.renderDigest();
+        app.renderDigest();
     }
     
     console.log('✅ Settings saved');
@@ -4147,7 +4348,11 @@ function deleteCurrentSource() {
 // ==========================================
 
 function openClientManager() {
-    app.clientManager.openClientManager();
+    document.getElementById('client-manager-modal').classList.remove('hidden');
+    app.clientManagerMarket = 'ALL';
+    app.selectedClients.clear();
+    updateClientManagerCounts();
+    renderClientTable();
 }
 
 function closeClientManager() {
@@ -4167,10 +4372,6 @@ function switchClientManagerTab(market) {
 }
 
 function updateClientManagerCounts() {
-    app.clientManager.updateClientManagerCounts();
-}
-
-function updateClientManagerCounts_old() {
     const counts = { ALL: 0, ANZ: 0, ASEAN: 0, GCG: 0, ISA: 0, KOREA: 0 };
     app.clients.forEach(c => {
         counts.ALL++;
@@ -4189,10 +4390,6 @@ function updateClientManagerCounts_old() {
 }
 
 function renderClientTable() {
-    app.clientManager.renderClientTable();
-}
-
-function renderClientTable_old() {
     const tbody = document.getElementById('client-table-body');
     const searchTerm = (document.getElementById('cm-search-input')?.value || '').toLowerCase();
     
@@ -4232,10 +4429,6 @@ function filterClientManager() {
 }
 
 function toggleClientSelection(idx) {
-    app.clientManager.toggleClientSelection(idx);
-}
-
-function toggleClientSelection_old(idx) {
     if (app.selectedClients.has(idx)) {
         app.selectedClients.delete(idx);
     } else {
@@ -4313,10 +4506,6 @@ function openAddClientForm() {
 }
 
 function editClient(idx) {
-    app.clientManager.editClient(idx);
-}
-
-function editClient_old(idx) {
     const client = app.clients[idx];
     if (!client) return;
     
@@ -4360,10 +4549,6 @@ function updateCountryOptions() {
 }
 
 function saveClient() {
-    app.clientManager.saveClient();
-}
-
-function saveClient_old() {
     const idxStr = document.getElementById('client-form-id').value;
     const name = document.getElementById('client-form-name').value.trim();
     const market = document.getElementById('client-form-market').value;
@@ -4398,10 +4583,6 @@ function saveClient_old() {
 }
 
 function deleteClient(idx) {
-    app.clientManager.deleteClient(idx);
-}
-
-function deleteClient_old(idx) {
     const client = app.clients[idx];
     if (confirm(`Delete "${client.name}"?`)) {
         app.clients.splice(idx, 1);
@@ -4413,10 +4594,6 @@ function deleteClient_old(idx) {
 }
 
 function importClientsCSV() {
-    app.clientManager.importClientsCSV();
-}
-
-function importClientsCSV_old() {
     document.getElementById('csv-import-modal').classList.remove('hidden');
     document.getElementById('csv-import-data').value = '';
     document.getElementById('csv-file-input').value = '';
@@ -4476,10 +4653,6 @@ function processCSVImport() {
 }
 
 function exportClientsCSV() {
-    app.clientManager.exportClientsCSV();
-}
-
-function exportClientsCSV_old() {
     const csv = app.clients.map(c => 
         [c.name, c.market, c.country, c.industry, c.tier, c.atl || ''].join(',')
     ).join('\n');
@@ -5477,16 +5650,19 @@ For each article, provide a JSON array with this structure:
   {
     "title": "Original article title",
     "strategicThesis": "The big idea in one powerful sentence — what market shift does this signal? (Think: 'The mainframe moment for AI governance' or 'Sovereignty becomes the new security')",
-    "leadershipImplication": "What this means for technology leaders — the 'so what' for a CTO or CIO making investment decisions",
-    "cxoQuestion": "A provocative question for CxO discussion (e.g., 'What happens to your AI strategy when your cloud provider becomes your competitor?')",
+    "boardQuestion": "A provocative question for board/CxO discussion that positions IBM favorably (e.g., 'What happens to your AI strategy when your cloud provider becomes your competitor?')",
+    "atlEnablement": "How should ATLs use this insight? Which client conversations does it unlock?",
+    "ibmNarrative": "How this connects to IBM's strategic positioning (watsonx, hybrid cloud, consulting-led transformation)",
+    "clientTypes": "Which client profiles should prioritize this (e.g., 'Tier 1 FSI with cloud concentration risk', 'Telcos evaluating GenAI monetization')",
     "timeHorizon": "6 months" or "12 months" or "2-3 years"
   }
 ]
 
 QUALITY RULES:
 - Strategic thesis must be memorable and quotable — something worth repeating in a keynote
-- Leadership implication must be concrete and actionable — not generic advice
-- CxO questions must be genuinely thought-provoking, not leading or sales-y
+- Board questions must be genuinely thought-provoking, not leading/sales-y
+- ATL enablement must be actionable — name specific conversation types or client situations
+- IBM narrative must connect to real IBM strategy, not generic capabilities
 
 Return ONLY valid JSON array, no markdown. Max 5 articles.`;
 
@@ -5562,8 +5738,10 @@ function renderSynthesizedDeepRead(insight, article) {
             <div class="deep-read-item-title">${escapeHtml(insight.title)}</div>
             <div class="deep-read-strategic">
                 <div class="deep-read-thesis"><strong>💡 Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
-                <div class="deep-read-implication"><strong>📊 Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication || '')}</div>
-                <div class="deep-read-question"><strong>🎯 CxO Question:</strong> "${escapeHtml(insight.cxoQuestion || '')}"</div>
+                <div class="deep-read-board"><strong>🎯 Board Question:</strong> "${escapeHtml(insight.boardQuestion || insight.conversationTopic || '')}"</div>
+                <div class="deep-read-atl"><strong>📢 ATL Enablement:</strong> ${escapeHtml(insight.atlEnablement || insight.leadershipImplication || '')}</div>
+                <div class="deep-read-ibm"><strong>🔵 IBM Narrative:</strong> ${escapeHtml(insight.ibmNarrative || '')}</div>
+                ${insight.clientTypes ? `<div class="deep-read-clients"><strong>🏢 Target Clients:</strong> ${escapeHtml(insight.clientTypes)}</div>` : ''}
             </div>
         </div>
     `;
@@ -5581,8 +5759,10 @@ function renderCachedDeepRead(insight, articleData) {
             ${insight.strategicThesis ? `
             <div class="deep-read-strategic">
                 <div class="deep-read-thesis"><strong>💡 Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
-                <div class="deep-read-implication"><strong>📊 Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication || '')}</div>
-                <div class="deep-read-question"><strong>🎯 CxO Question:</strong> "${escapeHtml(insight.cxoQuestion || '')}"</div>
+                <div class="deep-read-board"><strong>🎯 Board Question:</strong> "${escapeHtml(insight.boardQuestion || insight.conversationTopic || '')}"</div>
+                <div class="deep-read-atl"><strong>📢 ATL Enablement:</strong> ${escapeHtml(insight.atlEnablement || insight.leadershipImplication || '')}</div>
+                ${insight.ibmNarrative ? `<div class="deep-read-ibm"><strong>🔵 IBM Narrative:</strong> ${escapeHtml(insight.ibmNarrative)}</div>` : ''}
+                ${insight.clientTypes ? `<div class="deep-read-clients"><strong>🏢 Target Clients:</strong> ${escapeHtml(insight.clientTypes)}</div>` : ''}
             </div>
             ` : `<div class="deep-read-item-summary">${escapeHtml(insight.summary || article.summary || '')}</div>`}
         </div>
@@ -5641,9 +5821,9 @@ window.app = app;
 // Expose all interactive methods for onclick handlers
 // These ensure onclick="methodName()" works reliably across all browsers
 window.refreshApp = function() { app.refresh(); };
-window.openAppSettings = function() { app.ui.openSettings(); };
-window.copyAllATLBriefs = function() { app.clientManager.copyAllATLBriefs(); };
-window.exportBrief = function() { app.ui.exportBrief(); };
+window.openAppSettings = function() { app.openSettings(); };
+window.copyAllATLBriefs = function() { app.copyAllATLBriefs(); };
+window.exportBrief = function() { app.exportBrief(); };
 window.openGTMDigest = function() { app.openGTMDigest(); };
 window.deepReadArticle = function(id) { app.deepReadArticle(id); };
 window.openArticle = function(id) { app.openArticle(id); };
