@@ -1209,12 +1209,25 @@ const CROSS_REFERENCE_THEMES = {
 const DEAL_RELEVANCE_SIGNALS = {
     // Competitor keywords — co-occurrence with a client = competitive threat
     COMPETITOR_KEYWORDS: [
+        // Hyperscalers
         'microsoft', 'azure', 'aws', 'amazon web services', 'google cloud', 'gcp',
+        // AI-specific products
+        'azure openai', 'copilot', 'github copilot', 'microsoft copilot', 'amazon bedrock', 'amazon q',
+        'vertex ai', 'gemini', 'google gemini', 'duet ai', 'openai', 'chatgpt', 'anthropic', 'claude',
+        // Data platforms
+        'snowflake', 'databricks', 'palantir', 'datadog', 'splunk', 'elastic',
+        // Cloud/Infra
+        'vmware', 'hashicorp', 'terraform', 'nutanix',
+        // Consulting/SI
         'accenture', 'deloitte', 'mckinsey', 'pwc', 'kpmg', 'ey consulting',
-        'alibaba cloud', 'aliyun', 'tencent cloud', 'ntt data', 'fujitsu', 
-        'infosys', 'wipro', 'cognizant', 'capgemini', 'dxc technology',
-        'servicenow', 'salesforce', 'sap', 'oracle cloud', 'snowflake', 'databricks',
-        'palantir', 'datadog', 'splunk', 'elastic', 'hashicorp', 'vmware'
+        'infosys', 'wipro', 'cognizant', 'capgemini', 'dxc technology', 'tcs', 'hcl', 'tech mahindra',
+        'kyndryl',
+        // Regional competitors
+        'alibaba cloud', 'aliyun', 'tencent cloud', 'ntt data', 'fujitsu',
+        // Automation
+        'servicenow', 'salesforce', 'sap', 'oracle cloud', 'uipath', 'automation anywhere',
+        // Security
+        'crowdstrike', 'palo alto', 'zscaler', 'okta', 'cyberark'
     ],
     // C-suite change keywords — signals new decision-maker, potential re-evaluation
     CSUITE_KEYWORDS: [
@@ -1224,49 +1237,71 @@ const DEAL_RELEVANCE_SIGNALS = {
         'technology leadership', 'digital leadership', 'it leadership change',
         'executive appointment', 'joins as', 'promoted to', 'group cto',
         'chief ai officer', 'caio', 'head of technology', 'head of digital',
-        'vp engineering', 'vp technology', 'svp technology', 'evp technology'
+        'vp engineering', 'vp technology', 'svp technology', 'evp technology',
+        'chief analytics officer', 'chief automation officer', 'chief security officer', 'ciso'
     ],
     // Regulatory keywords — compliance pressure = IBM opportunity (APAC-specific)
     REGULATORY_KEYWORDS: [
         // ASEAN
-        'mas notice', 'mas guidelines', 'pdpc advisory', 'imda guideline', 'bsp circular',
-        'ojk regulation', 'bi regulation', 'bank indonesia', 'sec thailand', 'bot thailand',
-        'bnm malaysia', 'bank negara', 'pdpa thailand', 'pdpa singapore',
+        'mas notice', 'mas guidelines', 'mas consultation', 'pdpc advisory', 'pdpc enforcement',
+        'imda guideline', 'bsp circular', 'ojk regulation', 'bi regulation', 'bank indonesia',
+        'sec thailand', 'bot thailand', 'bnm malaysia', 'bank negara', 'pdpa thailand', 'pdpa singapore',
+        'pdpa malaysia', 'cybersecurity act singapore',
         // ANZ
-        'apra prudential', 'asic guidance', 'oaic', 'privacy act australia', 'cdr rules',
-        'rbnz', 'fma new zealand', 'privacy commissioner nz',
+        'apra prudential', 'apra cps', 'cps 230', 'cps 234', 'cps 220', 'asic guidance', 'asic rg',
+        'oaic', 'privacy act australia', 'cdr rules', 'consumer data right',
+        'rbnz', 'fma new zealand', 'privacy commissioner nz', 'nzism',
         // GCG
-        'hkma circular', 'sfc hong kong', 'pipl china', 'cac china', 'mlr china',
-        'fsc taiwan', 'ndpc taiwan', 'pdpo hong kong',
+        'hkma circular', 'hkma guideline', 'sfc hong kong', 'pipl china', 'pipl', 'cac china',
+        'mlr china', 'dsl china', 'fsc taiwan', 'ndpc taiwan', 'pdpo hong kong',
         // ISA
-        'sebi circular', 'rbi master direction', 'meity notification', 'dpdp act',
-        'cert-in directive', 'irdai', 'npci guidelines',
+        'sebi circular', 'rbi master direction', 'rbi guideline', 'meity notification', 'dpdp act',
+        'cert-in directive', 'irdai', 'npci guidelines', 'pfrda', 'digital india act',
         // KOREA
-        'fsc korea', 'kisa', 'pipa korea', 'kdca',
-        // General
+        'fsc korea', 'fss korea', 'kisa', 'pipa korea', 'mydata korea', 'k-isms',
+        // Global/Regional
+        'ai act', 'ai regulation', 'ai governance framework', 'responsible ai',
         'compliance deadline', 'regulatory requirement', 'mandatory', 'non-compliance', 
-        'regulatory fine', 'enforcement action', 'data protection law', 'ai regulation', 
-        'cloud regulation', 'operational resilience', 'third party risk', 'outsourcing guidelines'
+        'regulatory fine', 'enforcement action', 'data protection law',
+        'cloud regulation', 'operational resilience', 'dora', 'third party risk', 'outsourcing guidelines',
+        'critical infrastructure', 'essential services', 'systemically important'
     ],
     // IBM product/solution keywords — direct IBM relevance
     IBM_KEYWORDS: [
+        // watsonx family
         'watsonx', 'watsonx.ai', 'watsonx.data', 'watsonx.governance', 'watson',
-        'ibm cloud', 'red hat', 'openshift', 'ansible', 'rhel',
-        'ibm consulting', 'ibm security', 'qradar', 'guardium', 'verify', 'maas360',
-        'ibm z', 'ibm power', 'linuxone', 'ibm storage', 'ibm spectrum',
+        'watsonx assistant', 'watsonx orchestrate', 'watsonx code assistant',
+        'granite', 'granite model',
+        // Cloud & Platform
+        'ibm cloud', 'ibm cloud satellite', 'cloud pak', 'cp4d', 'cloud pak for data',
+        'cp4i', 'cloud pak for integration', 'cp4ba', 'cloud pak for business automation',
+        // Red Hat
+        'red hat', 'openshift', 'ansible', 'rhel', 'red hat enterprise linux',
+        'openshift ai', 'ansible automation platform', 'red hat insights',
+        // Security
+        'ibm security', 'qradar', 'guardium', 'verify', 'maas360', 'trusteer',
+        'ibm concert', 'concert', 'randori', 'reaqta',
+        // Infrastructure
+        'ibm z', 'ibm power', 'linuxone', 'ibm storage', 'ibm spectrum', 'ibm flashsystem',
+        // Observability & FinOps
+        'instana', 'turbonomic', 'apptio', 'cloudability',
+        // Other
         'ibm quantum', 'ibm research', 'ibm institute', 'ibm garage',
-        'hybrid cloud ibm', 'ibm ai', 'ibm automation', 'turbonomic', 'instana',
-        'apptio', 'concert', 'cp4d', 'cloud pak', 'sterling', 'aspera'
+        'ibm consulting', 'ibm automation', 'sterling', 'aspera', 'databand',
+        'envizi', 'sustainability', 'ibm sustainability'
     ],
     // Opportunity keywords — signals active buying intent
     OPPORTUNITY_KEYWORDS: [
-        'digital transformation', 'ai strategy', 'cloud migration', 'modernization',
-        'rfp', 'request for proposal', 'tender', 'procurement', 'technology investment',
-        'it budget', 'digital initiative', 'technology roadmap', 'vendor selection',
-        'proof of concept', 'pilot program', 'strategic partnership', 'technology refresh',
+        'digital transformation', 'ai strategy', 'genai strategy', 'cloud migration', 'modernization',
+        'rfp', 'request for proposal', 'rfi', 'request for information', 'tender', 'procurement',
+        'technology investment', 'it budget', 'digital initiative', 'technology roadmap',
+        'vendor selection', 'vendor evaluation', 'technology selection',
+        'proof of concept', 'poc', 'pilot program', 'strategic partnership', 'technology refresh',
         'multi-year contract', 'enterprise agreement', 'platform consolidation',
         'legacy modernization', 'mainframe modernization', 'core banking transformation',
-        'data platform', 'ai platform', 'automation platform', 'integration platform'
+        'data platform', 'ai platform', 'automation platform', 'integration platform',
+        'cloud repatriation', 'hybrid cloud strategy', 'multi-cloud strategy',
+        'cost optimization', 'finops', 'cloud cost', 'sustainability initiative'
     ]
 };
 
@@ -1315,68 +1350,123 @@ const FIELD_CTO_ACTION_TRIGGERS = {
 // ============================================
 // COMPETITIVE POSITIONING MAP
 // IBM solutions vs competitor offerings
+// Used by generateGTMDigest() and renderATLEnablement()
 // ============================================
 const COMPETITIVE_POSITIONING = {
-    // AI & ML
+    // AI & ML - Microsoft
     'azure openai': { ibm: 'watsonx.ai', angle: 'Enterprise AI governance + data privacy' },
     'copilot': { ibm: 'watsonx Code Assistant', angle: 'Enterprise security + on-prem deployment' },
+    'github copilot': { ibm: 'watsonx Code Assistant', angle: 'Enterprise governance + IP protection' },
+    'microsoft copilot': { ibm: 'watsonx Orchestrate', angle: 'Process automation + enterprise integration' },
+    'dynamics 365 copilot': { ibm: 'watsonx Orchestrate', angle: 'Open ecosystem + hybrid deployment' },
+    
+    // AI & ML - AWS
     'bedrock': { ibm: 'watsonx.ai', angle: 'Hybrid deployment + model flexibility' },
+    'amazon bedrock': { ibm: 'watsonx.ai', angle: 'On-prem option + data sovereignty' },
     'sagemaker': { ibm: 'watsonx.ai + Cloud Pak for Data', angle: 'Governed AI lifecycle' },
+    'amazon q': { ibm: 'watsonx Assistant', angle: 'Enterprise knowledge + hybrid deployment' },
+    'aws trainium': { ibm: 'watsonx.ai', angle: 'Model portability + multi-cloud' },
+    
+    // AI & ML - Google
     'vertex ai': { ibm: 'watsonx.ai', angle: 'Open models + enterprise integration' },
+    'gemini': { ibm: 'watsonx.ai', angle: 'Enterprise governance + data residency' },
+    'google gemini': { ibm: 'watsonx.ai', angle: 'Hybrid deployment + regulatory compliance' },
+    'duet ai': { ibm: 'watsonx Code Assistant', angle: 'Enterprise security + audit trail' },
+    
+    // AI & ML - Others
+    'openai': { ibm: 'watsonx.ai', angle: 'Enterprise governance + data privacy + hybrid' },
+    'chatgpt enterprise': { ibm: 'watsonx Assistant', angle: 'On-prem deployment + data sovereignty' },
+    'anthropic': { ibm: 'watsonx.ai', angle: 'Model choice + enterprise governance' },
+    'claude enterprise': { ibm: 'watsonx.ai', angle: 'Hybrid deployment + compliance' },
+    'cohere': { ibm: 'watsonx.ai', angle: 'Enterprise scale + governance' },
+    
+    // Data Platforms
     'databricks': { ibm: 'watsonx.data', angle: 'Cost optimization + governance' },
     'snowflake': { ibm: 'watsonx.data', angle: 'Hybrid deployment + AI integration' },
+    'palantir': { ibm: 'watsonx.data + watsonx.ai', angle: 'Open architecture + cost' },
+    'datadog': { ibm: 'Instana', angle: 'AI-powered observability + hybrid' },
+    'splunk': { ibm: 'QRadar + Instana', angle: 'Unified security + observability' },
     
     // Cloud & Infrastructure
     'azure arc': { ibm: 'Red Hat OpenShift', angle: 'True hybrid + multi-cloud portability' },
     'aws outposts': { ibm: 'IBM Cloud Satellite', angle: 'Edge + sovereign deployment' },
     'anthos': { ibm: 'Red Hat OpenShift', angle: 'Enterprise support + ecosystem' },
     'vmware': { ibm: 'Red Hat OpenShift Virtualization', angle: 'Modernization path + Kubernetes' },
+    'vmware tanzu': { ibm: 'Red Hat OpenShift', angle: 'Enterprise Kubernetes + support' },
+    'hashicorp': { ibm: 'Red Hat Ansible + OpenShift', angle: 'Enterprise automation + support' },
     
     // Automation & Integration
-    'power automate': { ibm: 'IBM Automation', angle: 'Enterprise scale + AI integration' },
-    'servicenow': { ibm: 'IBM Automation', angle: 'Deep integration + process mining' },
+    'power automate': { ibm: 'watsonx Orchestrate', angle: 'AI-powered automation + enterprise scale' },
+    'power platform': { ibm: 'watsonx Orchestrate + Automation', angle: 'Enterprise integration + governance' },
+    'servicenow': { ibm: 'watsonx Orchestrate', angle: 'Deep integration + process mining' },
+    'uipath': { ibm: 'watsonx Orchestrate', angle: 'AI-first automation + enterprise' },
+    'automation anywhere': { ibm: 'watsonx Orchestrate', angle: 'Intelligent automation + scale' },
     'mulesoft': { ibm: 'IBM Integration', angle: 'Hybrid deployment + API management' },
+    'workato': { ibm: 'IBM Integration', angle: 'Enterprise governance + security' },
     
     // Security
     'sentinel': { ibm: 'QRadar SIEM', angle: 'AI-powered threat intelligence' },
-    'splunk': { ibm: 'QRadar + Instana', angle: 'Unified security + observability' },
+    'microsoft sentinel': { ibm: 'QRadar SIEM', angle: 'Hybrid SIEM + threat intelligence' },
     'crowdstrike': { ibm: 'IBM Security', angle: 'Managed detection + response' },
+    'palo alto': { ibm: 'IBM Security', angle: 'Integrated security + consulting' },
+    'zscaler': { ibm: 'IBM Security', angle: 'Zero trust + enterprise integration' },
     
-    // Consulting
+    // Consulting & SI
     'accenture': { ibm: 'IBM Consulting', angle: 'Technology depth + IBM stack expertise' },
     'deloitte': { ibm: 'IBM Consulting', angle: 'Technology-led transformation' },
-    'infosys': { ibm: 'IBM Consulting', angle: 'Strategic advisory + co-creation' }
+    'infosys': { ibm: 'IBM Consulting', angle: 'Strategic advisory + co-creation' },
+    'wipro': { ibm: 'IBM Consulting', angle: 'Deep tech expertise + innovation' },
+    'cognizant': { ibm: 'IBM Consulting', angle: 'Industry expertise + IBM ecosystem' },
+    'tcs': { ibm: 'IBM Consulting', angle: 'Strategic transformation + IP' },
+    'capgemini': { ibm: 'IBM Consulting', angle: 'Technology-first approach' },
+    'kyndryl': { ibm: 'IBM Consulting + Technology', angle: 'End-to-end IBM stack' }
 };
 
 // ============================================
 // APAC MARKET CONTEXT
 // Market-specific keywords and priorities
+// Used by renderATLEnablement() for market signal routing
 // ============================================
 const APAC_MARKET_CONTEXT = {
     ANZ: {
-        regulators: ['apra', 'asic', 'oaic', 'accc', 'rba', 'rbnz', 'fma', 'comcom'],
-        priorities: ['open banking', 'cdr', 'operational resilience', 'climate risk', 'scams prevention'],
-        watchwords: ['big four banks', 'superannuation', 'nbn', 'asx', 'nzx']
+        // Country names (for geographic routing)
+        countries: ['australia', 'australian', 'new zealand', 'nz', 'kiwi', 'sydney', 'melbourne', 'brisbane', 'perth', 'auckland', 'wellington'],
+        // Regulators (highest priority for market assignment)
+        regulators: ['apra', 'asic', 'oaic', 'accc', 'rba', 'austrac', 'rbnz', 'fma', 'comcom', 'cdr'],
+        // Market priorities (current regulatory/business themes)
+        priorities: ['open banking', 'consumer data right', 'cdr', 'operational resilience', 'climate risk', 'scams prevention', 'cps 230', 'cps 234', 'prudential standard', 'financial accountability'],
+        // Watchwords (entities, initiatives, market-specific terms)
+        watchwords: ['big four banks', 'superannuation', 'nbn', 'asx', 'nzx', 'anz region', 'trans-tasman', 'afterpay', 'buy now pay later'],
+        // Key industries in this market
+        industries: ['Financial Services', 'Energy', 'Telecommunications', 'Healthcare', 'Retail']
     },
     ASEAN: {
-        regulators: ['mas', 'pdpc', 'imda', 'bnm', 'sc malaysia', 'ojk', 'bi', 'bsp', 'sec philippines', 'bot', 'sec thailand'],
-        priorities: ['digital banking license', 'e-payment', 'financial inclusion', 'data localization', 'cross-border payments'],
-        watchwords: ['asean', 'regional integration', 'digital economy', 'smart nation', 'industry 4.0']
+        countries: ['singapore', 'singaporean', 'malaysia', 'malaysian', 'indonesia', 'indonesian', 'thailand', 'thai', 'philippines', 'filipino', 'vietnam', 'vietnamese'],
+        regulators: ['mas', 'pdpc', 'imda', 'bnm', 'bank negara', 'sc malaysia', 'ojk', 'bi', 'bank indonesia', 'bsp', 'sec philippines', 'bot', 'sec thailand', 'sbv'],
+        priorities: ['digital banking license', 'e-payment', 'paynow', 'promptpay', 'qris', 'financial inclusion', 'data localization', 'cross-border payments', 'sgfindex', 'project greenprint'],
+        watchwords: ['asean', 'regional integration', 'digital economy', 'smart nation', 'industry 4.0', 'sea region', 'southeast asia', 'grab', 'gojek', 'sea limited', 'shopee'],
+        industries: ['Financial Services', 'Telecommunications', 'Energy', 'Transportation & Logistics', 'Technology']
     },
     GCG: {
-        regulators: ['hkma', 'sfc', 'pcpd', 'fsc taiwan', 'cac', 'pboc', 'csrc'],
-        priorities: ['greater bay area', 'wealth connect', 'fintech sandbox', 'virtual bank', 'data cross-border'],
-        watchwords: ['gba', 'cross-boundary', 'renminbi', 'digital yuan', 'hkex']
+        countries: ['hong kong', 'hk', 'taiwan', 'taiwanese', 'china', 'chinese', 'macau', 'shenzhen', 'guangzhou', 'taipei'],
+        regulators: ['hkma', 'sfc', 'pcpd', 'ia', 'mpfa', 'fsc taiwan', 'cac', 'pboc', 'csrc', 'cbirc', 'miit', 'samr'],
+        priorities: ['greater bay area', 'gba', 'wealth connect', 'fintech sandbox', 'virtual bank', 'data cross-border', 'pipl', 'cross-boundary', 'southbound', 'northbound'],
+        watchwords: ['cross-boundary', 'renminbi', 'rmb', 'digital yuan', 'e-cny', 'hkex', 'hsi', 'taiex', 'alibaba', 'tencent', 'huawei', 'tsmc', 'foxconn'],
+        industries: ['Financial Services', 'Technology', 'Manufacturing', 'Transportation & Logistics']
     },
     ISA: {
-        regulators: ['rbi', 'sebi', 'irdai', 'cert-in', 'meity', 'npci', 'cbsl', 'sbp'],
-        priorities: ['upi', 'account aggregator', 'digital rupee', 'dpdp act', 'data localization'],
-        watchwords: ['digital india', 'make in india', 'fintech hub', 'startup india', 'gift city']
+        countries: ['india', 'indian', 'sri lanka', 'sri lankan', 'pakistan', 'pakistani', 'bangladesh', 'bangladeshi', 'mumbai', 'delhi', 'bangalore', 'bengaluru', 'hyderabad', 'chennai', 'pune'],
+        regulators: ['rbi', 'sebi', 'irdai', 'pfrda', 'cert-in', 'meity', 'npci', 'ibbi', 'cbsl', 'sbp', 'bb'],
+        priorities: ['upi', 'unified payments', 'account aggregator', 'digital rupee', 'e-rupi', 'dpdp act', 'data localization', 'ocen', 'ondc', 'aadhaar'],
+        watchwords: ['digital india', 'make in india', 'fintech hub', 'startup india', 'gift city', 'ifsc', 'nse', 'bse', 'sensex', 'nifty', 'jio', 'reliance', 'tata', 'infosys', 'wipro', 'tcs'],
+        industries: ['Financial Services', 'Technology', 'Telecommunications', 'Manufacturing', 'Energy']
     },
     KOREA: {
-        regulators: ['fsc', 'fss', 'kisa', 'pipc', 'bok', 'kdic'],
-        priorities: ['mydata', 'open banking', 'digital asset', 'cbdc', 'ai ethics'],
-        watchwords: ['k-finance', 'new deal', 'digital new deal', 'chaebol', 'kospi', 'kosdaq']
+        countries: ['korea', 'korean', 'south korea', 'rok', 'seoul', 'busan', 'incheon'],
+        regulators: ['fsc korea', 'fss', 'kisa', 'pipc', 'bok', 'bank of korea', 'kdic', 'kftc', 'msit'],
+        priorities: ['mydata', 'open banking', 'digital asset', 'cbdc', 'ai ethics', 'k-data', 'data dam', 'regulatory sandbox'],
+        watchwords: ['k-finance', 'new deal', 'digital new deal', 'chaebol', 'kospi', 'kosdaq', 'samsung', 'sk', 'lg', 'hyundai', 'kakao', 'naver', 'k-startup'],
+        industries: ['Technology', 'Manufacturing', 'Financial Services', 'Telecommunications']
     }
 };
 
@@ -1417,5 +1507,110 @@ const SIGNAL_CLASSIFICATION = {
         'automation', 'integration', 'security', 'observability'
     ]
 };
+
+// ============================================
+// DEEP READS SOURCE CLASSIFICATION
+// Sources that provide strategic, long-form content
+// Used by renderDeepReads() for source selection
+// ============================================
+const DEEP_READS_SOURCES = {
+    // Primary strategic sources (always include)
+    PRIMARY: [
+        'McKinsey', 'BCG', 'Bain', 'HBR', 'MIT Sloan', 'Wharton',
+        'a]16z', 'Andreessen Horowitz', 'Sequoia', 'Benedict Evans',
+        'Stratechery', 'Not Boring', 'Platformer'
+    ],
+    // Research & Analysis (high quality, include when relevant)
+    RESEARCH: [
+        'Gartner', 'Forrester', 'IDC', 'MIT Tech Review', 'The Information',
+        'Protocol', 'Rest of World', 'Economist', 'FT', 'WSJ'
+    ],
+    // IBM & Industry (include for IBM-relevant topics)
+    IBM_ADJACENT: [
+        'IBM Newsroom', 'IBM Research', 'Red Hat Blog', 'Think Blog',
+        'IBM Institute', 'The Register', 'Computer Weekly'
+    ],
+    // Categories that indicate strategic content
+    STRATEGIC_CATEGORIES: [
+        'Strategic', 'Leadership', 'Research', 'Analysis', 'Long Read'
+    ]
+};
+
+// ============================================
+// COUNTRY TO MARKET MAPPING
+// Used for geographic signal routing
+// ============================================
+const COUNTRY_MARKET_MAP = {
+    // ANZ
+    'AU': 'ANZ', 'NZ': 'ANZ',
+    // ASEAN
+    'SG': 'ASEAN', 'MY': 'ASEAN', 'ID': 'ASEAN', 'TH': 'ASEAN', 'PH': 'ASEAN', 'VN': 'ASEAN',
+    // GCG
+    'HK': 'GCG', 'TW': 'GCG', 'CN': 'GCG', 'MO': 'GCG',
+    // ISA
+    'IN': 'ISA', 'LK': 'ISA', 'PK': 'ISA', 'BD': 'ISA', 'NP': 'ISA',
+    // KOREA
+    'KR': 'KOREA'
+};
+
+// ============================================
+// HELPER FUNCTIONS
+// Utilities for signal detection and routing
+// ============================================
+
+/**
+ * Look up IBM competitive positioning for a given text
+ * @param {string} text - Article title or content to search
+ * @returns {object|null} - { competitor, ibm, angle } or null
+ */
+function getCompetitivePosition(text) {
+    const lowerText = text.toLowerCase();
+    for (const [competitor, position] of Object.entries(COMPETITIVE_POSITIONING)) {
+        if (lowerText.includes(competitor.toLowerCase())) {
+            return {
+                competitor: competitor,
+                ibm: position.ibm,
+                angle: position.angle
+            };
+        }
+    }
+    return null;
+}
+
+/**
+ * Detect which APAC market a text refers to based on countries/cities
+ * @param {string} text - Article title or content to search
+ * @returns {string|null} - Market code (ANZ, ASEAN, GCG, ISA, KOREA) or null
+ */
+function detectMarketFromText(text) {
+    const lowerText = text.toLowerCase();
+    for (const [market, context] of Object.entries(APAC_MARKET_CONTEXT)) {
+        // Check countries first (most specific)
+        if (context.countries?.some(c => lowerText.includes(c))) {
+            return market;
+        }
+        // Then check regulators
+        if (context.regulators?.some(r => lowerText.includes(r))) {
+            return market;
+        }
+    }
+    return null;
+}
+
+/**
+ * Classify which wave (AI or Sovereignty) an article belongs to
+ * @param {string} text - Article title or content to search
+ * @returns {string|null} - 'AI_WAVE', 'SOVEREIGNTY_WAVE', or null
+ */
+function classifyWave(text) {
+    const lowerText = text.toLowerCase();
+    const aiScore = SIGNAL_CLASSIFICATION.AI_WAVE.filter(kw => lowerText.includes(kw)).length;
+    const sovScore = SIGNAL_CLASSIFICATION.SOVEREIGNTY_WAVE.filter(kw => lowerText.includes(kw)).length;
+    
+    if (aiScore > sovScore && aiScore > 0) return 'AI_WAVE';
+    if (sovScore > aiScore && sovScore > 0) return 'SOVEREIGNTY_WAVE';
+    if (aiScore > 0) return 'AI_WAVE'; // Tie-breaker: AI wave
+    return null;
+}
 
 // Made with Bob

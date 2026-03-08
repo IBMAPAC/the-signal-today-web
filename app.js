@@ -3417,8 +3417,13 @@ Return ONLY valid JSON, no markdown fences:
         } catch (e) { /* ignore cache errors */ }
         
         // Competitive Landscape
+        // Competitive Landscape - use DEAL_RELEVANCE_SIGNALS if available
+        const competitorPattern = typeof DEAL_RELEVANCE_SIGNALS !== 'undefined'
+            ? new RegExp(DEAL_RELEVANCE_SIGNALS.COMPETITOR_KEYWORDS.slice(0, 30).join('|'), 'i')
+            : /microsoft|aws|azure|google cloud|accenture|deloitte|servicenow|salesforce/i;
+        
         const competitiveArticles = this.dailyArticles
-            .filter(a => a.signalType === 'risk' || /microsoft|aws|azure|google cloud|accenture|deloitte|servicenow|salesforce/i.test(a.title))
+            .filter(a => a.signalType === 'risk' || competitorPattern.test(a.title))
             .slice(0, 5);
         
         if (competitiveArticles.length > 0) {
@@ -3428,7 +3433,13 @@ Return ONLY valid JSON, no markdown fences:
                 const competitors = this._extractCompetitors(a.title + ' ' + (a.summary || ''));
                 lines.push(`- **${a.title}** (${a.sourceName})`);
                 if (competitors.length > 0) {
-                    lines.push(`  Competitors: ${competitors.join(', ')}`);
+                    const competitorList = competitors.map(c => {
+                        if (c.ibm) {
+                            return `${c.name} → IBM: ${c.ibm}`;
+                        }
+                        return c.name;
+                    }).join('; ');
+                    lines.push(`  ${competitorList}`);
                 }
             }
             lines.push('');
@@ -3534,21 +3545,42 @@ Return ONLY valid JSON, no markdown fences:
     
     _extractCompetitors(text) {
         const competitors = [];
-        const competitorPatterns = [
-            { pattern: /microsoft|azure/i, name: 'Microsoft/Azure' },
-            { pattern: /aws|amazon web services/i, name: 'AWS' },
-            { pattern: /google cloud|gcp|vertex ai/i, name: 'Google Cloud' },
-            { pattern: /accenture/i, name: 'Accenture' },
-            { pattern: /deloitte/i, name: 'Deloitte' },
-            { pattern: /servicenow/i, name: 'ServiceNow' },
-            { pattern: /salesforce/i, name: 'Salesforce' },
-            { pattern: /snowflake/i, name: 'Snowflake' },
-            { pattern: /databricks/i, name: 'Databricks' }
-        ];
+        const lowerText = text.toLowerCase();
         
-        for (const { pattern, name } of competitorPatterns) {
-            if (pattern.test(text) && !competitors.includes(name)) {
-                competitors.push(name);
+        // Use COMPETITIVE_POSITIONING from sources.js if available
+        if (typeof COMPETITIVE_POSITIONING !== 'undefined') {
+            // Group by IBM solution to avoid duplicates
+            const found = new Set();
+            for (const [competitor, position] of Object.entries(COMPETITIVE_POSITIONING)) {
+                if (lowerText.includes(competitor.toLowerCase())) {
+                    // Normalize competitor names
+                    let name = competitor;
+                    if (competitor.includes('azure') || competitor.includes('microsoft')) name = 'Microsoft/Azure';
+                    else if (competitor.includes('aws') || competitor.includes('amazon') || competitor.includes('bedrock')) name = 'AWS';
+                    else if (competitor.includes('google') || competitor.includes('vertex') || competitor.includes('gemini')) name = 'Google Cloud';
+                    else if (competitor === 'copilot' || competitor === 'github copilot') name = 'Microsoft Copilot';
+                    else name = competitor.charAt(0).toUpperCase() + competitor.slice(1);
+                    
+                    if (!found.has(name)) {
+                        found.add(name);
+                        competitors.push({ name, ibm: position.ibm, angle: position.angle });
+                    }
+                }
+            }
+        } else {
+            // Fallback to basic patterns
+            const competitorPatterns = [
+                { pattern: /microsoft|azure/i, name: 'Microsoft/Azure' },
+                { pattern: /aws|amazon web services/i, name: 'AWS' },
+                { pattern: /google cloud|gcp|vertex ai/i, name: 'Google Cloud' },
+                { pattern: /accenture/i, name: 'Accenture' },
+                { pattern: /deloitte/i, name: 'Deloitte' }
+            ];
+            
+            for (const { pattern, name } of competitorPatterns) {
+                if (pattern.test(text)) {
+                    competitors.push({ name, ibm: null, angle: null });
+                }
             }
         }
         
@@ -3668,19 +3700,14 @@ Return ONLY valid JSON, no markdown fences:
                 const text = (a.title + ' ' + (a.summary || '')).toLowerCase();
                 let ibmPosition = '';
                 
-                // Map competitor to IBM positioning
-                if (/azure openai|microsoft ai|copilot/i.test(text)) {
-                    ibmPosition = ' → IBM: watsonx.ai (governance + data privacy)';
-                } else if (/aws bedrock|amazon q/i.test(text)) {
-                    ibmPosition = ' → IBM: watsonx.ai (hybrid deployment)';
-                } else if (/vertex ai|google cloud ai/i.test(text)) {
-                    ibmPosition = ' → IBM: watsonx.ai (open models + enterprise)';
-                } else if (/azure arc/i.test(text)) {
-                    ibmPosition = ' → IBM: Red Hat OpenShift (true hybrid)';
-                } else if (/snowflake|databricks/i.test(text)) {
-                    ibmPosition = ' → IBM: watsonx.data (governance + cost)';
-                } else if (/accenture|deloitte/i.test(text)) {
-                    ibmPosition = ' → IBM: IBM Consulting (tech-led transformation)';
+                // Use COMPETITIVE_POSITIONING from sources.js
+                if (typeof COMPETITIVE_POSITIONING !== 'undefined') {
+                    for (const [competitor, position] of Object.entries(COMPETITIVE_POSITIONING)) {
+                        if (text.includes(competitor.toLowerCase())) {
+                            ibmPosition = ` → IBM: ${position.ibm} (${position.angle})`;
+                            break;
+                        }
+                    }
                 }
                 
                 return `- ${a.title} (${a.sourceName})${ibmPosition}`;
@@ -4887,7 +4914,85 @@ function renderATLEnablement() {
     // Get today's articles with industry matches
     const todayArticles = app.dailyArticles.length > 0 ? app.dailyArticles : app.articles.slice(0, 30);
     
-    // Group by industry and find key themes
+    // Step 1: Detect market-specific signals using APAC_MARKET_CONTEXT
+    // This catches regulatory, priority, and watchword mentions
+    if (typeof APAC_MARKET_CONTEXT !== 'undefined') {
+        todayArticles.forEach(article => {
+            const text = `${article.title} ${article.summary || ''}`.toLowerCase();
+            
+            Object.entries(APAC_MARKET_CONTEXT).forEach(([market, context]) => {
+                if (!marketSignals[market]) return;
+                
+                // Check regulators (highest priority for market assignment)
+                const matchedRegulator = context.regulators?.find(r => text.includes(r.toLowerCase()));
+                if (matchedRegulator) {
+                    // Check if already added
+                    if (!marketSignals[market].some(s => s.articles?.[0]?.id === article.id)) {
+                        marketSignals[market].push({
+                            type: 'regulatory',
+                            industry: 'Regulatory',
+                            marketSignal: matchedRegulator.toUpperCase(),
+                            articles: [article],
+                            headline: article.title,
+                            priority: 1 // Highest priority
+                        });
+                    }
+                    return; // Don't double-add
+                }
+                
+                // Check countries/cities (geographic routing)
+                const matchedCountry = context.countries?.find(c => text.includes(c.toLowerCase()));
+                if (matchedCountry) {
+                    if (!marketSignals[market].some(s => s.articles?.[0]?.id === article.id)) {
+                        // Capitalize first letter for display
+                        const displayName = matchedCountry.charAt(0).toUpperCase() + matchedCountry.slice(1);
+                        marketSignals[market].push({
+                            type: 'geographic',
+                            industry: 'Regional',
+                            marketSignal: displayName,
+                            articles: [article],
+                            headline: article.title,
+                            priority: 1.5 // Between regulatory and priority
+                        });
+                    }
+                    return; // Don't double-add
+                }
+                
+                // Check priorities (market-specific themes)
+                const matchedPriority = context.priorities?.find(p => text.includes(p.toLowerCase()));
+                if (matchedPriority) {
+                    if (!marketSignals[market].some(s => s.articles?.[0]?.id === article.id)) {
+                        marketSignals[market].push({
+                            type: 'priority',
+                            industry: 'Market Priority',
+                            marketSignal: matchedPriority,
+                            articles: [article],
+                            headline: article.title,
+                            priority: 2
+                        });
+                    }
+                    return;
+                }
+                
+                // Check watchwords (market-specific entities/concepts)
+                const matchedWatchword = context.watchwords?.find(w => text.includes(w.toLowerCase()));
+                if (matchedWatchword) {
+                    if (!marketSignals[market].some(s => s.articles?.[0]?.id === article.id)) {
+                        marketSignals[market].push({
+                            type: 'watchword',
+                            industry: 'Market Signal',
+                            marketSignal: matchedWatchword,
+                            articles: [article],
+                            headline: article.title,
+                            priority: 3
+                        });
+                    }
+                }
+            });
+        });
+    }
+    
+    // Step 2: Group by industry and find key themes
     const industryArticles = {};
     todayArticles.forEach(article => {
         // Use matchedIndustries array, falling back to matchedIndustry singular
@@ -4902,7 +5007,7 @@ function renderATLEnablement() {
         });
     });
     
-    // Assign to markets based on where clients operate
+    // Step 3: Assign industry signals to markets based on where clients operate
     Object.entries(industryArticles).forEach(([industry, articles]) => {
         if (articles.length === 0) return;
         
@@ -4920,15 +5025,21 @@ function renderATLEnablement() {
         }
         
         relevantMarkets.forEach(market => {
+            // Check if article already added via market signal detection
+            const article = articles[0];
+            if (marketSignals[market].some(s => s.articles?.[0]?.id === article.id)) return;
+            
             marketSignals[market].push({
+                type: 'industry',
                 industry,
                 articles: articles.slice(0, 2),
-                headline: articles[0].title
+                headline: articles[0].title,
+                priority: 4
             });
         });
     });
     
-    // Also add client-specific signals (articles matching tracked clients)
+    // Step 4: Add client-specific signals (highest relevance)
     todayArticles.forEach(article => {
         if (!article.matchedClients || article.matchedClients.length === 0) return;
         
@@ -4941,27 +5052,66 @@ function renderATLEnablement() {
                 );
                 if (!existing) {
                     marketSignals[client.market].push({
+                        type: 'client',
                         industry: client.industry || 'Client News',
                         client: clientName,
+                        clientTier: client.tier,
                         articles: [article],
-                        headline: article.title
+                        headline: article.title,
+                        signalType: article.signalType,
+                        priority: 0 // Highest priority - client-specific
                     });
                 }
             }
         });
     });
     
-    // Generate briefs for each market with content
+    // Step 5: Sort signals within each market by priority, then by client tier
+    Object.keys(marketSignals).forEach(market => {
+        marketSignals[market].sort((a, b) => {
+            // Sort by priority first (0 = client, 1 = regulatory, etc.)
+            if (a.priority !== b.priority) return a.priority - b.priority;
+            // Then by client tier (if both are client signals)
+            if (a.clientTier && b.clientTier) return a.clientTier - b.clientTier;
+            return 0;
+        });
+    });
+    
+    // Step 6: Generate briefs for each market with content
     const briefs = Object.entries(marketSignals)
         .filter(([_, signals]) => signals.length > 0)
         .map(([market, signals]) => {
-            const topSignals = signals.slice(0, 4);
+            const topSignals = signals.slice(0, 5); // Show top 5 per market
+            
             // Build HTML content with clickable links
             const contentHtml = topSignals.map(s => {
                 const article = s.articles[0];
                 const sourceName = article.source || article.sourceName || 'Source';
-                const prefix = s.client ? `🎯 ${s.client}` : `📌 ${s.industry}`;
-                return `<div class="atl-brief-signal">
+                
+                // Determine prefix based on signal type
+                let prefix, prefixClass;
+                if (s.client) {
+                    const tierEmoji = { 1: '🔴', 2: '🟡', 3: '🟢' }[s.clientTier] || '⚪';
+                    prefix = `${tierEmoji} ${s.client}`;
+                    prefixClass = 'client';
+                } else if (s.type === 'regulatory') {
+                    prefix = `🛡️ ${s.marketSignal}`;
+                    prefixClass = 'regulatory';
+                } else if (s.type === 'geographic') {
+                    prefix = `🌏 ${s.marketSignal}`;
+                    prefixClass = 'geographic';
+                } else if (s.type === 'priority') {
+                    prefix = `📌 ${s.marketSignal}`;
+                    prefixClass = 'priority';
+                } else if (s.type === 'watchword') {
+                    prefix = `📍 ${s.marketSignal}`;
+                    prefixClass = 'watchword';
+                } else {
+                    prefix = `📌 ${s.industry}`;
+                    prefixClass = 'industry';
+                }
+                
+                return `<div class="atl-brief-signal ${prefixClass}">
                     <span class="atl-brief-prefix">${prefix}</span>
                     <a class="atl-brief-link" href="${article.url || '#'}" target="_blank">${escapeHtml(article.title)}</a>
                     <span class="atl-brief-source">(${escapeHtml(sourceName)})</span>
@@ -4969,12 +5119,27 @@ function renderATLEnablement() {
             }).join('');
             
             // Plain text for copying
-            const contentText = topSignals.map(s => {
-                const article = s.articles[0];
-                const sourceName = article.source || article.sourceName || 'Source';
-                const prefix = s.client ? `🎯 ${s.client}` : `📌 ${s.industry}`;
-                return `${prefix}: ${article.title} (${sourceName})\n${article.url || ''}`;
-            }).join('\n\n');
+            const date = new Date().toLocaleDateString('en-SG', { weekday: 'short', month: 'short', day: 'numeric' });
+            const contentText = `📡 The Signal Today | ${market} | ${date}\n\n` + 
+                topSignals.map(s => {
+                    const article = s.articles[0];
+                    const sourceName = article.source || article.sourceName || 'Source';
+                    
+                    let prefix;
+                    if (s.client) {
+                        prefix = `🎯 ${s.client}`;
+                    } else if (s.type === 'regulatory') {
+                        prefix = `🛡️ ${s.marketSignal}`;
+                    } else if (s.type === 'geographic') {
+                        prefix = `🌏 ${s.marketSignal}`;
+                    } else if (s.type === 'priority' || s.type === 'watchword') {
+                        prefix = `📍 ${s.marketSignal}`;
+                    } else {
+                        prefix = `📌 ${s.industry}`;
+                    }
+                    
+                    return `${prefix}: ${article.title} (${sourceName})\n${article.url || ''}`;
+                }).join('\n\n');
             
             return { market, contentHtml, contentText, signalCount: signals.length };
         });
@@ -4984,7 +5149,7 @@ function renderATLEnablement() {
     if (countEl) countEl.textContent = briefs.reduce((sum, b) => sum + b.signalCount, 0);
     
     if (briefs.length === 0) {
-        list.innerHTML = '<p class="card-description">No industry signals today. Click Refresh to fetch latest articles.</p>';
+        list.innerHTML = '<p class="card-description">No signals today. Click Refresh to fetch latest articles.</p>';
         return;
     }
     
