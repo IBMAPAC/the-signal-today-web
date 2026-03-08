@@ -490,51 +490,35 @@ class SignalApp {
             if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
             
             // Skip if any modal is open
-            const anyModalOpen = !document.getElementById('settings-modal').classList.contains('hidden') ||
-                                 !document.getElementById('article-modal').classList.contains('hidden') ||
-                                 !(document.getElementById('meeting-brief-modal')?.classList.contains('hidden') ?? true);
+            const settingsModal = document.getElementById('settings-modal');
+            const articleModal = document.getElementById('article-modal');
+            const clientManagerModal = document.getElementById('client-manager-modal');
+            const anyModalOpen = (settingsModal && !settingsModal.classList.contains('hidden')) ||
+                                 (articleModal && !articleModal.classList.contains('hidden')) ||
+                                 (clientManagerModal && !clientManagerModal.classList.contains('hidden'));
             
             switch (e.key) {
                 case 'r':
                 case 'R':
                     if (!anyModalOpen) { e.preventDefault(); this.refresh(); }
                     break;
-                case '1':
-                    if (!anyModalOpen) { e.preventDefault(); switchDigestTab('daily'); }
+                case 'c':
+                case 'C':
+                    if (!anyModalOpen) { e.preventDefault(); openClientManager(); }
                     break;
-                case '2':
-                    if (!anyModalOpen) { e.preventDefault(); switchDigestTab('weekly'); }
-                    break;
-                case 'j':
-                case 'J':
-                    if (!anyModalOpen) { e.preventDefault(); this.navigateArticles(1); }
-                    break;
-                case 'k':
-                case 'K':
-                    if (!anyModalOpen) { e.preventDefault(); this.navigateArticles(-1); }
-                    break;
-                case 'o':
-                case 'O':
-                    if (!anyModalOpen && this.focusedArticleIndex >= 0) {
-                        e.preventDefault();
-                        const articles = this.currentTab === 'daily' ? this.dailyArticles : this.weeklyArticles;
-                        const article = articles[this.focusedArticleIndex];
-                        if (article) this.openArticle(article.id);
-                    }
+                case 's':
+                case 'S':
+                    if (!anyModalOpen) { e.preventDefault(); this.openSettings(); }
                     break;
                 case 'Escape':
                     e.preventDefault();
-                    if (!document.getElementById('article-modal').classList.contains('hidden')) {
+                    if (articleModal && !articleModal.classList.contains('hidden')) {
                         closeArticle();
-                    } else if (!document.getElementById('settings-modal').classList.contains('hidden')) {
+                    } else if (settingsModal && !settingsModal.classList.contains('hidden')) {
                         closeSettings();
-                    } else if (document.getElementById('meeting-brief-modal') &&
-                               !document.getElementById('meeting-brief-modal').classList.contains('hidden')) {
-                        closeMeetingBrief();
+                    } else if (clientManagerModal && !clientManagerModal.classList.contains('hidden')) {
+                        closeClientManager();
                     }
-                    break;
-                case '?':
-                    if (!anyModalOpen) { e.preventDefault(); this.showKeyboardHelp(); }
                     break;
             }
         });
@@ -2231,17 +2215,8 @@ ${articleList}`;
         document.getElementById('empty-state').classList.add('hidden');
         document.getElementById('digest-content').classList.remove('hidden');
         
-        // Update tab badges
-        document.getElementById('daily-count-badge').textContent = this.dailyArticles.length;
-        document.getElementById('weekly-count-badge').textContent = this.weeklyArticles.length;
-        
-        // Render Daily Tab
+        // Render the 4-section layout
         this.renderDailyTab();
-        
-        // Render Weekly Tab
-        this.renderWeeklyTab();
-        
-        this.updateReadingTime();
     }
 
     renderDailyTab() {
@@ -3510,12 +3485,6 @@ TOP ARTICLES
     openSettings() {
         // Populate settings
         document.getElementById('api-key').value = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
-        document.getElementById('daily-minutes').value = this.settings.dailyMinutes;
-        document.getElementById('weekly-articles').value = this.settings.weeklyArticles;
-        
-        // Populate clients — display as comma-separated names (handle both string and object formats)
-        const clientNames = this.clients.map(c => typeof c === 'string' ? c : c.name);
-        document.getElementById('clients-input').value = clientNames.join(', ');
         
         // Populate new fields if they exist in the DOM
         const weekContextEl = document.getElementById('week-context');
@@ -3611,16 +3580,8 @@ let selectedPriority = 2;
 let selectedDigestType = 'daily';
 
 function switchDigestTab(tab) {
-    // Update tab buttons
-    document.querySelectorAll('.digest-tab').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tab);
-    });
-    
-    // Update tab content
-    document.getElementById('daily-tab').classList.toggle('hidden', tab !== 'daily');
-    document.getElementById('weekly-tab').classList.toggle('hidden', tab !== 'weekly');
-    
-    app.currentTab = tab;
+    // Legacy function - tabs removed in v2 redesign
+    // Kept for backwards compatibility in case any code calls it
 }
 
 function toggleSection(sectionId) {
@@ -3638,16 +3599,6 @@ function closeSettings() {
 function saveSettings() {
     const apiKey = document.getElementById('api-key').value.trim();
 
-    // Clamp daily minutes between 5 and 60 (JS-side validation in addition to HTML min/max)
-    const rawDailyMinutes = parseInt(document.getElementById('daily-minutes').value) || 15;
-    const dailyMinutes = Math.max(5, Math.min(60, rawDailyMinutes));
-
-    // Clamp weekly articles between 3 and 20
-    const rawWeeklyArticles = parseInt(document.getElementById('weekly-articles').value) || 5;
-    const weeklyArticles = Math.max(3, Math.min(20, rawWeeklyArticles));
-
-    const clientsInput = document.getElementById('clients-input').value;
-    
     // Save API key to localStorage (NOTE: stored unencrypted - user was warned in Settings UI)
     if (apiKey) {
         localStorage.setItem(STORAGE_KEYS.API_KEY, apiKey);
@@ -3655,11 +3606,7 @@ function saveSettings() {
         localStorage.removeItem(STORAGE_KEYS.API_KEY);
     }
     
-    // Save settings
-    app.settings.dailyMinutes = dailyMinutes;
-    app.settings.weeklyArticles = weeklyArticles;
-    
-    // Save new context fields if present in DOM
+    // Save context fields if present in DOM
     const weekContextEl = document.getElementById('week-context');
     if (weekContextEl) app.settings.thisWeekContext = weekContextEl.value.trim();
     
@@ -3674,21 +3621,16 @@ function saveSettings() {
         }
     }
     
-    // Parse clients — preserve existing tier/country data for known clients, default T2 for new ones
-    // Capture old clients BEFORE reassigning to avoid reading a partially-mutated array
-    const oldClients = app.clients.slice();
-    const newClientNames = clientsInput.split(',').map(c => c.trim()).filter(c => c);
-    app.clients = newClientNames.map(name => {
-        const existing = oldClients.find(c => (typeof c === 'string' ? c : c.name) === name);
-        if (existing && typeof existing === 'object') return existing;
-        return { name, tier: 2, country: '' };
-    });
-    
     // Save to storage
     app.saveToStorage();
     
     closeSettings();
     app.updateUI();
+    
+    // Re-render to apply any context changes
+    if (app.articles.length > 0) {
+        app.renderDigest();
+    }
     
     console.log('✅ Settings saved');
 }

@@ -403,6 +403,65 @@
                 </div>
             </div>
         </div>
+
+        <!-- SOURCE EDITOR MODAL -->
+        <div id="source-modal" class="modal hidden">
+            <div class="modal-backdrop" onclick="closeSourceEditor()"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="source-modal-title">Add Source</h2>
+                    <button class="modal-close" onclick="closeSourceEditor()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="source-name">Name</label>
+                        <input type="text" id="source-name" placeholder="e.g. TechCrunch">
+                    </div>
+                    <div class="form-group">
+                        <label for="source-url">RSS URL</label>
+                        <input type="text" id="source-url" placeholder="https://...">
+                    </div>
+                    <div class="form-group">
+                        <label for="source-category">Category</label>
+                        <select id="source-category">
+                            <option value="AI & Agentic">🤖 AI & Agentic</option>
+                            <option value="Sovereignty & Regulation">🛡️ Sovereignty & Regulation</option>
+                            <option value="APAC Enterprise">🌏 APAC Enterprise</option>
+                            <option value="China & Geopolitics">🇨🇳 China & Geopolitics</option>
+                            <option value="Competitive Landscape">⚔️ Competitive Landscape</option>
+                            <option value="Architecture & Platform">🏗️ Architecture & Platform</option>
+                            <option value="Strategic Perspectives">💭 Strategic Perspectives</option>
+                            <option value="IBM & Partners">🔵 IBM & Partners</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Priority</label>
+                        <div class="priority-buttons">
+                            <button type="button" class="priority-btn" data-priority="1" onclick="selectPriority(1)">High</button>
+                            <button type="button" class="priority-btn active" data-priority="2" onclick="selectPriority(2)">Medium</button>
+                            <button type="button" class="priority-btn" data-priority="3" onclick="selectPriority(3)">Low</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Digest Type</label>
+                        <div class="digest-type-buttons">
+                            <button type="button" class="digest-type-btn active" data-type="daily" onclick="selectDigestType('daily')">Daily</button>
+                            <button type="button" class="digest-type-btn" data-type="weekly" onclick="selectDigestType('weekly')">Weekly</button>
+                            <button type="button" class="digest-type-btn" data-type="both" onclick="selectDigestType('both')">Both</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="source-credibility">Credibility: <span id="credibility-value">80%</span></label>
+                        <input type="range" id="source-credibility" min="50" max="100" value="80" oninput="updateCredibilityDisplay()">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-danger" onclick="deleteCurrentSource()" id="delete-source-btn" style="display:none;">Delete</button>
+                    <button class="btn btn-secondary" onclick="closeSourceEditor()">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveSource()">Save</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="sources.js"></script>
