@@ -228,6 +228,8 @@ const STORAGE_KEYS = {
     ARTICLES: 'signal_articles',
     DIGEST: 'signal_digest',
     SETTINGS: 'signal_settings',
+    TODAYS_SIGNALS: 'signal_todays_signals_cache',
+    DEEP_READS: 'signal_deep_reads_cache',
     LAST_REFRESH: 'signal_last_refresh',
     TREND_HISTORY: 'signal_trend_history',
     ARTICLE_RATINGS: 'signal_article_ratings',   // Per-article 👍/👎 feedback
@@ -770,10 +772,10 @@ class SignalApp {
                 this.digest = this.createBasicDigest();
             }
             
-            // Save and render
+            // Save and render (forceRefresh = true to regenerate AI synthesis)
             localStorage.setItem(STORAGE_KEYS.LAST_REFRESH, new Date().toISOString());
             this.saveToStorage();
-            this.renderDigest();
+            this.renderDigest(true);
             this.updateUI();
             
             const totalTime = Math.round(performance.now() - startTime);
@@ -1564,16 +1566,19 @@ class SignalApp {
             
             // Industry match
             bd.industry = 0;
+            article.matchedIndustries = []; // Always initialize as array
             if (industryMatch) {
                 const tierBoost = { 1: 0.30, 2: 0.20, 3: 0.10 };
                 bd.industry = tierBoost[industryMatch.tier] || 0;
                 bd.industryName = industryMatch.name;
                 score += bd.industry;
                 article.matchedIndustry = industryMatch.name;
+                article.matchedIndustries = [industryMatch.name]; // Array for rendering
             }
             
             // Client match - tier-weighted boost
             bd.client = 0;
+            article.matchedClients = []; // Always initialize as array
             if (allClients.length > 0) {
                 const topClient = allClients[0];
                 const clientObj = this.clients.find(c => (typeof c === 'string' ? c : c.name) === topClient);
@@ -1582,7 +1587,7 @@ class SignalApp {
                 bd.clientName = topClient;
                 score += bd.client;
                 article.matchedClient = topClient;
-                article.allMatchedClients = allClients;
+                article.matchedClients = allClients; // Array for rendering
             }
             
             // Cross-reference boost
@@ -1767,26 +1772,41 @@ class SignalApp {
 
     detectAllClients(text) {
         // Return all matched client names for an article.
-        // Works with both structured objects {name, tier} and legacy strings.
+        // Works with both structured objects {name, tier, aliases} and legacy strings.
         // Uses word boundary matching to avoid false positives
         // e.g., "SK" shouldn't match "risk", "ANZ" shouldn't match "organization"
         const matches = [];
+        const textLower = text.toLowerCase();
         
         for (const clientEntry of this.clients) {
             const clientName = typeof clientEntry === 'string' ? clientEntry : clientEntry.name;
-            const clientLower = clientName.toLowerCase();
+            const aliases = (typeof clientEntry === 'object' && clientEntry.aliases) ? clientEntry.aliases : [];
             
+            // Check main name and all aliases
+            const namesToCheck = [clientName, ...aliases];
             let isMatch = false;
             
-            if (clientName.length <= 3) {
-                const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}\\b`, 'i');
-                isMatch = regex.test(text);
-            } else {
-                const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}`, 'i');
-                isMatch = regex.test(text);
+            for (const name of namesToCheck) {
+                const nameLower = name.toLowerCase();
+                
+                if (name.length <= 3) {
+                    // Short names need exact word boundary
+                    const regex = new RegExp(`\\b${this.escapeRegex(nameLower)}\\b`, 'i');
+                    if (regex.test(textLower)) {
+                        isMatch = true;
+                        break;
+                    }
+                } else {
+                    // Longer names just need word start boundary
+                    const regex = new RegExp(`\\b${this.escapeRegex(nameLower)}`, 'i');
+                    if (regex.test(textLower)) {
+                        isMatch = true;
+                        break;
+                    }
+                }
             }
             
-            if (isMatch) {
+            if (isMatch && !matches.includes(clientName)) {
                 matches.push(clientName);
             }
         }
@@ -2226,18 +2246,18 @@ ${articleList}`;
     // Rendering
     // ==========================================
 
-    renderDigest() {
+    renderDigest(forceRefresh = false) {
         document.getElementById('empty-state').classList.add('hidden');
         document.getElementById('digest-content').classList.remove('hidden');
         
         // Render the 4-section layout
-        this.renderDailyTab();
+        this.renderDailyTab(forceRefresh);
     }
 
-    renderDailyTab() {
+    renderDailyTab(forceRefresh = false) {
         // NEW 4-SECTION LAYOUT:
         // 1. Today's Signals — synthesized intelligence with IBM angles
-        renderTodaysSignals();
+        renderTodaysSignals(forceRefresh);
         
         // 2. Client Radar — market-based view with Brief ATL action
         renderClientRadar();
@@ -2246,7 +2266,7 @@ ${articleList}`;
         renderATLEnablement();
         
         // 4. Deep Reads — collapsed by default
-        renderDeepReads();
+        renderDeepReads(forceRefresh);
         
         // Update portfolio stats
         updateClientManagerCounts();
@@ -4517,6 +4537,7 @@ function copyBriefATL() {
 
 // ==========================================
 // ATL ENABLEMENT RENDERING
+// Shows industry signals grouped by market for quick Slack sharing
 // ==========================================
 
 function renderATLEnablement() {
@@ -4538,7 +4559,12 @@ function renderATLEnablement() {
     // Group by industry and find key themes
     const industryArticles = {};
     todayArticles.forEach(article => {
-        const industries = article.matchedIndustries || [];
+        // Use matchedIndustries array, falling back to matchedIndustry singular
+        let industries = article.matchedIndustries || [];
+        if (industries.length === 0 && article.matchedIndustry) {
+            industries = [article.matchedIndustry];
+        }
+        
         industries.forEach(ind => {
             if (!industryArticles[ind]) industryArticles[ind] = [];
             industryArticles[ind].push(article);
@@ -4557,9 +4583,9 @@ function renderATLEnablement() {
             }
         });
         
-        // If no specific clients, distribute to all
+        // If no specific clients match, distribute to all markets
         if (relevantMarkets.size === 0) {
-            relevantMarkets.add('ASEAN'); // Default
+            Object.keys(marketSignals).forEach(m => relevantMarkets.add(m));
         }
         
         relevantMarkets.forEach(market => {
@@ -4571,28 +4597,57 @@ function renderATLEnablement() {
         });
     });
     
+    // Also add client-specific signals (articles matching tracked clients)
+    todayArticles.forEach(article => {
+        if (!article.matchedClients || article.matchedClients.length === 0) return;
+        
+        article.matchedClients.forEach(clientName => {
+            const client = app.clients.find(c => c.name === clientName);
+            if (client && marketSignals[client.market]) {
+                // Check if we already have this article for this market
+                const existing = marketSignals[client.market].find(s => 
+                    s.articles?.some(a => a.id === article.id)
+                );
+                if (!existing) {
+                    marketSignals[client.market].push({
+                        industry: client.industry || 'Client News',
+                        client: clientName,
+                        articles: [article],
+                        headline: article.title
+                    });
+                }
+            }
+        });
+    });
+    
     // Generate briefs for each market with content
     const briefs = Object.entries(marketSignals)
         .filter(([_, signals]) => signals.length > 0)
         .map(([market, signals]) => {
-            const topSignals = signals.slice(0, 3);
-            const content = topSignals.map(s => 
-                `📌 ${s.industry}: ${s.articles[0].title} (${s.articles[0].source})`
-            ).join('\n\n');
+            const topSignals = signals.slice(0, 4);
+            const content = topSignals.map(s => {
+                const prefix = s.client ? `🎯 ${s.client}` : `📌 ${s.industry}`;
+                return `${prefix}: ${s.articles[0].title} (${s.articles[0].source})`;
+            }).join('\n\n');
             
             return { market, content, signalCount: signals.length };
         });
     
+    // Update count badge
+    const countEl = document.getElementById('atl-signals-count');
+    if (countEl) countEl.textContent = briefs.reduce((sum, b) => sum + b.signalCount, 0);
+    
     if (briefs.length === 0) {
-        list.innerHTML = '<p class="card-description">No industry signals today. Refresh to fetch latest.</p>';
+        list.innerHTML = '<p class="card-description">No industry signals today. Click Refresh to fetch latest articles.</p>';
         return;
     }
     
-    list.innerHTML = briefs.map(({ market, content }) => `
+    list.innerHTML = briefs.map(({ market, content, signalCount }) => `
         <div class="atl-brief">
             <div class="atl-brief-header">
                 <span class="atl-brief-market">${market}</span>
-                <button class="atl-brief-copy" onclick="copyATLBrief(this, '${market}')" title="Copy">📋</button>
+                <span class="atl-brief-count">${signalCount} signals</span>
+                <button class="atl-brief-copy" onclick="copyATLBrief(this, '${market}')" title="Copy to clipboard">📋</button>
             </div>
             <div class="atl-brief-content">${escapeHtml(content)}</div>
         </div>
@@ -4616,11 +4671,31 @@ function copyATLBrief(btn, market) {
 // Purpose: "Act on this TODAY" - tactical, immediate
 // ==========================================
 
-async function renderTodaysSignals() {
+async function renderTodaysSignals(forceRefresh = false) {
     const list = document.getElementById('signals-list');
     const introEl = document.getElementById('signals-intro');
     const countEl = document.getElementById('signals-count');
     if (!list) return;
+    
+    // Check cache first unless forcing refresh
+    if (!forceRefresh) {
+        try {
+            const cached = localStorage.getItem(STORAGE_KEYS.TODAYS_SIGNALS);
+            if (cached) {
+                const { signals, timestamp, articlesData } = JSON.parse(cached);
+                const age = Date.now() - timestamp;
+                // Show cached if less than 8 hours old and has content
+                if (age < 8 * 60 * 60 * 1000 && signals && signals.length > 0) {
+                    countEl.textContent = signals.length;
+                    introEl.textContent = `${signals.length} actionable signals (${formatTimeAgo(timestamp)})`;
+                    list.innerHTML = signals.map((s, i) => renderCachedSignal(s, articlesData?.[i])).join('');
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log('Signal cache read error:', e);
+        }
+    }
     
     const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
     
@@ -4651,6 +4726,7 @@ async function renderTodaysSignals() {
             rawSignals.push({
                 type: 'client',
                 headline: article.title,
+                summary: article.summary || '',
                 sources: [article.source],
                 articles: [article],
                 industries: article.matchedIndustries || [],
@@ -4670,6 +4746,7 @@ async function renderTodaysSignals() {
             rawSignals.push({
                 type: 'competitive',
                 headline: article.title,
+                summary: article.summary || '',
                 sources: [article.source],
                 articles: [article],
                 industries: article.matchedIndustries || [],
@@ -4678,27 +4755,56 @@ async function renderTodaysSignals() {
         }
     });
     
+    // 4. Add top daily articles if not enough signals
+    if (rawSignals.length < 3) {
+        const topArticles = (app.dailyArticles.length > 0 ? app.dailyArticles : app.articles)
+            .filter(a => !rawSignals.some(s => s.articles?.some(sa => sa.id === a.id)))
+            .slice(0, 5 - rawSignals.length);
+        
+        topArticles.forEach(article => {
+            rawSignals.push({
+                type: 'news',
+                headline: article.title,
+                summary: article.summary || '',
+                sources: [article.source],
+                articles: [article],
+                industries: article.matchedIndustries || [],
+                clients: article.matchedClients || []
+            });
+        });
+    }
+    
     countEl.textContent = Math.min(rawSignals.length, 5);
     
     if (rawSignals.length === 0) {
-        introEl.textContent = 'Pull to refresh to generate signals.';
-        list.innerHTML = '';
+        introEl.textContent = 'Click Refresh to generate signals.';
+        list.innerHTML = '<p class="card-description">No signals yet. Click Refresh to fetch latest news and generate actionable intelligence.</p>';
         return;
     }
     
-    // Without API key: render basic signals
+    // Without API key: render basic signals with article context
     if (!apiKey) {
         introEl.textContent = `${rawSignals.length} signals detected. Add API key for AI synthesis.`;
         list.innerHTML = rawSignals.slice(0, 5).map(signal => renderBasicSignal(signal)).join('');
+        // Cache basic signals too
+        cacheSignals(rawSignals.slice(0, 5).map(s => ({
+            headline: s.headline,
+            summary: s.summary || '',
+            sources: s.sources,
+            type: s.type
+        })), rawSignals.slice(0, 5));
         return;
     }
     
     // With API key: generate AI-powered synthesis
     introEl.textContent = 'Synthesizing actionable intelligence...';
     
-    const signalSummaries = rawSignals.slice(0, 5).map(s => 
-        `- ${s.headline} (${s.sources.join(', ')})${s.clients.length > 0 ? ` [Clients: ${s.clients.join(', ')}]` : ''}`
-    ).join('\n');
+    // Include more context in the prompt
+    const signalSummaries = rawSignals.slice(0, 5).map(s => {
+        const summary = s.summary || s.articles?.[0]?.summary || '';
+        const context = summary ? `\n  Context: ${summary.substring(0, 150)}` : '';
+        return `- ${s.headline} (${s.sources.join(', ')})${s.clients.length > 0 ? ` [Clients: ${s.clients.join(', ')}]` : ''}${context}`;
+    }).join('\n\n');
     
     const tier1Clients = app.clients.filter(c => c.tier === 1).map(c => c.name).slice(0, 10).join(', ');
     
@@ -4716,7 +4822,8 @@ For each signal, provide a JSON array with EXACTLY this structure:
 [
   {
     "headline": "Action-oriented headline (10 words max)",
-    "wave": "AI" or "SOVEREIGNTY",
+    "context": "2-3 sentence summary of why this matters for APAC enterprise clients",
+    "wave": "AI" or "SOVEREIGNTY" or "COMPETITIVE",
     "action": "What the Field CTO should DO today (one sentence)",
     "ibmAngle": "Specific IBM product/capability to position (watsonx.ai, watsonx.governance, Red Hat OpenShift, IBM Consulting, etc.)",
     "competitive": "Competitor affected or threatening (or null if not applicable)"
@@ -4736,7 +4843,7 @@ Return ONLY valid JSON array, no markdown, max 5 signals.`;
             },
             body: JSON.stringify({
                 model: 'claude-sonnet-4-20250514',
-                max_tokens: 800,
+                max_tokens: 1200,
                 messages: [{ role: 'user', content: prompt }]
             })
         });
@@ -4751,26 +4858,12 @@ Return ONLY valid JSON array, no markdown, max 5 signals.`;
             const synthesized = JSON.parse(jsonMatch[0]);
             introEl.textContent = `${synthesized.length} actionable signals for today`;
             
+            // Cache the synthesized signals with article data
+            cacheSignals(synthesized, rawSignals.slice(0, 5));
+            
             list.innerHTML = synthesized.map((signal, idx) => {
                 const rawSignal = rawSignals[idx] || {};
-                const sourcesHtml = rawSignal.articles?.map(a => 
-                    `<span class="signal-card-source" onclick="openArticle('${a.id}')">${escapeHtml(a.source)}</span>`
-                ).join('') || '';
-                
-                return `
-                    <div class="signal-card">
-                        <div class="signal-card-header">
-                            <span class="signal-card-headline">${escapeHtml(signal.headline)}</span>
-                            <div class="signal-card-tags">
-                                <span class="signal-card-tag ${signal.wave === 'AI' ? 'industry' : 'client'}">${signal.wave} WAVE</span>
-                                ${signal.competitive ? `<span class="signal-card-tag competitive">⚔️ ${escapeHtml(signal.competitive)}</span>` : ''}
-                            </div>
-                        </div>
-                        <div class="signal-card-body"><strong>Action:</strong> ${escapeHtml(signal.action)}</div>
-                        <div class="signal-card-ibm"><strong>IBM Angle:</strong> ${escapeHtml(signal.ibmAngle)}</div>
-                        <div class="signal-card-sources">${sourcesHtml}</div>
-                    </div>
-                `;
+                return renderSynthesizedSignal(signal, rawSignal);
             }).join('');
         } else {
             throw new Error('No valid JSON in response');
@@ -4782,6 +4875,65 @@ Return ONLY valid JSON array, no markdown, max 5 signals.`;
     }
 }
 
+function cacheSignals(signals, rawSignals) {
+    try {
+        const articlesData = rawSignals.map(s => ({
+            articles: (s.articles || []).map(a => ({ id: a.id, source: a.source, url: a.url, title: a.title }))
+        }));
+        localStorage.setItem(STORAGE_KEYS.TODAYS_SIGNALS, JSON.stringify({
+            signals,
+            articlesData,
+            timestamp: Date.now()
+        }));
+    } catch (e) {
+        console.log('Signal cache write error:', e);
+    }
+}
+
+function renderSynthesizedSignal(signal, rawSignal) {
+    const sourcesHtml = rawSignal.articles?.map(a => 
+        `<a class="signal-card-source" href="${a.url || '#'}" target="_blank" onclick="event.stopPropagation(); openArticle('${a.id}')">${escapeHtml(a.source)}</a>`
+    ).join(' • ') || '';
+    
+    return `
+        <div class="signal-card">
+            <div class="signal-card-header">
+                <span class="signal-card-headline">${escapeHtml(signal.headline)}</span>
+                <div class="signal-card-tags">
+                    <span class="signal-card-tag ${signal.wave === 'AI' ? 'industry' : signal.wave === 'COMPETITIVE' ? 'competitive' : 'client'}">${signal.wave} WAVE</span>
+                    ${signal.competitive ? `<span class="signal-card-tag competitive">⚔️ ${escapeHtml(signal.competitive)}</span>` : ''}
+                </div>
+            </div>
+            ${signal.context ? `<div class="signal-card-context">${escapeHtml(signal.context)}</div>` : ''}
+            <div class="signal-card-body"><strong>Action:</strong> ${escapeHtml(signal.action)}</div>
+            <div class="signal-card-ibm"><strong>IBM Angle:</strong> ${escapeHtml(signal.ibmAngle)}</div>
+            <div class="signal-card-sources">Sources: ${sourcesHtml}</div>
+        </div>
+    `;
+}
+
+function renderCachedSignal(signal, articleData) {
+    const sourcesHtml = articleData?.articles?.map(a => 
+        `<a class="signal-card-source" href="${a.url || '#'}" target="_blank" onclick="event.stopPropagation(); openArticle('${a.id}')">${escapeHtml(a.source)}</a>`
+    ).join(' • ') || '';
+    
+    return `
+        <div class="signal-card">
+            <div class="signal-card-header">
+                <span class="signal-card-headline">${escapeHtml(signal.headline)}</span>
+                <div class="signal-card-tags">
+                    <span class="signal-card-tag ${signal.wave === 'AI' ? 'industry' : signal.wave === 'COMPETITIVE' ? 'competitive' : 'client'}">${signal.wave || 'NEWS'} WAVE</span>
+                    ${signal.competitive ? `<span class="signal-card-tag competitive">⚔️ ${escapeHtml(signal.competitive)}</span>` : ''}
+                </div>
+            </div>
+            ${signal.context ? `<div class="signal-card-context">${escapeHtml(signal.context)}</div>` : ''}
+            ${signal.action ? `<div class="signal-card-body"><strong>Action:</strong> ${escapeHtml(signal.action)}</div>` : ''}
+            ${signal.ibmAngle ? `<div class="signal-card-ibm"><strong>IBM Angle:</strong> ${escapeHtml(signal.ibmAngle)}</div>` : ''}
+            <div class="signal-card-sources">Sources: ${sourcesHtml}</div>
+        </div>
+    `;
+}
+
 function renderBasicSignal(signal) {
     const tagHtml = [
         ...signal.industries.map(t => `<span class="signal-card-tag industry">${escapeHtml(t)}</span>`),
@@ -4790,8 +4942,8 @@ function renderBasicSignal(signal) {
     ].join('');
     
     const sourcesHtml = signal.articles?.map(a => 
-        `<span class="signal-card-source" onclick="openArticle('${a.id}')">${escapeHtml(a.source)}</span>`
-    ).join('') || '';
+        `<a class="signal-card-source" href="${a.url || '#'}" target="_blank" onclick="event.stopPropagation(); openArticle('${a.id}')">${escapeHtml(a.source)}</a>`
+    ).join(' • ') || '';
     
     return `
         <div class="signal-card">
@@ -4799,28 +4951,55 @@ function renderBasicSignal(signal) {
                 <span class="signal-card-headline">${escapeHtml(signal.headline)}</span>
                 <div class="signal-card-tags">${tagHtml}</div>
             </div>
-            <div class="signal-card-body">Sources: ${signal.sources.join(', ')}</div>
-            <div class="signal-card-sources">${sourcesHtml}</div>
+            ${signal.summary ? `<div class="signal-card-context">${escapeHtml(signal.summary.substring(0, 200))}</div>` : ''}
+            <div class="signal-card-sources">Sources: ${sourcesHtml}</div>
         </div>
     `;
 }
 
 // ==========================================
-// DEEP READS RENDERING (AI-powered)
+// DEEP READS RENDERING (AI-powered with caching)
 // Purpose: "Internalize for strategic conversations"
 // Long-form thinking for CxO/board-level discourse
+// 
+// REFRESH RULE: Deep Reads are refreshed when:
+// 1. User clicks Refresh button (forceRefresh = true)
+// 2. Cache is older than 24 hours (strategic content has longer shelf life)
+// 3. Source articles come from weeklyArticles (7-14 day lookback)
 // ==========================================
 
-async function renderDeepReads() {
+async function renderDeepReads(forceRefresh = false) {
     const list = document.getElementById('deep-reads-list');
     const countEl = document.getElementById('deep-reads-count');
     if (!list) return;
     
+    // Check cache first unless forcing refresh
+    if (!forceRefresh) {
+        try {
+            const cached = localStorage.getItem(STORAGE_KEYS.DEEP_READS);
+            if (cached) {
+                const { insights, articlesData, timestamp } = JSON.parse(cached);
+                const age = Date.now() - timestamp;
+                // Show cached if less than 24 hours old (strategic content has longer shelf life)
+                if (age < 24 * 60 * 60 * 1000 && insights && insights.length > 0) {
+                    countEl.textContent = insights.length;
+                    list.innerHTML = insights.map((insight, idx) => 
+                        renderCachedDeepRead(insight, articlesData?.[idx])
+                    ).join('');
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log('Deep reads cache read error:', e);
+        }
+    }
+    
     const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
     
     // Select deep read candidates: strategic sources, analyst content, thought leadership
+    // RULE: Pulls from weeklyArticles (7-14 day lookback) for strategic, longer-form content
     const strategicCategories = ['Strategic Perspectives', 'Architecture & Platform'];
-    const strategicSources = ['a]6z', 'Benedict Evans', 'Stratechery', 'MIT Technology Review', 'Harvard Business Review'];
+    const strategicSources = ['a16z', 'Benedict Evans', 'Stratechery', 'MIT Technology Review', 'Harvard Business Review'];
     
     // Prioritize: 1) Strategic category, 2) High credibility, 3) Longer content
     let candidates = app.weeklyArticles.length > 0 
@@ -4838,12 +5017,19 @@ async function renderDeepReads() {
     countEl.textContent = Math.min(candidates.length, 5);
     
     if (candidates.length === 0) {
-        list.innerHTML = '<p class="card-description">No strategic content this week. Check back after refresh.</p>';
+        list.innerHTML = '<p class="card-description">No strategic content this week. Click Refresh to fetch latest articles.</p>';
         return;
     }
     
-    // Without API key: render basic list
+    // Without API key: render basic list and cache it
     if (!apiKey) {
+        const basicInsights = candidates.slice(0, 5).map(a => ({
+            title: a.title,
+            source: a.source,
+            summary: a.summary || '',
+            timeHorizon: 'TBD'
+        }));
+        cacheDeepReads(basicInsights, candidates.slice(0, 5));
         list.innerHTML = candidates.slice(0, 5).map(article => renderBasicDeepRead(article)).join('');
         return;
     }
@@ -4891,7 +5077,7 @@ Return ONLY valid JSON array, no markdown. Max 5 articles.`;
             },
             body: JSON.stringify({
                 model: 'claude-sonnet-4-20250514',
-                max_tokens: 1000,
+                max_tokens: 1200,
                 messages: [{ role: 'user', content: prompt }]
             })
         });
@@ -4905,24 +5091,14 @@ Return ONLY valid JSON array, no markdown. Max 5 articles.`;
         if (jsonMatch) {
             const synthesized = JSON.parse(jsonMatch[0]);
             
+            // Cache the synthesized insights with article data
+            cacheDeepReads(synthesized, candidates.slice(0, 5));
+            
             list.innerHTML = synthesized.map((insight, idx) => {
                 const article = candidates[idx];
                 if (!article) return '';
                 
-                return `
-                    <div class="deep-read-item" onclick="openArticle('${article.id}')">
-                        <div class="deep-read-item-header">
-                            <span class="deep-read-item-source">${escapeHtml(article.source)}</span>
-                            <span class="deep-read-item-time">${escapeHtml(insight.timeHorizon)} horizon</span>
-                        </div>
-                        <div class="deep-read-item-title">${escapeHtml(insight.title)}</div>
-                        <div class="deep-read-strategic">
-                            <div class="deep-read-thesis"><strong>Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
-                            <div class="deep-read-implication"><strong>Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication)}</div>
-                            <div class="deep-read-conversation"><strong>CxO Question:</strong> ${escapeHtml(insight.conversationTopic)}</div>
-                        </div>
-                    </div>
-                `;
+                return renderSynthesizedDeepRead(insight, article);
             }).join('');
         } else {
             throw new Error('No valid JSON in response');
@@ -4933,11 +5109,67 @@ Return ONLY valid JSON array, no markdown. Max 5 articles.`;
     }
 }
 
+function cacheDeepReads(insights, articles) {
+    try {
+        const articlesData = articles.map(a => ({
+            id: a.id,
+            source: a.source,
+            url: a.url,
+            title: a.title,
+            summary: a.summary
+        }));
+        localStorage.setItem(STORAGE_KEYS.DEEP_READS, JSON.stringify({
+            insights,
+            articlesData,
+            timestamp: Date.now()
+        }));
+    } catch (e) {
+        console.log('Deep reads cache write error:', e);
+    }
+}
+
+function renderSynthesizedDeepRead(insight, article) {
+    return `
+        <div class="deep-read-item" onclick="openArticle('${article.id}')">
+            <div class="deep-read-item-header">
+                <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source)}</a>
+                <span class="deep-read-item-time">${escapeHtml(insight.timeHorizon)} horizon</span>
+            </div>
+            <div class="deep-read-item-title">${escapeHtml(insight.title)}</div>
+            <div class="deep-read-strategic">
+                <div class="deep-read-thesis"><strong>Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
+                <div class="deep-read-implication"><strong>Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication)}</div>
+                <div class="deep-read-conversation"><strong>CxO Question:</strong> ${escapeHtml(insight.conversationTopic)}</div>
+            </div>
+        </div>
+    `;
+}
+
+function renderCachedDeepRead(insight, articleData) {
+    const article = articleData || {};
+    return `
+        <div class="deep-read-item" onclick="openArticle('${article.id || ''}')">
+            <div class="deep-read-item-header">
+                <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source || insight.source || '')}</a>
+                <span class="deep-read-item-time">${escapeHtml(insight.timeHorizon || 'TBD')} horizon</span>
+            </div>
+            <div class="deep-read-item-title">${escapeHtml(insight.title || article.title || '')}</div>
+            ${insight.strategicThesis ? `
+            <div class="deep-read-strategic">
+                <div class="deep-read-thesis"><strong>Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
+                <div class="deep-read-implication"><strong>Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication || '')}</div>
+                <div class="deep-read-conversation"><strong>CxO Question:</strong> ${escapeHtml(insight.conversationTopic || '')}</div>
+            </div>
+            ` : `<div class="deep-read-item-summary">${escapeHtml(insight.summary || article.summary || '')}</div>`}
+        </div>
+    `;
+}
+
 function renderBasicDeepRead(article) {
     return `
         <div class="deep-read-item" onclick="openArticle('${article.id}')">
             <div class="deep-read-item-header">
-                <span class="deep-read-item-source">${escapeHtml(article.source)}</span>
+                <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source)}</a>
                 <span class="deep-read-item-time">${article.readingTime || '5'} min</span>
             </div>
             <div class="deep-read-item-title">${escapeHtml(article.title)}</div>
@@ -4960,6 +5192,17 @@ function formatRelativeDate(date) {
     if (days < 7) return `${days}d ago`;
     if (days < 30) return `${Math.floor(days / 7)}w ago`;
     return date.toLocaleDateString();
+}
+
+function formatTimeAgo(timestamp) {
+    const diff = Date.now() - timestamp;
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    return new Date(timestamp).toLocaleDateString();
 }
 
 // Initialize app

@@ -657,6 +657,7 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .signal-card-tag.competitive { background: var(--cds-tag-background-red); color: var(--cds-tag-color-red); }
 
 .signal-card-body { font-size: var(--cds-body-01); color: var(--cds-text-secondary); line-height: 1.6; margin-bottom: var(--cds-spacing-04); }
+.signal-card-context { font-size: var(--cds-body-01); color: var(--cds-text-secondary); line-height: 1.5; margin-bottom: var(--cds-spacing-04); padding: var(--cds-spacing-03); background: var(--cds-layer-02); border-left: 3px solid var(--cds-border-interactive); }
 .signal-card-ibm { font-size: var(--cds-body-01); color: var(--cds-text-primary); border-left: 2px solid var(--cds-interactive); padding-left: var(--cds-spacing-04); }
 .signal-card-ibm strong { color: var(--cds-interactive); }
 
@@ -673,6 +674,7 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .atl-brief:last-child { margin-bottom: 0; }
 .atl-brief-header { display: flex; justify-content: space-between; align-items: center; gap: var(--cds-spacing-04); margin-bottom: var(--cds-spacing-03); }
 .atl-brief-market { font-weight: 600; font-size: var(--cds-body-02); color: var(--cds-support-warning); }
+.atl-brief-count { font-size: var(--cds-body-01); color: var(--cds-text-secondary); margin-left: auto; margin-right: var(--cds-spacing-03); }
 .atl-brief-copy { background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.6; padding: var(--cds-spacing-02); min-width: var(--touch-min); min-height: var(--touch-min); }
 .atl-brief-copy:hover { opacity: 1; }
 .atl-brief-copy.copied { color: var(--cds-support-success); opacity: 1; }
