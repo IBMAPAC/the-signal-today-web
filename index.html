@@ -40,7 +40,7 @@
         </header>
 
         <!-- Main Content -->
-        <main class="main-content">
+        <main id="main-content" class="main-content" role="main" aria-label="Article digest">
             <!-- Loading State -->
             <div id="loading" class="loading hidden">
                 <div class="spinner"></div>
@@ -57,19 +57,104 @@
             <div id="digest-content" class="digest-content hidden">
                 
                 <!-- Digest Tabs -->
-                <div class="digest-tabs">
-                    <button class="digest-tab active" data-tab="daily" onclick="switchDigestTab('daily')">
-                        📰 Daily Brief
-                        <span id="daily-count-badge" class="tab-badge">0</span>
+                <div id="digest-tabs" class="digest-tabs" role="tablist" aria-label="Digest view selection">
+                    <button class="digest-tab active" data-tab="command" onclick="switchDigestTab('command')"
+                            role="tab" aria-selected="true" aria-controls="command-tab" id="tab-command">
+                        🎯 Command Center
+                        <span id="command-count-badge" class="tab-badge" aria-label="priority count">0</span>
                     </button>
-                    <button class="digest-tab" data-tab="weekly" onclick="switchDigestTab('weekly')">
+                    <button class="digest-tab" data-tab="daily" onclick="switchDigestTab('daily')"
+                            role="tab" aria-selected="false" aria-controls="daily-tab" id="tab-daily">
+                        📰 Daily Brief
+                        <span id="daily-count-badge" class="tab-badge" aria-label="article count">0</span>
+                    </button>
+                    <button class="digest-tab" data-tab="weekly" onclick="switchDigestTab('weekly')"
+                            role="tab" aria-selected="false" aria-controls="weekly-tab" id="tab-weekly">
                         📚 Weekly Deep Reads
-                        <span id="weekly-count-badge" class="tab-badge">0</span>
+                        <span id="weekly-count-badge" class="tab-badge" aria-label="article count">0</span>
                     </button>
                 </div>
 
+                <!-- Command Center Tab -->
+                <div id="command-tab" class="digest-tab-content" role="tabpanel" aria-labelledby="tab-command">
+                    
+                    <!-- Your Priorities -->
+                    <section class="card command-priorities-card">
+                        <div class="card-header">
+                            <h2>🎯 Your Priorities</h2>
+                            <span id="priorities-count" class="badge badge-red">0</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-description">Top 3-5 action items extracted from today's intelligence</p>
+                            <div id="priorities-list" class="priorities-list"></div>
+                        </div>
+                    </section>
+
+                    <!-- Top 10 Signals -->
+                    <section class="card command-signals-card">
+                        <div class="card-header">
+                            <h2>📊 Top 10 Signals</h2>
+                            <div class="signal-filters">
+                                <select id="tier-filter" onchange="app.filterSignals()" aria-label="Filter by tier">
+                                    <option value="all">All Tiers</option>
+                                    <option value="1">Tier 1 Only</option>
+                                    <option value="2">Tier 2 Only</option>
+                                    <option value="3">Tier 3 Only</option>
+                                </select>
+                                <select id="market-filter" onchange="app.filterSignals()" aria-label="Filter by market">
+                                    <option value="all">All Markets</option>
+                                    <option value="ANZ">ANZ</option>
+                                    <option value="ASEAN">ASEAN</option>
+                                    <option value="GCG">GCG</option>
+                                    <option value="ISA">ISA</option>
+                                    <option value="KOREA">KOREA</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-description">Highest priority signals filtered by your criteria</p>
+                            <div id="top-signals-list" class="top-signals-list"></div>
+                        </div>
+                    </section>
+
+                    <!-- Deep Read of the Week -->
+                    <section class="card command-deepread-card">
+                        <div class="card-header">
+                            <h2>🎓 Deep Read of the Week</h2>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-description">One strategic article worth your extended attention</p>
+                            <div id="deepread-content"></div>
+                        </div>
+                    </section>
+
+                    <!-- Competitive Pulse -->
+                    <section class="card command-competitive-card">
+                        <div class="card-header">
+                            <h2>📈 Competitive Pulse (7 Days)</h2>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-description">Competitor activity trends over the past week</p>
+                            <div id="competitive-pulse" class="competitive-pulse"></div>
+                        </div>
+                    </section>
+
+                    <!-- Meeting Prep -->
+                    <section class="card command-meetings-card">
+                        <div class="card-header">
+                            <h2>📅 Meeting Prep</h2>
+                            <span id="meetings-count" class="badge badge-purple">0</span>
+                            <button class="btn btn-sm btn-secondary" onclick="app.createMeetingDialog()" style="margin-left: auto;">+ New Meeting</button>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-description">Upcoming meetings with collected signals</p>
+                            <div id="meetings-list" class="meetings-list"></div>
+                        </div>
+                    </section>
+                </div>
+
                 <!-- Daily Digest Tab -->
-                <div id="daily-tab" class="digest-tab-content">
+                <div id="daily-tab" class="digest-tab-content" role="tabpanel" aria-labelledby="tab-daily">
 
                     <!-- Action Brief — synthesised headline, read this first -->
                     <section id="summary-section" class="card summary-card">
@@ -159,7 +244,7 @@
                 </div>
 
                 <!-- Weekly Digest Tab -->
-                <div id="weekly-tab" class="digest-tab-content hidden">
+                <div id="weekly-tab" class="digest-tab-content hidden" role="tabpanel" aria-labelledby="tab-weekly" aria-hidden="true">
                     
                     <!-- Weekly Overview -->
                     <section class="card weekly-overview-card">
@@ -241,7 +326,7 @@
                         <div class="form-group">
                             <label for="api-key">API Key</label>
                             <input type="password" id="api-key" placeholder="sk-ant-...">
-                            <p class="form-hint">⚠️ Your API key is stored unencrypted in browser localStorage. Do not use on shared devices.</p>
+                            <p class="form-hint">🔒 Your API key is encrypted using Web Crypto API and stored securely in browser localStorage. Still, avoid using on shared/public devices.</p>
                             <p class="form-hint">Get your API key from <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">console.anthropic.com</a></p>
                         </div>
                         <div class="form-group">
@@ -274,14 +359,124 @@
                         <h3>🏢 Industry Priorities</h3>
                         <p class="form-hint">Select your priority industries (Tier 1 = +30%, Tier 2 = +20%, Tier 3 = +10%)</p>
                         <div id="industry-settings"></div>
+
+                    <!-- Executive Scoring Weights -->
+                    <section class="settings-section">
+                        <h3>⚖️ Executive Scoring Weights</h3>
+                        <p class="form-hint">Adjust how different factors contribute to article relevance scores (0-100)</p>
+                        <div class="scoring-weights">
+                            <div class="weight-item">
+                                <label for="weight-tier1">Tier 1 Client Mention</label>
+                                <input type="range" id="weight-tier1" min="0" max="100" value="50" oninput="document.getElementById('weight-tier1-value').textContent = this.value">
+                                <span id="weight-tier1-value" class="weight-value">50</span>
+                            </div>
+                            <div class="weight-item">
+                                <label for="weight-tier2">Tier 2 Client Mention</label>
+                                <input type="range" id="weight-tier2" min="0" max="100" value="30" oninput="document.getElementById('weight-tier2-value').textContent = this.value">
+                                <span id="weight-tier2-value" class="weight-value">30</span>
+                            </div>
+                            <div class="weight-item">
+                                <label for="weight-tier3">Tier 3 Client Mention</label>
+                                <input type="range" id="weight-tier3" min="0" max="100" value="15" oninput="document.getElementById('weight-tier3-value').textContent = this.value">
+                                <span id="weight-tier3-value" class="weight-value">15</span>
+                            </div>
+                            <div class="weight-item">
+                                <label for="weight-competitive">Competitive (IBM vs Competitor)</label>
+                                <input type="range" id="weight-competitive" min="0" max="100" value="25" oninput="document.getElementById('weight-competitive-value').textContent = this.value">
+                                <span id="weight-competitive-value" class="weight-value">25</span>
+                            </div>
+                            <div class="weight-item">
+                                <label for="weight-regulatory">Regulatory (APAC Compliance)</label>
+                                <input type="range" id="weight-regulatory" min="0" max="100" value="20" oninput="document.getElementById('weight-regulatory-value').textContent = this.value">
+                                <span id="weight-regulatory-value" class="weight-value">20</span>
+                            </div>
+                            <div class="weight-item">
+                                <label for="weight-strategic">Strategic Themes (AI, Cloud, Security)</label>
+                                <input type="range" id="weight-strategic" min="0" max="100" value="15" oninput="document.getElementById('weight-strategic-value').textContent = this.value">
+                                <span id="weight-strategic-value" class="weight-value">15</span>
+                            </div>
+                            <div class="weight-item">
+                                <label for="weight-recency">Recency (Last 24 Hours)</label>
+                                <input type="range" id="weight-recency" min="0" max="100" value="10" oninput="document.getElementById('weight-recency-value').textContent = this.value">
+                                <span id="weight-recency-value" class="weight-value">10</span>
+                            </div>
+                            <div class="weight-item">
+                                <label for="weight-source">Source Quality (Premium Analyst)</label>
+                                <input type="range" id="weight-source" min="0" max="100" value="10" oninput="document.getElementById('weight-source-value').textContent = this.value">
+                                <span id="weight-source-value" class="weight-value">10</span>
+                            </div>
+                        </div>
+                        <div class="weight-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="app.resetScoringWeights()">Reset to Defaults</button>
+                            <p class="form-hint">Note: Scores are capped at 100%. Multiple factors can combine.</p>
+                        </div>
+                    </section>
                     </section>
 
-                    <!-- Client Watchlist -->
+                    <!-- Client Watchlist Management -->
                     <section class="settings-section">
-                        <h3>👤 Client Watchlist</h3>
-                        <p class="form-hint">Companies to monitor. Tier 1 (Strategic) = +35% boost, Tier 2 (Growth) = +25%, Tier 3 (Prospect) = +15%. Tiers are set automatically from defaults or can be edited in sources.js.</p>
-                        <div id="client-settings">
-                            <textarea id="clients-input" rows="4" placeholder="DBS, Singtel, Telstra, OCBC, UOB..."></textarea>
+                        <h3>👤 Client Watchlist Management</h3>
+                        <p class="form-hint">Manage your 343 accounts across 3 tiers and 5 markets. Tier 1 clients get highest priority in AI digest.</p>
+                        
+                        <!-- Statistics Dashboard -->
+                        <div class="watchlist-stats">
+                            <div class="stat-card tier1">
+                                <h4>🔴 Tier 1</h4>
+                                <p class="stat-number" id="tier1-count">0</p>
+                                <p class="stat-label">Strategic Accounts</p>
+                            </div>
+                            <div class="stat-card tier2">
+                                <h4>🟡 Tier 2</h4>
+                                <p class="stat-number" id="tier2-count">0</p>
+                                <p class="stat-label">Growth Accounts</p>
+                            </div>
+                            <div class="stat-card tier3">
+                                <h4>🟢 Tier 3</h4>
+                                <p class="stat-number" id="tier3-count">0</p>
+                                <p class="stat-label">Emerging Accounts</p>
+                            </div>
+                        </div>
+
+                        <!-- Bulk Operations -->
+                        <div class="bulk-operations">
+                            <button onclick="app.addClientDialog()" class="btn btn-primary">
+                                ➕ Add Client
+                            </button>
+                            <button onclick="app.importClientsDialog()" class="btn btn-secondary">
+                                📥 Import CSV
+                            </button>
+                            <button onclick="app.exportClients()" class="btn btn-secondary">
+                                📤 Export CSV
+                            </button>
+                            <input type="text" id="client-search" placeholder="Search clients..."
+                                   oninput="app.searchClients(this.value)">
+                        </div>
+
+                        <!-- Tier 1 Clients -->
+                        <div class="tier-section tier1-section">
+                            <h4>🔴 Tier 1 - Strategic Accounts</h4>
+                            <div id="tier1-clients" class="client-list">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Tier 2 Clients -->
+                        <div class="tier-section tier2-section">
+                            <h4>🟡 Tier 2 - Growth Accounts</h4>
+                            <div id="tier2-clients" class="client-list">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Tier 3 Clients (Collapsed by default) -->
+                        <div class="tier-section tier3-section collapsed">
+                            <h4 onclick="app.toggleTier3()" style="cursor: pointer;">
+                                🟢 Tier 3 - Emerging Accounts
+                                <span class="toggle-icon">▼</span>
+                            </h4>
+                            <div id="tier3-clients" class="client-list" style="display: none;">
+                                <!-- Populated dynamically -->
+                            </div>
                         </div>
                     </section>
 
@@ -349,6 +544,7 @@
                         <span id="article-score" class="article-score"></span>
                     </div>
                     <div id="article-summary" class="article-summary"></div>
+                    <div id="score-breakdown" class="score-breakdown hidden"></div>
                     <div class="article-actions">
                         <a id="article-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Read Full Article →</a>
                         <button id="deep-read-btn" class="btn btn-secondary hidden" onclick="app.deepReadArticle(document.getElementById('article-modal').dataset.articleId)">🤖 Deep Read</button>
@@ -461,7 +657,160 @@
         </div>
     </div>
 
+    <!-- Add Client Modal -->
+    <div id="add-client-modal" class="modal hidden">
+        <div class="modal-backdrop" onclick="app.closeAddClientModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Client</h2>
+                <button class="modal-close" onclick="app.closeAddClientModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="add-client-form" onsubmit="app.submitAddClient(event)">
+                    <div class="form-group">
+                        <label for="client-name">Client Name *</label>
+                        <input type="text" id="client-name" required 
+                               placeholder="e.g., DBS Bank">
+                    </div>
+                    <div class="form-group">
+                        <label for="client-tier">Tier *</label>
+                        <select id="client-tier" required>
+                            <option value="1">Tier 1 - Strategic Account</option>
+                            <option value="2">Tier 2 - Growth Account</option>
+                            <option value="3">Tier 3 - Emerging Account</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="client-market">Market *</label>
+                        <select id="client-market" required>
+                            <option value="ANZ">ANZ (Australia & New Zealand)</option>
+                            <option value="ASEAN">ASEAN (Southeast Asia)</option>
+                            <option value="GCG">GCG (Greater China)</option>
+                            <option value="ISA">ISA (India & South Asia)</option>
+                            <option value="KOREA">Korea</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="client-atl">ATL Owner *</label>
+                        <input type="text" id="client-atl" required 
+                               placeholder="e.g., John Smith">
+                    </div>
+                    <div class="form-group">
+                        <label for="client-notes">Notes</label>
+                        <textarea id="client-notes" rows="3" 
+                                  placeholder="Meeting dates, deal status, context..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Add Client</button>
+                        <button type="button" class="btn btn-secondary" 
+                                onclick="app.closeAddClientModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import CSV Modal -->
+    <div id="import-csv-modal" class="modal hidden">
+        <div class="modal-backdrop" onclick="app.closeImportModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Import Clients from CSV</h2>
+                <button class="modal-close" onclick="app.closeImportModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p class="form-hint">CSV Format: Name, Tier, Market, ATL, Notes</p>
+                <p class="form-hint">Example:</p>
+                <pre style="background: #f5f5f5; padding: 1rem; border-radius: 4px; font-size: 0.875rem;">DBS Bank,1,ASEAN,John Smith,AI meeting March 15
+Commonwealth Bank,1,ANZ,Jane Doe,Hybrid cloud discussion
+Samsung,1,KOREA,Kim Park,watsonx.ai demo scheduled</pre>
+                <textarea id="csv-input" rows="10" 
+                          placeholder="Paste your CSV data here..."></textarea>
+                <div class="form-actions">
+                    <button onclick="app.importCSV()" class="btn btn-primary">Import</button>
+                    <button onclick="app.closeImportModal()" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Create Meeting Modal -->
+    <div id="create-meeting-modal" class="modal hidden">
+        <div class="modal-backdrop" onclick="app.closeMeetingDialog()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📅 Create Meeting</h2>
+                <button class="modal-close" onclick="app.closeMeetingDialog()">×</button>
+            </div>
+            <div class="modal-body">
+                <form id="create-meeting-form" class="modal-form" onsubmit="app.submitCreateMeeting(event)">
+                    <div class="form-group">
+                        <label for="meeting-client">Client Name *</label>
+                        <input type="text" id="meeting-client" required placeholder="e.g., DBS Bank">
+                    </div>
+                    <div class="form-group">
+                        <label for="meeting-date">Meeting Date *</label>
+                        <input type="date" id="meeting-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="meeting-purpose">Purpose/Topic</label>
+                        <input type="text" id="meeting-purpose" placeholder="e.g., Q1 Business Review">
+                    </div>
+                    <div class="form-group">
+                        <label for="meeting-attendees">Attendees</label>
+                        <textarea id="meeting-attendees" rows="3" placeholder="e.g., CTO, VP Engineering, Account Team"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="app.closeMeetingDialog()">Cancel</button>
+                <button class="btn btn-primary" onclick="document.getElementById('create-meeting-form').requestSubmit()">Create Meeting</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Meeting Detail Modal -->
+    <div id="meeting-detail-modal" class="modal hidden">
+        <div class="modal-backdrop" onclick="app.closeMeetingDetail()"></div>
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="meeting-detail-title">📅 Meeting Details</h2>
+                <button class="modal-close" onclick="app.closeMeetingDetail()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="meeting-detail-content"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="app.closeMeetingDetail()">Close</button>
+                <button class="btn btn-secondary" onclick="app.exportMeetingBrief()">📤 Export</button>
+                <button class="btn btn-primary" onclick="app.editMeeting()">✏️ Edit</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Signal to Meeting Modal -->
+    <div id="add-signal-modal" class="modal hidden">
+        <div class="modal-backdrop" onclick="app.closeAddSignalModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📊 Add Signal to Meeting</h2>
+                <button class="modal-close" onclick="app.closeAddSignalModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p class="card-description">Select a meeting to add this signal:</p>
+                <div id="meeting-select-list" class="meeting-select-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="app.closeAddSignalModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="client-watchlist.js"></script>
+    <script src="meeting-prep.js"></script>
+    <script src="executive-scorer.js"></script>
     <script src="sources.js"></script>
     <script src="app.js"></script>
+
+
 </body>
 </html>
