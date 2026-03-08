@@ -1692,18 +1692,27 @@ class SignalApp {
         const hasIBM = DEAL_RELEVANCE_SIGNALS.IBM_KEYWORDS.some(kw => text.includes(kw));
         const hasOpportunity = DEAL_RELEVANCE_SIGNALS.OPPORTUNITY_KEYWORDS.some(kw => text.includes(kw));
         
-        // Highest boost: client + competitor co-occurrence = competitive threat
-        if (hasClient && hasCompetitor) boost += 0.35;
+        // Check for Field CTO escalation triggers
+        const hasEscalation = typeof FIELD_CTO_ACTION_TRIGGERS !== 'undefined' &&
+            FIELD_CTO_ACTION_TRIGGERS.ESCALATION_TRIGGERS.some(kw => text.includes(kw));
+        const hasMarketSignal = typeof FIELD_CTO_ACTION_TRIGGERS !== 'undefined' &&
+            FIELD_CTO_ACTION_TRIGGERS.MARKET_SIGNALS.some(kw => text.includes(kw));
+        
+        // Highest boost: escalation triggers = immediate Field CTO attention
+        if (hasEscalation) boost += 0.40;
+        // Client + competitor co-occurrence = competitive threat
+        else if (hasClient && hasCompetitor) boost += 0.35;
         // Client + C-suite change = new decision-maker opportunity
         else if (hasClient && hasCsuite) boost += 0.30;
         // Client + opportunity signal = active buying intent
         else if (hasClient && hasOpportunity) boost += 0.20;
-        // Regulatory signal = compliance pressure = IBM opportunity
+        
+        // Additional boosts (can stack)
+        if (hasMarketSignal) boost += 0.20;
         if (hasRegulatory) boost += 0.25;
-        // IBM keyword = direct relevance
         if (hasIBM) boost += 0.15;
         
-        return Math.min(0.40, boost);
+        return Math.min(0.50, boost);
     }
 
     classifySignalType(text, matchedClients) {
@@ -1716,10 +1725,19 @@ class SignalApp {
         const hasIBM = DEAL_RELEVANCE_SIGNALS.IBM_KEYWORDS.some(kw => text.includes(kw));
         const hasOpportunity = DEAL_RELEVANCE_SIGNALS.OPPORTUNITY_KEYWORDS.some(kw => text.includes(kw));
         
-        if (hasClient && hasCompetitor) return 'risk';
+        // Check for Field CTO-specific triggers
+        const hasEscalation = typeof FIELD_CTO_ACTION_TRIGGERS !== 'undefined' &&
+            FIELD_CTO_ACTION_TRIGGERS.ESCALATION_TRIGGERS.some(kw => text.includes(kw));
+        const hasATLBrief = typeof FIELD_CTO_ACTION_TRIGGERS !== 'undefined' &&
+            FIELD_CTO_ACTION_TRIGGERS.ATL_BRIEFING_TRIGGERS.some(kw => text.includes(kw));
+        const hasPositioning = typeof FIELD_CTO_ACTION_TRIGGERS !== 'undefined' &&
+            FIELD_CTO_ACTION_TRIGGERS.IBM_POSITIONING.some(kw => text.includes(kw));
+        
+        // Priority classification
+        if (hasEscalation || (hasClient && hasCompetitor)) return 'risk';
         if (hasClient && hasCsuite) return 'relationship';
-        if (hasRegulatory) return 'regulatory';
-        if (hasIBM) return 'ibm';
+        if (hasATLBrief || hasRegulatory) return 'regulatory';
+        if (hasIBM || hasPositioning) return 'ibm';
         if (hasClient && hasOpportunity) return 'opportunity';
         if (hasClient) return 'relationship';
         return 'background';
@@ -3250,67 +3268,291 @@ Return ONLY valid JSON, no markdown fences:
         const lines = [];
         const date = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         
-        lines.push(`# The Signal Today — ${date}`);
+        lines.push(`# The Signal Today — Field CTO Brief`);
+        lines.push(`## ${date}`);
+        lines.push('');
+        lines.push('**IBM APAC** | 115 ATLs | 343 Accounts | 5 Markets (ANZ, ASEAN, GCG, ISA, KOREA)');
+        lines.push('');
+        lines.push('---');
         lines.push('');
         
-        // Executive Summary
-        if (this.digest?.executiveSummary) {
-            lines.push('## ⚡ Action Brief');
-            // Strip markdown links to plain text for export
-            lines.push(this.digest.executiveSummary.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'));
+        // Today's Signals - grouped by action type
+        try {
+            const cached = localStorage.getItem(STORAGE_KEYS.TODAYS_SIGNALS);
+            if (cached) {
+                const { signals } = JSON.parse(cached);
+                if (signals && signals.length > 0) {
+                    lines.push('## ⚡ TODAY\'S SIGNALS');
+                    lines.push('');
+                    
+                    // Group by action type
+                    const escalate = signals.filter(s => s.actionType === 'ESCALATE');
+                    const briefAtl = signals.filter(s => s.actionType === 'BRIEF_ATL');
+                    const position = signals.filter(s => s.actionType === 'POSITION');
+                    const monitor = signals.filter(s => s.actionType === 'MONITOR' || !s.actionType);
+                    
+                    if (escalate.length > 0) {
+                        lines.push('### 🚨 ESCALATE (Action within 48 hours)');
+                        lines.push('');
+                        for (const signal of escalate) {
+                            this._formatSignalForExport(signal, lines);
+                        }
+                    }
+                    
+                    if (briefAtl.length > 0) {
+                        lines.push('### 📢 BRIEF ATL (Prepare team talking points)');
+                        lines.push('');
+                        for (const signal of briefAtl) {
+                            this._formatSignalForExport(signal, lines);
+                        }
+                    }
+                    
+                    if (position.length > 0) {
+                        lines.push('### 🎯 POSITION (Develop IBM response)');
+                        lines.push('');
+                        for (const signal of position) {
+                            this._formatSignalForExport(signal, lines);
+                        }
+                    }
+                    
+                    if (monitor.length > 0) {
+                        lines.push('### 👁️ MONITOR (Track for escalation)');
+                        lines.push('');
+                        for (const signal of monitor) {
+                            this._formatSignalForExport(signal, lines);
+                        }
+                    }
+                }
+            }
+        } catch (e) { /* ignore cache errors */ }
+        
+        // Client Radar by Market
+        const clientArticles = this.dailyArticles.filter(a => a.matchedClients && a.matchedClients.length > 0);
+        if (clientArticles.length > 0) {
+            lines.push('## 📍 CLIENT RADAR');
             lines.push('');
+            
+            // Group by market
+            const byMarket = {};
+            for (const a of clientArticles) {
+                for (const clientName of a.matchedClients) {
+                    const clientObj = this.clients.find(c => c.name === clientName);
+                    if (!clientObj) continue;
+                    const market = clientObj.market || 'OTHER';
+                    if (!byMarket[market]) byMarket[market] = {};
+                    if (!byMarket[market][clientName]) byMarket[market][clientName] = { client: clientObj, articles: [] };
+                    if (!byMarket[market][clientName].articles.some(x => x.id === a.id)) {
+                        byMarket[market][clientName].articles.push(a);
+                    }
+                }
+            }
+            
+            for (const market of ['ANZ', 'ASEAN', 'GCG', 'ISA', 'KOREA']) {
+                if (!byMarket[market]) continue;
+                const clientCount = Object.keys(byMarket[market]).length;
+                lines.push(`### ${market} (${clientCount} clients with signals)`);
+                lines.push('');
+                
+                // Sort by tier
+                const sortedClients = Object.entries(byMarket[market])
+                    .sort((a, b) => (a[1].client.tier || 2) - (b[1].client.tier || 2));
+                
+                for (const [clientName, data] of sortedClients) {
+                    const { client, articles } = data;
+                    const signalType = articles[0]?.signalType || 'signal';
+                    const signalEmoji = { risk: '🔴', opportunity: '🟡', relationship: '🟢', regulatory: '🛡️', ibm: '🔵' }[signalType] || '⚪';
+                    
+                    lines.push(`**${signalEmoji} ${clientName}** — Tier ${client.tier} | ${client.industry || 'N/A'}`);
+                    if (client.atl) lines.push(`ATL: ${client.atl}`);
+                    for (const a of articles.slice(0, 2)) {
+                        lines.push(`- ${a.title} (${a.sourceName})`);
+                    }
+                    lines.push('');
+                }
+            }
         }
         
-        // Digest Sections
-        if (this.digest?.sections?.length > 0) {
-            for (const section of this.digest.sections) {
-                lines.push(`## ${section.emoji || ''} ${section.title}`);
-                lines.push((section.summary || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'));
+        // ATL Enablement by Market
+        lines.push('## 📢 ATL ENABLEMENT');
+        lines.push('');
+        lines.push('*Copy-ready briefs for Slack/Teams by market*');
+        lines.push('');
+        
+        // Generate brief for each market
+        const atlBriefs = this._generateATLBriefsForExport();
+        for (const [market, brief] of Object.entries(atlBriefs)) {
+            if (brief.length > 0) {
+                lines.push(`### ${market}`);
+                lines.push('```');
+                lines.push(brief);
+                lines.push('```');
                 lines.push('');
             }
         }
         
-        // Conversation Starters
-        if (this.digest?.conversationStarters?.length > 0) {
-            lines.push('## 💬 Conversation Openers');
-            for (const starter of this.digest.conversationStarters) {
-                lines.push(`- ${starter.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')}`);
+        // Deep Reads
+        try {
+            const cached = localStorage.getItem(STORAGE_KEYS.DEEP_READS);
+            if (cached) {
+                const { insights } = JSON.parse(cached);
+                if (insights && insights.length > 0) {
+                    lines.push('## 📚 DEEP READS');
+                    lines.push('');
+                    lines.push('*Strategic content for CxO conversations*');
+                    lines.push('');
+                    
+                    for (const insight of insights) {
+                        lines.push(`### ${insight.title}`);
+                        if (insight.timeHorizon) lines.push(`*${insight.timeHorizon} horizon*`);
+                        lines.push('');
+                        if (insight.strategicThesis) lines.push(`**💡 Strategic Thesis:** ${insight.strategicThesis}`);
+                        if (insight.boardQuestion) lines.push(`**🎯 Board Question:** "${insight.boardQuestion}"`);
+                        if (insight.atlEnablement) lines.push(`**📢 ATL Enablement:** ${insight.atlEnablement}`);
+                        if (insight.ibmNarrative) lines.push(`**🔵 IBM Narrative:** ${insight.ibmNarrative}`);
+                        if (insight.clientTypes) lines.push(`**🏢 Target Clients:** ${insight.clientTypes}`);
+                        lines.push('');
+                    }
+                }
             }
-            lines.push('');
-        }
+        } catch (e) { /* ignore cache errors */ }
         
-        // Client Watch
-        const clientArticles = this.dailyArticles.filter(a => a.matchedClient);
-        if (clientArticles.length > 0) {
-            lines.push('## 👁️ Client Watch');
-            const byClient = {};
-            for (const a of clientArticles) {
-                if (!byClient[a.matchedClient]) byClient[a.matchedClient] = [];
-                byClient[a.matchedClient].push(a);
-            }
-            for (const [client, articles] of Object.entries(byClient)) {
-                lines.push(`### ${client}`);
-                for (const a of articles.slice(0, 3)) {
-                    lines.push(`- [${a.sourceName}] ${a.title} — ${a.url}`);
+        // Competitive Landscape
+        const competitiveArticles = this.dailyArticles
+            .filter(a => a.signalType === 'risk' || /microsoft|aws|azure|google cloud|accenture|deloitte|servicenow|salesforce/i.test(a.title))
+            .slice(0, 5);
+        
+        if (competitiveArticles.length > 0) {
+            lines.push('## ⚔️ COMPETITIVE LANDSCAPE');
+            lines.push('');
+            for (const a of competitiveArticles) {
+                const competitors = this._extractCompetitors(a.title + ' ' + (a.summary || ''));
+                lines.push(`- **${a.title}** (${a.sourceName})`);
+                if (competitors.length > 0) {
+                    lines.push(`  Competitors: ${competitors.join(', ')}`);
                 }
             }
             lines.push('');
         }
         
-        // Top Articles
-        lines.push('## 📰 Top Daily Articles');
-        for (const a of this.dailyArticles.slice(0, 15)) {
-            lines.push(`- **${a.sourceName}**: ${a.title} — ${a.url}`);
-        }
+        // Footer
+        lines.push('---');
+        lines.push('');
+        lines.push(`*Generated by The Signal Today | ${new Date().toISOString()}*`);
         
         const content = lines.join('\n');
         const blob = new Blob([content], { type: 'text/markdown' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `signal-brief-${new Date().toISOString().split('T')[0]}.md`;
+        a.download = `signal-field-cto-brief-${new Date().toISOString().split('T')[0]}.md`;
         a.click();
         URL.revokeObjectURL(url);
+    }
+    
+    _formatSignalForExport(signal, lines) {
+        const markets = (signal.affectedMarkets || []).join(', ');
+        const wave = signal.wave ? `[${signal.wave}]` : '';
+        const competitive = signal.competitive ? `⚔️ ${signal.competitive}` : '';
+        
+        lines.push(`**${signal.headline}** ${wave} ${competitive}`);
+        if (markets) lines.push(`📍 Markets: ${markets}`);
+        if (signal.context) lines.push(`${signal.context}`);
+        if (signal.action) lines.push(`▶️ **Action:** ${signal.action}`);
+        if (signal.talkingPoint) lines.push(`💬 **ATL Talking Point:** "${signal.talkingPoint}"`);
+        if (signal.ibmAngle) lines.push(`🔵 **IBM Position:** ${signal.ibmAngle}`);
+        lines.push('');
+    }
+    
+    _generateATLBriefsForExport() {
+        const briefs = { ANZ: '', ASEAN: '', GCG: '', ISA: '', KOREA: '' };
+        const articles = this.dailyArticles.length > 0 ? this.dailyArticles : this.articles.slice(0, 30);
+        
+        // Group signals by market
+        const marketSignals = { ANZ: [], ASEAN: [], GCG: [], ISA: [], KOREA: [] };
+        
+        for (const article of articles) {
+            // Client-specific signals
+            if (article.matchedClients && article.matchedClients.length > 0) {
+                for (const clientName of article.matchedClients) {
+                    const client = this.clients.find(c => c.name === clientName);
+                    if (client && marketSignals[client.market]) {
+                        marketSignals[client.market].push({
+                            type: 'client',
+                            prefix: `🎯 ${clientName}`,
+                            title: article.title,
+                            source: article.sourceName
+                        });
+                    }
+                }
+            }
+            
+            // Industry signals
+            if (article.matchedIndustry || article.matchedIndustries?.length > 0) {
+                const industry = article.matchedIndustry || article.matchedIndustries[0];
+                // Find which markets have clients in this industry
+                const marketsForIndustry = [...new Set(
+                    this.clients
+                        .filter(c => c.industry === industry)
+                        .map(c => c.market)
+                        .filter(m => marketSignals[m])
+                )];
+                
+                for (const market of marketsForIndustry) {
+                    marketSignals[market].push({
+                        type: 'industry',
+                        prefix: `📌 ${industry}`,
+                        title: article.title,
+                        source: article.sourceName
+                    });
+                }
+            }
+        }
+        
+        // Format briefs
+        for (const [market, signals] of Object.entries(marketSignals)) {
+            if (signals.length === 0) continue;
+            
+            const uniqueSignals = signals
+                .filter((s, i, arr) => arr.findIndex(x => x.title === s.title) === i)
+                .slice(0, 4);
+            
+            const date = new Date().toLocaleDateString('en-SG', { weekday: 'short', month: 'short', day: 'numeric' });
+            const briefLines = [
+                `📡 The Signal Today | ${market} | ${date}`,
+                ''
+            ];
+            
+            for (const s of uniqueSignals) {
+                briefLines.push(`${s.prefix}: ${s.title} (${s.source})`);
+            }
+            
+            briefs[market] = briefLines.join('\n');
+        }
+        
+        return briefs;
+    }
+    
+    _extractCompetitors(text) {
+        const competitors = [];
+        const competitorPatterns = [
+            { pattern: /microsoft|azure/i, name: 'Microsoft/Azure' },
+            { pattern: /aws|amazon web services/i, name: 'AWS' },
+            { pattern: /google cloud|gcp|vertex ai/i, name: 'Google Cloud' },
+            { pattern: /accenture/i, name: 'Accenture' },
+            { pattern: /deloitte/i, name: 'Deloitte' },
+            { pattern: /servicenow/i, name: 'ServiceNow' },
+            { pattern: /salesforce/i, name: 'Salesforce' },
+            { pattern: /snowflake/i, name: 'Snowflake' },
+            { pattern: /databricks/i, name: 'Databricks' }
+        ];
+        
+        for (const { pattern, name } of competitorPatterns) {
+            if (pattern.test(text) && !competitors.includes(name)) {
+                competitors.push(name);
+            }
+        }
+        
+        return competitors;
     }
 
     // ==========================================
@@ -3365,114 +3607,237 @@ Return ONLY valid JSON, no markdown fences:
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
         });
 
-        // Build industry signals block from Phase 1 output
-        const industrySignals = this.digest?.industrySignals || [];
-        const industryBlock = industrySignals.length > 0
-            ? industrySignals.map(s =>
-                `${s.industry.toUpperCase()}\nSignal: ${s.headline}\nIBM angle: ${s.ibmAngle}\nAction: ${s.salesAction}`
-              ).join('\n\n')
-            : 'No industry signals available — run a fresh digest first.';
+        // Build market-grouped client signals
+        const marketSignals = { ANZ: [], ASEAN: [], GCG: [], ISA: [], KOREA: [] };
+        for (const article of this.dailyArticles.filter(a => a.matchedClients && a.matchedClients.length > 0)) {
+            for (const clientName of article.matchedClients) {
+                const clientObj = this.clients.find(c => c.name === clientName);
+                if (!clientObj || clientObj.tier > 2) continue;
+                const market = clientObj.market || 'ASEAN';
+                if (marketSignals[market]) {
+                    marketSignals[market].push({
+                        client: clientName,
+                        tier: clientObj.tier,
+                        industry: clientObj.industry || 'Other',
+                        title: article.title,
+                        signalType: article.signalType || 'signal',
+                        url: article.url
+                    });
+                }
+            }
+        }
+        
+        const marketSignalBlock = Object.entries(marketSignals)
+            .filter(([_, signals]) => signals.length > 0)
+            .map(([market, signals]) => {
+                const lines = signals.slice(0, 3).map(s => {
+                    const signalEmoji = { risk: '🔴', opportunity: '🟡', relationship: '🟢', regulatory: '🛡️', ibm: '🔵' }[s.signalType] || '⚪';
+                    return `- ${signalEmoji} ${s.client} (${s.industry}, Tier ${s.tier}): ${s.title}`;
+                });
+                return `${market}:\n${lines.join('\n')}`;
+            }).join('\n\n') || 'No Tier 1/2 client signals today.';
 
-        // Top 5 weekly articles for the "Top Articles" section
+        // Get Today's Signals from cache for escalation items
+        let escalationItems = [];
+        try {
+            const cached = localStorage.getItem(STORAGE_KEYS.TODAYS_SIGNALS);
+            if (cached) {
+                const { signals } = JSON.parse(cached);
+                escalationItems = (signals || [])
+                    .filter(s => s.actionType === 'ESCALATE' || s.actionType === 'BRIEF_ATL')
+                    .map(s => `[${s.actionType}] ${s.headline}: ${s.action}`);
+            }
+        } catch (e) { /* ignore */ }
+        const escalationBlock = escalationItems.length > 0 
+            ? escalationItems.join('\n') 
+            : 'No escalation items today.';
+
+        // Top 5 weekly articles
         const topArticles = this.weeklyArticles.slice(0, 5);
         const topArticleList = topArticles.map(a =>
             `- ${a.title} (${a.sourceName}) — ${a.url}`
         ).join('\n');
 
-        // Competitive / regulatory signals from digest sections
-        const competitiveSection = (this.digest?.sections || []).find(s =>
-            s.title?.toLowerCase().includes('competitive')
-        );
-        const regulatorySection = (this.digest?.sections || []).find(s =>
-            s.title?.toLowerCase().includes('regulatory')
-        );
-        const crossIndustryBlock = [
-            competitiveSection ? `Competitive: ${(competitiveSection.summary || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').substring(0, 400)}` : '',
-            regulatorySection ? `Regulatory: ${(regulatorySection.summary || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').substring(0, 400)}` : ''
-        ].filter(Boolean).join('\n');
+        // Competitive signals with IBM positioning
+        const competitiveArticles = this.dailyArticles
+            .filter(a => a.signalType === 'risk' || /microsoft|aws|azure|google cloud|accenture|deloitte|servicenow|salesforce|snowflake|databricks/i.test(a.title))
+            .slice(0, 3);
+        
+        const competitiveBlock = competitiveArticles.length > 0
+            ? competitiveArticles.map(a => {
+                const text = (a.title + ' ' + (a.summary || '')).toLowerCase();
+                let ibmPosition = '';
+                
+                // Map competitor to IBM positioning
+                if (/azure openai|microsoft ai|copilot/i.test(text)) {
+                    ibmPosition = ' → IBM: watsonx.ai (governance + data privacy)';
+                } else if (/aws bedrock|amazon q/i.test(text)) {
+                    ibmPosition = ' → IBM: watsonx.ai (hybrid deployment)';
+                } else if (/vertex ai|google cloud ai/i.test(text)) {
+                    ibmPosition = ' → IBM: watsonx.ai (open models + enterprise)';
+                } else if (/azure arc/i.test(text)) {
+                    ibmPosition = ' → IBM: Red Hat OpenShift (true hybrid)';
+                } else if (/snowflake|databricks/i.test(text)) {
+                    ibmPosition = ' → IBM: watsonx.data (governance + cost)';
+                } else if (/accenture|deloitte/i.test(text)) {
+                    ibmPosition = ' → IBM: IBM Consulting (tech-led transformation)';
+                }
+                
+                return `- ${a.title} (${a.sourceName})${ibmPosition}`;
+            }).join('\n')
+            : 'No competitive signals today.';
 
-        if (!apiKey) {
-            // No API key: produce a basic plain-text digest from available data
-            const lines = [
-                `Subject: IBM APAC Field CTO — Weekly Intelligence Brief | ${date}`,
-                '',
-                industryBlock,
-                '',
-                crossIndustryBlock ? `CROSS-INDUSTRY SIGNALS\n${crossIndustryBlock}` : '',
-                '',
-                `TOP ARTICLES\n${topArticleList || 'No articles available.'}`
-            ].filter(l => l !== undefined);
-            const text = lines.join('\n');
-            this._lastGTMDigestText = text;
-            bodyEl.innerHTML = `<pre class="gtm-digest-text">${this.escapeHtml(text)}</pre>
-                <p class="form-hint">Add a Claude API key in Settings for AI-enhanced GTM digests.</p>`;
-            if (copyBtn) copyBtn.classList.remove('hidden');
-            return;
-        }
-
-        // Build client signals block grouped by industry (Tier 1 & 2 only)
-        const clientSignalLines = [];
-        for (const article of this.dailyArticles.filter(a => a.matchedClient)) {
-            const clientObj = this.clients.find(c =>
-                (typeof c === 'string' ? c : c.name) === article.matchedClient
-            );
-            if (!clientObj || (typeof clientObj === 'object' && clientObj.tier > 2)) continue;
-            const tier = (typeof clientObj === 'object') ? clientObj.tier : 2;
-            const industry = (typeof clientObj === 'object' && clientObj.industry) ? clientObj.industry : 'Other';
-            const signalType = article.signalType || 'signal';
-            clientSignalLines.push(
-                `${article.matchedClient} (${industry}, Tier ${tier}, ${signalType}): ${article.title}`
-            );
-        }
-        const clientSignalBlock = clientSignalLines.length > 0
-            ? clientSignalLines.join('\n')
-            : 'No Tier 1/2 client signals today.';
-
-        // Inject thisWeekContext (was missing from original GTM prompt)
+        // This week's context
         const weekContextBlock = this.settings.thisWeekContext
             ? `\nTHIS WEEK'S CONTEXT:\n${this.settings.thisWeekContext}\n`
             : '';
 
-        const prompt = `Write a weekly intelligence email FROM the IBM APAC Field CTO TO the GTM sales team.
-Write in first person. You are the Field CTO addressing your team directly.
-The team is organised by industry vertical. They need to know what to do this week, not just what happened.
-Plain text only. No markdown, no bullet symbols, no HTML.
-Use ALL CAPS for section headers. Use dashes for list items.
+        if (!apiKey) {
+            // No API key: produce a comprehensive plain-text digest
+            
+            // Get Deep Reads insights if available
+            let deepReadsBlock = '';
+            try {
+                const cached = localStorage.getItem(STORAGE_KEYS.DEEP_READS);
+                if (cached) {
+                    const { insights } = JSON.parse(cached);
+                    if (insights && insights.length > 0) {
+                        deepReadsBlock = insights.slice(0, 3).map(i => 
+                            `- ${i.title}${i.timeHorizon ? ` (${i.timeHorizon})` : ''}`
+                        ).join('\n');
+                    }
+                }
+            } catch (e) { /* ignore */ }
+            
+            const lines = [
+                `Subject: IBM APAC Field CTO — Weekly Intelligence Brief | ${date}`,
+                '',
+                '================================================================================',
+                'FIELD CTO CONTEXT',
+                '================================================================================',
+                '115 ATLs | 343 Accounts | 5 Markets (ANZ, ASEAN, GCG, ISA, KOREA)',
+                'Dual-Wave Thesis: AI/Agentic Transformation + Sovereignty/Regulation',
+                '',
+                '================================================================================',
+                'ESCALATION & BRIEFING ITEMS',
+                '================================================================================',
+                escalationBlock,
+                '',
+                '================================================================================',
+                'CLIENT SIGNALS BY MARKET',
+                '================================================================================',
+                marketSignalBlock,
+                '',
+                '================================================================================',
+                'COMPETITIVE LANDSCAPE',
+                '================================================================================',
+                competitiveBlock,
+                ''
+            ];
+            
+            if (deepReadsBlock) {
+                lines.push('================================================================================');
+                lines.push('STRATEGIC READS');
+                lines.push('================================================================================');
+                lines.push(deepReadsBlock);
+                lines.push('');
+            }
+            
+            lines.push('================================================================================');
+            lines.push('TOP ARTICLES');
+            lines.push('================================================================================');
+            lines.push(topArticleList || 'No articles available.');
+            lines.push('');
+            lines.push('---');
+            lines.push('Add a Claude API key in Settings for AI-enhanced GTM digests with');
+            lines.push('talking points, IBM positioning, and market-specific actions.');
+            
+            const text = lines.join('\n');
+            this._lastGTMDigestText = text;
+            bodyEl.innerHTML = `<pre class="gtm-digest-text">${this.escapeHtml(text)}</pre>
+                <p class="form-hint">Add a Claude API key in Settings for AI-enhanced GTM digests with talking points and IBM positioning.</p>`;
+            if (copyBtn) copyBtn.classList.remove('hidden');
+            return;
+        }
+
+        const prompt = `Write a weekly intelligence email FROM the IBM APAC Field CTO TO the 115 Account Technical Leaders (ATLs) across the 5 APAC markets.
+
+ROLE CONTEXT:
+- You ARE the Field CTO leading 115 ATLs who directly engage 343 enterprise accounts
+- Markets: ANZ (Australia/NZ), ASEAN (SG/MY/TH/ID/PH), GCG (HK/TW/China), ISA (India/South Asia), KOREA
+- Each ATL manages 2-3 clients and works in a "cockpit model" with their Technical Sales Leader (TSL)
+- Strategic goal: Increase IBM's share of client technology spend by earning "Client CTO" posture
+- Dual-wave thesis: AI/Agentic transformation (Wave 1) + Sovereignty/Regulation (Wave 2)
+
+VOICE & TONE:
+- Write in first person as the Field CTO addressing your ATL team
+- Be direct, action-oriented, and confident but not arrogant
+- Sound like a senior technical leader, not a corporate communications team
+- Use conversational language — "Here's what I'm seeing..." not "The following observations..."
+
+FORMAT RULES:
+- Plain text only. No markdown, no bullet symbols, no HTML.
+- Use ALL CAPS for section headers.
+- Use dashes for list items.
+- Keep it scannable — busy ATLs need to grasp the key points in 60 seconds.
 ${weekContextBlock}
-INDUSTRY SIGNALS AVAILABLE:
-${industryBlock}
+ESCALATION & BRIEFING ITEMS (action required):
+${escalationBlock}
 
-CLIENT SIGNALS THIS WEEK (Tier 1 & 2 accounts only):
-${clientSignalBlock}
+CLIENT SIGNALS BY MARKET (Tier 1 & 2 accounts):
+${marketSignalBlock}
 
-CROSS-INDUSTRY CONTEXT:
-${crossIndustryBlock || 'No cross-industry signals available.'}
+COMPETITIVE LANDSCAPE:
+${competitiveBlock}
 
 TOP ARTICLES THIS WEEK:
 ${topArticleList || 'No articles available.'}
 
 Produce EXACTLY this structure (plain text, no markdown):
 
-Subject: IBM APAC Field CTO — Weekly Intelligence Brief | ${date}
+Subject: IBM APAC Field CTO — Weekly ATL Intelligence Brief | ${date}
 
 WHAT TO LEAD WITH THIS WEEK
-[2-3 sentences maximum. State the single IBM message, the market evidence for it, and the call to action for sellers. Tag as [AI WAVE] or [SOVEREIGNTY WAVE].]
 
-[For each industry that has a signal, write a section:]
-[INDUSTRY NAME IN CAPS]
-Signal: [headline — if a watchlist client is the evidence, name them]
-IBM angle: [ibmAngle — be specific about the IBM product/service]
-Action: [salesAction — what the GTM seller should do this week, name a client account if relevant]
-Client watch: [if any Tier 1/2 clients in this industry had signals today, list them with one-sentence implication for the ATL. Omit this line if no client signals.]
+[2-3 sentences maximum. State the single IBM message ATLs should lead with this week. Tag it [AI WAVE] or [SOVEREIGNTY WAVE]. Be specific about the call to action.]
 
-CROSS-INDUSTRY SIGNALS
-- [2-3 bullets: competitive alerts or regulatory changes affecting all verticals]
+ESCALATION ITEMS
 
-CALL TO ACTION THIS WEEK
-- [1-2 specific actions for sellers, tied to the week's signals. Name accounts where possible.]
+[If there are ESCALATE signals: For each one, write the client/market and exactly what the ATL should do. If none, write "No escalation items this week — but stay close to your Tier 1s."]
 
-TOP ARTICLES
-[list the top 3-5 articles with title and URL, one per line]`;
+ACTION ITEMS BY MARKET
+
+[For each market with signals, write:]
+
+[MARKET NAME]
+- [Client name]: [One sentence on the signal and what the ATL should do THIS WEEK. Be specific.]
+- [Continue for each client signal in that market. Max 3 per market.]
+
+[If a market has no signals, skip it entirely.]
+
+COMPETITIVE WATCH
+
+[2-3 sentences on competitive threats or positioning opportunities. Name specific competitors (Microsoft, AWS, Accenture, etc.) and the IBM counter-position. Reference specific IBM solutions (watsonx.ai, watsonx.governance, Red Hat OpenShift, IBM Consulting).]
+
+ATL TALKING POINTS
+
+[Exactly 3 conversational one-liners ATLs can use with client CTOs this week. These should sound like what a peer CTO would say, not what a sales rep would pitch. Each should be max 25 words.]
+
+1. [Talking point about AI/Agentic wave]
+2. [Talking point about Sovereignty/Regulation wave]
+3. [Talking point connecting to IBM's strategic positioning]
+
+IBM POSITIONING THIS WEEK
+
+[1-2 sentences on which IBM solutions to emphasize and why. Connect to the week's signals.]
+
+CALL TO ACTION
+
+[1-2 specific actions for ALL ATLs to take this week. Be concrete: name the IBM asset to review, the conversation type to have, or the follow-up to schedule. Start with verbs.]
+
+TOP READS
+
+[List 3-5 articles with title and URL, one per line. After each, add ONE sentence on why an ATL should care — what conversation does it enable?]`;
 
         try {
             const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -3485,7 +3850,7 @@ TOP ARTICLES
                 },
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-20250514',
-                    max_tokens: 1500,
+                    max_tokens: 1800,
                     messages: [{ role: 'user', content: prompt }]
                 })
             });
@@ -4790,29 +5155,53 @@ async function renderTodaysSignals(forceRefresh = false) {
     
     const tier1Clients = app.clients.filter(c => c.tier === 1).map(c => c.name).slice(0, 10).join(', ');
     
-    const prompt = `You are the intelligence briefer for the IBM APAC Field CTO.
+    // Identify which markets have signals
+    const marketsInSignals = [...new Set(rawSignals.flatMap(s => 
+        (s.clients || []).map(clientName => {
+            const client = app.clients.find(c => c.name === clientName);
+            return client?.market || null;
+        }).filter(Boolean)
+    ))];
+    
+    const prompt = `You are the strategic intelligence briefer for the IBM APAC Field CTO who leads 115 Account Technical Leaders (ATLs) across 343 enterprise accounts in 5 markets: ANZ, ASEAN, GCG, ISA, and KOREA.
 
 TODAY'S RAW SIGNALS:
 ${signalSummaries}
 
-ROLE CONTEXT:
-- Field CTO leading 115 ATLs across 343 accounts in APAC
-- Tier 1 clients: ${tier1Clients || 'configured in watchlist'}
-- Focus: AI/Agentic wave + Sovereignty/Regulation wave
+FIELD CTO CONTEXT:
+- Tier 1 clients (highest priority): ${tier1Clients || 'See watchlist'}
+- Markets with signals today: ${marketsInSignals.length > 0 ? marketsInSignals.join(', ') : 'All markets'}
+- Dual-wave thesis: AI/Agentic transformation + Sovereignty/Regulation pressure
+- Goal: Increase IBM's share of client technology spend by earning "Client CTO" posture
+
+ACTION TYPE DEFINITIONS (use these exact values):
+- "ESCALATE" = Contact TSL/client executive within 48 hours (C-suite change, competitive threat, major deal signal)
+- "BRIEF_ATL" = Prepare talking points for ATL team in affected market (industry trend, regulatory change)
+- "POSITION" = Develop IBM response/counter-positioning (competitor announcement, market shift)
+- "MONITOR" = Track for pattern/escalation (early signal, emerging trend)
 
 For each signal, provide a JSON array with EXACTLY this structure:
 [
   {
-    "headline": "Action-oriented headline (10 words max)",
-    "context": "2-3 sentence summary of why this matters for APAC enterprise clients",
+    "headline": "Action-oriented headline (10 words max, lead with verb)",
+    "context": "2-3 sentences: What happened, who is affected, why it matters for APAC enterprise clients",
     "wave": "AI" or "SOVEREIGNTY" or "COMPETITIVE",
-    "action": "What the Field CTO should DO today (one sentence)",
-    "ibmAngle": "Specific IBM product/capability to position (watsonx.ai, watsonx.governance, Red Hat OpenShift, IBM Consulting, etc.)",
-    "competitive": "Competitor affected or threatening (or null if not applicable)"
+    "actionType": "ESCALATE" or "BRIEF_ATL" or "POSITION" or "MONITOR",
+    "action": "Specific action for Field CTO (who to contact, what to prepare, by when)",
+    "affectedMarkets": ["ANZ", "ASEAN", "GCG", "ISA", "KOREA"] — which markets this impacts,
+    "ibmAngle": "Specific IBM solution to position: watsonx.ai, watsonx.governance, watsonx.data, Red Hat OpenShift, IBM Consulting, QRadar, Instana, etc.",
+    "talkingPoint": "One sentence the ATL can use with client CTO (conversational, not salesy)",
+    "competitive": "Competitor name if relevant (Microsoft, AWS, Google, Accenture, etc.) or null"
   }
 ]
 
-Return ONLY valid JSON array, no markdown, max 5 signals.`;
+QUALITY RULES:
+- Headlines must start with action verb (Brief, Alert, Position, Monitor, Prepare)
+- Actions must be specific (name a role, give a timeframe, specify a deliverable)
+- Talking points must sound human, not corporate — something you'd actually say to a CTO peer
+- IBM angles must map to real IBM products/services, not generic capabilities
+
+Return ONLY valid JSON array, no markdown, max 5 signals, ordered by urgency (ESCALATE first).`;
 
     try {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -4884,18 +5273,35 @@ function renderSynthesizedSignal(signal, rawSignal) {
         }).join('')
         : (rawSignal.sources || []).map(s => `<span class="signal-source-name">${escapeHtml(s)}</span>`).join(', ');
     
+    // Action type styling
+    const actionTypeStyles = {
+        'ESCALATE': { emoji: '🚨', class: 'action-escalate', label: 'ESCALATE' },
+        'BRIEF_ATL': { emoji: '📢', class: 'action-brief', label: 'BRIEF ATL' },
+        'POSITION': { emoji: '🎯', class: 'action-position', label: 'POSITION' },
+        'MONITOR': { emoji: '👁️', class: 'action-monitor', label: 'MONITOR' }
+    };
+    const actionStyle = actionTypeStyles[signal.actionType] || actionTypeStyles['MONITOR'];
+    
+    // Markets affected
+    const marketsHtml = (signal.affectedMarkets || []).length > 0
+        ? `<div class="signal-card-markets">${signal.affectedMarkets.map(m => `<span class="market-tag">${m}</span>`).join('')}</div>`
+        : '';
+    
     return `
-        <div class="signal-card">
+        <div class="signal-card ${actionStyle.class}">
             <div class="signal-card-header">
+                <div class="signal-card-action-badge ${actionStyle.class}">${actionStyle.emoji} ${actionStyle.label}</div>
                 <span class="signal-card-headline">${escapeHtml(signal.headline)}</span>
                 <div class="signal-card-tags">
-                    <span class="signal-card-tag ${signal.wave === 'AI' ? 'industry' : signal.wave === 'COMPETITIVE' ? 'competitive' : 'client'}">${signal.wave} WAVE</span>
+                    <span class="signal-card-tag ${signal.wave === 'AI' ? 'industry' : signal.wave === 'COMPETITIVE' ? 'competitive' : 'client'}">${signal.wave}</span>
                     ${signal.competitive ? `<span class="signal-card-tag competitive">⚔️ ${escapeHtml(signal.competitive)}</span>` : ''}
                 </div>
             </div>
+            ${marketsHtml}
             ${signal.context ? `<div class="signal-card-context">${escapeHtml(signal.context)}</div>` : ''}
             <div class="signal-card-body"><strong>Action:</strong> ${escapeHtml(signal.action)}</div>
-            <div class="signal-card-ibm"><strong>IBM Angle:</strong> ${escapeHtml(signal.ibmAngle)}</div>
+            ${signal.talkingPoint ? `<div class="signal-card-talking-point"><strong>💬 ATL Talking Point:</strong> "${escapeHtml(signal.talkingPoint)}"</div>` : ''}
+            <div class="signal-card-ibm"><strong>IBM Position:</strong> ${escapeHtml(signal.ibmAngle)}</div>
             <div class="signal-card-sources">${sourcesHtml || 'No sources'}</div>
         </div>
     `;
@@ -4913,18 +5319,35 @@ function renderCachedSignal(signal, articleData) {
         }).join('')
         : '';
     
+    // Action type styling
+    const actionTypeStyles = {
+        'ESCALATE': { emoji: '🚨', class: 'action-escalate', label: 'ESCALATE' },
+        'BRIEF_ATL': { emoji: '📢', class: 'action-brief', label: 'BRIEF ATL' },
+        'POSITION': { emoji: '🎯', class: 'action-position', label: 'POSITION' },
+        'MONITOR': { emoji: '👁️', class: 'action-monitor', label: 'MONITOR' }
+    };
+    const actionStyle = actionTypeStyles[signal.actionType] || actionTypeStyles['MONITOR'];
+    
+    // Markets affected
+    const marketsHtml = (signal.affectedMarkets || []).length > 0
+        ? `<div class="signal-card-markets">${signal.affectedMarkets.map(m => `<span class="market-tag">${m}</span>`).join('')}</div>`
+        : '';
+    
     return `
-        <div class="signal-card">
+        <div class="signal-card ${actionStyle.class}">
             <div class="signal-card-header">
+                <div class="signal-card-action-badge ${actionStyle.class}">${actionStyle.emoji} ${actionStyle.label}</div>
                 <span class="signal-card-headline">${escapeHtml(signal.headline)}</span>
                 <div class="signal-card-tags">
-                    <span class="signal-card-tag ${signal.wave === 'AI' ? 'industry' : signal.wave === 'COMPETITIVE' ? 'competitive' : 'client'}">${signal.wave || 'NEWS'} WAVE</span>
+                    <span class="signal-card-tag ${signal.wave === 'AI' ? 'industry' : signal.wave === 'COMPETITIVE' ? 'competitive' : 'client'}">${signal.wave || 'NEWS'}</span>
                     ${signal.competitive ? `<span class="signal-card-tag competitive">⚔️ ${escapeHtml(signal.competitive)}</span>` : ''}
                 </div>
             </div>
+            ${marketsHtml}
             ${signal.context ? `<div class="signal-card-context">${escapeHtml(signal.context)}</div>` : ''}
             ${signal.action ? `<div class="signal-card-body"><strong>Action:</strong> ${escapeHtml(signal.action)}</div>` : ''}
-            ${signal.ibmAngle ? `<div class="signal-card-ibm"><strong>IBM Angle:</strong> ${escapeHtml(signal.ibmAngle)}</div>` : ''}
+            ${signal.talkingPoint ? `<div class="signal-card-talking-point"><strong>💬 ATL Talking Point:</strong> "${escapeHtml(signal.talkingPoint)}"</div>` : ''}
+            ${signal.ibmAngle ? `<div class="signal-card-ibm"><strong>IBM Position:</strong> ${escapeHtml(signal.ibmAngle)}</div>` : ''}
             <div class="signal-card-sources">${sourcesHtml || 'No sources'}</div>
         </div>
     `;
@@ -5044,28 +5467,37 @@ async function renderDeepReads(forceRefresh = false) {
         `[${i + 1}] "${a.title}" (${a.source})\nSummary: ${a.summary?.substring(0, 200) || 'No summary'}`
     ).join('\n\n');
     
-    const prompt = `You are preparing a strategic reading brief for the IBM APAC Field CTO.
+    const prompt = `You are preparing a strategic reading brief for the IBM APAC Field CTO who leads 115 ATLs across 343 enterprise accounts.
 
-These are long-form articles selected for weekend/travel reading — strategic content, not breaking news.
+These are long-form articles for strategic thinking — content to internalize for CxO conversations, board discussions, and quarterly business reviews.
 
 ARTICLES:
 ${articleSummaries}
 
-ROLE CONTEXT:
-- Field CTO leading 115 ATLs across 343 enterprise accounts
-- Needs strategic perspectives for CxO conversations and offsites
-- Focus: market shifts, technology evolution, competitive landscape
+FIELD CTO CONTEXT:
+- Needs perspectives that elevate conversations from tactical to strategic
+- Must translate technology trends into business impact for CFOs and CEOs
+- Responsible for ATL team development — needs content that builds team capability
+- Dual-wave focus: AI/Agentic transformation + Sovereignty/Regulation pressure
 
 For each article, provide a JSON array with this structure:
 [
   {
     "title": "Original article title",
-    "strategicThesis": "The big idea in one sentence — what market shift or technology evolution does this represent?",
-    "leadershipImplication": "What should a CTO be thinking about or preparing for based on this?",
-    "conversationTopic": "A CxO-level question this raises (for board discussions, customer exec meetings)",
-    "timeHorizon": "6 months" or "12 months" or "2-3 years" — when will this matter most?
+    "strategicThesis": "The big idea in one powerful sentence — what market shift does this signal? (Think: 'The mainframe moment for AI governance' or 'Sovereignty becomes the new security')",
+    "boardQuestion": "A provocative question for board/CxO discussion that positions IBM favorably (e.g., 'What happens to your AI strategy when your cloud provider becomes your competitor?')",
+    "atlEnablement": "How should ATLs use this insight? Which client conversations does it unlock?",
+    "ibmNarrative": "How this connects to IBM's strategic positioning (watsonx, hybrid cloud, consulting-led transformation)",
+    "clientTypes": "Which client profiles should prioritize this (e.g., 'Tier 1 FSI with cloud concentration risk', 'Telcos evaluating GenAI monetization')",
+    "timeHorizon": "6 months" or "12 months" or "2-3 years"
   }
 ]
+
+QUALITY RULES:
+- Strategic thesis must be memorable and quotable — something worth repeating in a keynote
+- Board questions must be genuinely thought-provoking, not leading/sales-y
+- ATL enablement must be actionable — name specific conversation types or client situations
+- IBM narrative must connect to real IBM strategy, not generic capabilities
 
 Return ONLY valid JSON array, no markdown. Max 5 articles.`;
 
@@ -5133,16 +5565,18 @@ function cacheDeepReads(insights, articles) {
 
 function renderSynthesizedDeepRead(insight, article) {
     return `
-        <div class="deep-read-item" onclick="openArticle('${article.id}')">
+        <div class="deep-read-item">
             <div class="deep-read-item-header">
                 <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source)}</a>
                 <span class="deep-read-item-time">${escapeHtml(insight.timeHorizon)} horizon</span>
             </div>
             <div class="deep-read-item-title">${escapeHtml(insight.title)}</div>
             <div class="deep-read-strategic">
-                <div class="deep-read-thesis"><strong>Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
-                <div class="deep-read-implication"><strong>Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication)}</div>
-                <div class="deep-read-conversation"><strong>CxO Question:</strong> ${escapeHtml(insight.conversationTopic)}</div>
+                <div class="deep-read-thesis"><strong>💡 Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
+                <div class="deep-read-board"><strong>🎯 Board Question:</strong> "${escapeHtml(insight.boardQuestion || insight.conversationTopic || '')}"</div>
+                <div class="deep-read-atl"><strong>📢 ATL Enablement:</strong> ${escapeHtml(insight.atlEnablement || insight.leadershipImplication || '')}</div>
+                <div class="deep-read-ibm"><strong>🔵 IBM Narrative:</strong> ${escapeHtml(insight.ibmNarrative || '')}</div>
+                ${insight.clientTypes ? `<div class="deep-read-clients"><strong>🏢 Target Clients:</strong> ${escapeHtml(insight.clientTypes)}</div>` : ''}
             </div>
         </div>
     `;
@@ -5151,7 +5585,7 @@ function renderSynthesizedDeepRead(insight, article) {
 function renderCachedDeepRead(insight, articleData) {
     const article = articleData || {};
     return `
-        <div class="deep-read-item" onclick="openArticle('${article.id || ''}')">
+        <div class="deep-read-item">
             <div class="deep-read-item-header">
                 <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source || insight.source || '')}</a>
                 <span class="deep-read-item-time">${escapeHtml(insight.timeHorizon || 'TBD')} horizon</span>
@@ -5159,9 +5593,11 @@ function renderCachedDeepRead(insight, articleData) {
             <div class="deep-read-item-title">${escapeHtml(insight.title || article.title || '')}</div>
             ${insight.strategicThesis ? `
             <div class="deep-read-strategic">
-                <div class="deep-read-thesis"><strong>Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
-                <div class="deep-read-implication"><strong>Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication || '')}</div>
-                <div class="deep-read-conversation"><strong>CxO Question:</strong> ${escapeHtml(insight.conversationTopic || '')}</div>
+                <div class="deep-read-thesis"><strong>💡 Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
+                <div class="deep-read-board"><strong>🎯 Board Question:</strong> "${escapeHtml(insight.boardQuestion || insight.conversationTopic || '')}"</div>
+                <div class="deep-read-atl"><strong>📢 ATL Enablement:</strong> ${escapeHtml(insight.atlEnablement || insight.leadershipImplication || '')}</div>
+                ${insight.ibmNarrative ? `<div class="deep-read-ibm"><strong>🔵 IBM Narrative:</strong> ${escapeHtml(insight.ibmNarrative)}</div>` : ''}
+                ${insight.clientTypes ? `<div class="deep-read-clients"><strong>🏢 Target Clients:</strong> ${escapeHtml(insight.clientTypes)}</div>` : ''}
             </div>
             ` : `<div class="deep-read-item-summary">${escapeHtml(insight.summary || article.summary || '')}</div>`}
         </div>
@@ -5170,7 +5606,7 @@ function renderCachedDeepRead(insight, articleData) {
 
 function renderBasicDeepRead(article) {
     return `
-        <div class="deep-read-item" onclick="openArticle('${article.id}')">
+        <div class="deep-read-item">
             <div class="deep-read-item-header">
                 <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source)}</a>
                 <span class="deep-read-item-time">${article.readingTime || '5'} min</span>

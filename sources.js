@@ -1151,36 +1151,59 @@ const CATEGORIES = {
 
 // ============================================
 // CROSS-REFERENCE THEMES FOR SIGNAL DETECTION
+// Enhanced for Field CTO context
 // ============================================
 const CROSS_REFERENCE_THEMES = {
-    'AI Governance': ['ai governance', 'ai regulation', 'ai act', 'ai safety', 'responsible ai', 'ai ethics', 'ai risk', 'ai audit'],
+    // === AI/AGENTIC TRANSFORMATION (Wave 1) ===
+    'Agentic AI': ['ai agent', 'agentic', 'autonomous agent', 'multi-agent', 'agent framework', 'agent orchestration', 'tool use', 'mcp protocol', 'function calling'],
+    'Generative AI Enterprise': ['enterprise genai', 'genai adoption', 'llm deployment', 'foundation model', 'rag', 'retrieval augmented', 'fine-tuning', 'prompt engineering'],
+    'AI Governance & Safety': ['ai governance', 'ai regulation', 'ai act', 'ai safety', 'responsible ai', 'ai ethics', 'ai risk', 'ai audit', 'model governance', 'ai compliance'],
+    'AI Infrastructure': ['gpu shortage', 'nvidia', 'tpu', 'inference cost', 'training cluster', 'ai chip', 'accelerator', 'ai infrastructure', 'model serving'],
+    'Copilot & AI Assistants': ['copilot', 'ai assistant', 'code assistant', 'ai coding', 'developer ai', 'ai productivity', 'ai workplace'],
+    
+    // === SOVEREIGNTY & REGULATION (Wave 2) ===
+    'Data Sovereignty': ['data sovereignty', 'data localization', 'data residency', 'cross-border data', 'data protection', 'privacy regulation', 'pdpa', 'dpdp'],
+    'Sovereign Cloud': ['sovereign cloud', 'government cloud', 'classified cloud', 'air-gapped', 'private cloud', 'on-premise', 'cloud repatriation'],
+    'Regulatory Compliance APAC': ['mas notice', 'apra prudential', 'hkma circular', 'sebi circular', 'rbi directive', 'operational resilience', 'third party risk'],
+    'AI Regulation APAC': ['ai regulation', 'ai governance framework', 'ai ethics guidelines', 'algorithmic accountability', 'ai transparency'],
+    
+    // === COMPETITIVE LANDSCAPE ===
     'Cloud Competition': ['azure', 'aws', 'google cloud', 'cloud pricing', 'multi-cloud', 'hybrid cloud', 'cloud market share', 'cloud revenue'],
-    'Data Sovereignty': ['data sovereignty', 'data localization', 'gdpr', 'data residency', 'cross-border data', 'data protection', 'privacy regulation'],
-    'Agentic AI': ['ai agent', 'agentic', 'autonomous agent', 'multi-agent', 'agent framework', 'agent orchestration', 'tool use'],
-    'Generative AI': ['generative ai', 'genai', 'llm', 'large language model', 'chatgpt', 'claude', 'gemini', 'copilot', 'foundation model'],
-    'Cybersecurity': ['ransomware', 'cyber attack', 'data breach', 'zero trust', 'security vulnerability', 'threat actor', 'apt'],
-    'Digital Banking': ['digital bank', 'neobank', 'open banking', 'banking api', 'fintech disruption', 'embedded finance'],
-    'Enterprise AI Adoption': ['ai adoption', 'ai transformation', 'enterprise ai', 'ai strategy', 'ai implementation', 'ai roi'],
-    'Hybrid Cloud': ['hybrid cloud', 'multicloud', 'cloud repatriation', 'on-premise', 'private cloud', 'sovereign cloud'],
-    'AI Infrastructure': ['gpu', 'nvidia', 'tpu', 'inference', 'training cluster', 'ai chip', 'accelerator', 'cuda'],
-    'Platform Engineering': ['platform engineering', 'developer experience', 'internal developer', 'golden path', 'developer productivity'],
-    'API Economy': ['api economy', 'api management', 'api gateway', 'open api', 'api monetization', 'api strategy'],
+    'Microsoft AI Moves': ['azure openai', 'microsoft ai', 'copilot enterprise', 'azure arc', 'microsoft fabric', 'azure ai foundry', 'microsoft partnership'],
+    'AWS AI Moves': ['aws bedrock', 'amazon q', 'aws sagemaker', 'amazon connect', 'aws generative ai', 'aws partnership'],
+    'Google Cloud AI Moves': ['vertex ai', 'google workspace ai', 'gemini enterprise', 'google cloud ai', 'google partnership'],
+    'Consulting Competition': ['accenture wins', 'deloitte partnership', 'infosys deal', 'wipro contract', 'cognizant agreement', 'capgemini'],
+    
+    // === IBM & ECOSYSTEM ===
+    'watsonx & IBM AI': ['watsonx', 'watson', 'ibm ai', 'ibm cloud', 'ibm consulting', 'ibm partnership', 'ibm contract', 'ibm deal'],
+    'Red Hat & Hybrid': ['red hat', 'openshift', 'ansible', 'rhel', 'kubernetes', 'container platform', 'hybrid cloud'],
+    
+    // === MARKET SIGNALS ===
+    'C-Suite Changes': ['new cto', 'new cio', 'appoints', 'names chief', 'cto appointed', 'cio appointed', 'cdo appointed', 'chief ai officer'],
+    'Digital Transformation Deals': ['digital transformation', 'cloud migration', 'modernization program', 'rfp', 'tender', 'procurement', 'technology investment'],
+    'M&A Activity': ['acquisition', 'merger', 'acquired', 'strategic investment', 'buyout', 'ipo', 'private equity'],
+    'APAC Expansion': ['apac expansion', 'asia pacific', 'singapore hub', 'regional headquarters', 'apac growth', 'asia strategy', 'southeast asia'],
+    
+    // === INDUSTRY DISRUPTION ===
+    'Banking Transformation': ['core banking', 'digital bank', 'neobank', 'open banking', 'banking as a service', 'embedded finance', 'payment modernization'],
+    'Telco Transformation': ['5g monetization', 'open ran', 'telco cloud', 'network automation', 'bss transformation', 'oss modernization'],
+    'Insurance Transformation': ['insurtech', 'claims automation', 'underwriting ai', 'insurance platform', 'embedded insurance'],
+    'Government Digitalization': ['smart nation', 'digital government', 'govtech', 'citizen services', 'government cloud'],
+    
+    // === TECHNOLOGY TRENDS ===
+    'Platform Engineering': ['platform engineering', 'developer experience', 'internal developer', 'golden path', 'developer productivity', 'devex'],
+    'Observability & AIOps': ['observability', 'aiops', 'sre', 'incident management', 'chaos engineering', 'reliability'],
+    'API Economy': ['api economy', 'api management', 'api gateway', 'api monetization', 'api strategy', 'api-first'],
     'Sustainability Tech': ['green it', 'sustainable tech', 'carbon footprint', 'esg reporting', 'climate tech', 'net zero tech'],
-    'Talent & Skills': ['ai talent', 'tech talent', 'skills gap', 'upskilling', 'workforce transformation', 'hiring'],
-    'M&A Activity': ['acquisition', 'merger', 'acquired', 'strategic investment', 'buyout', 'ipo', 'spac'],
-    'APAC Expansion': ['apac expansion', 'asia pacific', 'singapore hub', 'regional headquarters', 'apac growth', 'asia strategy'],
-    // NEW: IBM-specific competitive intelligence themes
-    'IBM vs Azure': ['azure openai', 'microsoft ai', 'copilot enterprise', 'azure arc', 'microsoft fabric', 'azure ai foundry'],
-    'IBM vs AWS': ['aws bedrock', 'amazon q', 'aws sagemaker', 'amazon connect', 'aws generative ai'],
-    'IBM vs Google Cloud': ['vertex ai', 'google workspace ai', 'gemini enterprise', 'google cloud ai'],
-    'watsonx & IBM AI': ['watsonx', 'watson', 'ibm ai', 'ibm cloud', 'ibm consulting', 'ibm z', 'ibm power'],
-    'APAC Regulatory Compliance': ['mas notice', 'apra prudential', 'pdpc advisory', 'hkma circular', 'sebi circular', 'ojk regulation', 'bsp circular', 'imda guideline', 'meity notification'],
-    'C-Suite Changes': ['new cto', 'new cio', 'appoints', 'names chief', 'chief technology officer', 'chief information officer', 'chief digital officer', 'cdo appointed', 'cto appointed', 'cio appointed'],
-    'Digital Transformation Deals': ['digital transformation', 'cloud migration', 'modernization program', 'rfp', 'tender', 'procurement', 'technology investment', 'it budget', 'digital initiative']
+    
+    // === RISK SIGNALS ===
+    'Cybersecurity Threats': ['ransomware', 'cyber attack', 'data breach', 'zero trust', 'security vulnerability', 'threat actor', 'apt', 'supply chain attack'],
+    'Economic Headwinds': ['cost cutting', 'layoffs', 'restructuring', 'budget reduction', 'hiring freeze', 'downsizing'],
+    'Talent & Skills': ['ai talent', 'tech talent', 'skills gap', 'upskilling', 'workforce transformation', 'hiring challenge']
 };
 
 // ============================================
-// DEAL RELEVANCE SIGNALS — NEW
+// DEAL RELEVANCE SIGNALS — FIELD CTO ENHANCED
 // Used for deal-relevance scoring layer in app.js
 // ============================================
 const DEAL_RELEVANCE_SIGNALS = {
@@ -1190,7 +1213,8 @@ const DEAL_RELEVANCE_SIGNALS = {
         'accenture', 'deloitte', 'mckinsey', 'pwc', 'kpmg', 'ey consulting',
         'alibaba cloud', 'aliyun', 'tencent cloud', 'ntt data', 'fujitsu', 
         'infosys', 'wipro', 'cognizant', 'capgemini', 'dxc technology',
-        'servicenow', 'salesforce', 'sap', 'oracle cloud'
+        'servicenow', 'salesforce', 'sap', 'oracle cloud', 'snowflake', 'databricks',
+        'palantir', 'datadog', 'splunk', 'elastic', 'hashicorp', 'vmware'
     ],
     // C-suite change keywords — signals new decision-maker, potential re-evaluation
     CSUITE_KEYWORDS: [
@@ -1198,29 +1222,199 @@ const DEAL_RELEVANCE_SIGNALS = {
         'chief technology officer', 'chief information officer', 'chief digital officer',
         'chief data officer', 'cdo appointed', 'cto appointed', 'cio appointed',
         'technology leadership', 'digital leadership', 'it leadership change',
-        'executive appointment', 'joins as', 'promoted to'
+        'executive appointment', 'joins as', 'promoted to', 'group cto',
+        'chief ai officer', 'caio', 'head of technology', 'head of digital',
+        'vp engineering', 'vp technology', 'svp technology', 'evp technology'
     ],
-    // Regulatory keywords — compliance pressure = IBM opportunity
+    // Regulatory keywords — compliance pressure = IBM opportunity (APAC-specific)
     REGULATORY_KEYWORDS: [
-        'mas notice', 'apra prudential', 'pdpc advisory', 'hkma circular',
-        'sebi circular', 'ojk regulation', 'bsp circular', 'imda guideline',
-        'meity notification', 'compliance deadline', 'regulatory requirement',
-        'mandatory', 'non-compliance', 'regulatory fine', 'enforcement action',
-        'data protection law', 'ai regulation', 'cloud regulation'
+        // ASEAN
+        'mas notice', 'mas guidelines', 'pdpc advisory', 'imda guideline', 'bsp circular',
+        'ojk regulation', 'bi regulation', 'bank indonesia', 'sec thailand', 'bot thailand',
+        'bnm malaysia', 'bank negara', 'pdpa thailand', 'pdpa singapore',
+        // ANZ
+        'apra prudential', 'asic guidance', 'oaic', 'privacy act australia', 'cdr rules',
+        'rbnz', 'fma new zealand', 'privacy commissioner nz',
+        // GCG
+        'hkma circular', 'sfc hong kong', 'pipl china', 'cac china', 'mlr china',
+        'fsc taiwan', 'ndpc taiwan', 'pdpo hong kong',
+        // ISA
+        'sebi circular', 'rbi master direction', 'meity notification', 'dpdp act',
+        'cert-in directive', 'irdai', 'npci guidelines',
+        // KOREA
+        'fsc korea', 'kisa', 'pipa korea', 'kdca',
+        // General
+        'compliance deadline', 'regulatory requirement', 'mandatory', 'non-compliance', 
+        'regulatory fine', 'enforcement action', 'data protection law', 'ai regulation', 
+        'cloud regulation', 'operational resilience', 'third party risk', 'outsourcing guidelines'
     ],
     // IBM product/solution keywords — direct IBM relevance
     IBM_KEYWORDS: [
-        'watsonx', 'watson', 'ibm cloud', 'red hat', 'openshift', 'ansible',
-        'ibm consulting', 'ibm security', 'qradar', 'ibm z', 'ibm power',
-        'ibm storage', 'ibm quantum', 'ibm research', 'ibm institute',
-        'hybrid cloud ibm', 'ibm ai', 'ibm automation'
+        'watsonx', 'watsonx.ai', 'watsonx.data', 'watsonx.governance', 'watson',
+        'ibm cloud', 'red hat', 'openshift', 'ansible', 'rhel',
+        'ibm consulting', 'ibm security', 'qradar', 'guardium', 'verify', 'maas360',
+        'ibm z', 'ibm power', 'linuxone', 'ibm storage', 'ibm spectrum',
+        'ibm quantum', 'ibm research', 'ibm institute', 'ibm garage',
+        'hybrid cloud ibm', 'ibm ai', 'ibm automation', 'turbonomic', 'instana',
+        'apptio', 'concert', 'cp4d', 'cloud pak', 'sterling', 'aspera'
     ],
     // Opportunity keywords — signals active buying intent
     OPPORTUNITY_KEYWORDS: [
         'digital transformation', 'ai strategy', 'cloud migration', 'modernization',
         'rfp', 'request for proposal', 'tender', 'procurement', 'technology investment',
         'it budget', 'digital initiative', 'technology roadmap', 'vendor selection',
-        'proof of concept', 'pilot program', 'strategic partnership', 'technology refresh'
+        'proof of concept', 'pilot program', 'strategic partnership', 'technology refresh',
+        'multi-year contract', 'enterprise agreement', 'platform consolidation',
+        'legacy modernization', 'mainframe modernization', 'core banking transformation',
+        'data platform', 'ai platform', 'automation platform', 'integration platform'
+    ]
+};
+
+// ============================================
+// FIELD CTO ACTION TRIGGERS
+// Signals requiring Field CTO attention/action
+// ============================================
+const FIELD_CTO_ACTION_TRIGGERS = {
+    // Immediate escalation — contact client executive this week
+    ESCALATION_TRIGGERS: [
+        'cto appointed', 'cio appointed', 'cdo appointed', 'chief ai officer',
+        'digital transformation announced', 'cloud strategy announced',
+        'vendor review', 'technology refresh', 'rfp issued', 'tender announced',
+        'strategic review', 'board approved', 'budget approved', 'investment approved',
+        'partnership with microsoft', 'partnership with aws', 'partnership with google',
+        'signs with accenture', 'signs with deloitte', 'selects azure', 'selects aws',
+        'competitive win', 'competitive loss', 'ibm contract', 'ibm partnership'
+    ],
+    // ATL briefing required — ensure ATL is aware and prepared
+    ATL_BRIEFING_TRIGGERS: [
+        'cost cutting', 'layoffs', 'restructuring', 'merger', 'acquisition',
+        'new regulations', 'compliance requirements', 'regulatory action',
+        'cybersecurity incident', 'data breach', 'ransomware attack',
+        'earnings miss', 'profit warning', 'revenue decline',
+        'new product launch', 'market expansion', 'regional headquarters',
+        'leadership change', 'board changes', 'activist investor'
+    ],
+    // Market-wide impact — affects multiple accounts
+    MARKET_SIGNALS: [
+        'industry-wide', 'sector-wide', 'across the industry', 'banking sector',
+        'financial services industry', 'telecom industry', 'healthcare sector',
+        'government mandate', 'central bank directive', 'regulatory overhaul',
+        'market disruption', 'industry transformation', 'paradigm shift'
+    ],
+    // IBM positioning opportunity — leverage IBM strengths
+    IBM_POSITIONING: [
+        'hybrid cloud', 'data sovereignty', 'ai governance', 'responsible ai',
+        'mainframe', 'core banking', 'mission critical', 'high availability',
+        'regulated industry', 'compliance', 'security', 'zero trust',
+        'automation', 'aiops', 'observability', 'finops',
+        'open source', 'kubernetes', 'containers', 'openshift',
+        'data fabric', 'data mesh', 'data lakehouse', 'data integration'
+    ]
+};
+
+// ============================================
+// COMPETITIVE POSITIONING MAP
+// IBM solutions vs competitor offerings
+// ============================================
+const COMPETITIVE_POSITIONING = {
+    // AI & ML
+    'azure openai': { ibm: 'watsonx.ai', angle: 'Enterprise AI governance + data privacy' },
+    'copilot': { ibm: 'watsonx Code Assistant', angle: 'Enterprise security + on-prem deployment' },
+    'bedrock': { ibm: 'watsonx.ai', angle: 'Hybrid deployment + model flexibility' },
+    'sagemaker': { ibm: 'watsonx.ai + Cloud Pak for Data', angle: 'Governed AI lifecycle' },
+    'vertex ai': { ibm: 'watsonx.ai', angle: 'Open models + enterprise integration' },
+    'databricks': { ibm: 'watsonx.data', angle: 'Cost optimization + governance' },
+    'snowflake': { ibm: 'watsonx.data', angle: 'Hybrid deployment + AI integration' },
+    
+    // Cloud & Infrastructure
+    'azure arc': { ibm: 'Red Hat OpenShift', angle: 'True hybrid + multi-cloud portability' },
+    'aws outposts': { ibm: 'IBM Cloud Satellite', angle: 'Edge + sovereign deployment' },
+    'anthos': { ibm: 'Red Hat OpenShift', angle: 'Enterprise support + ecosystem' },
+    'vmware': { ibm: 'Red Hat OpenShift Virtualization', angle: 'Modernization path + Kubernetes' },
+    
+    // Automation & Integration
+    'power automate': { ibm: 'IBM Automation', angle: 'Enterprise scale + AI integration' },
+    'servicenow': { ibm: 'IBM Automation', angle: 'Deep integration + process mining' },
+    'mulesoft': { ibm: 'IBM Integration', angle: 'Hybrid deployment + API management' },
+    
+    // Security
+    'sentinel': { ibm: 'QRadar SIEM', angle: 'AI-powered threat intelligence' },
+    'splunk': { ibm: 'QRadar + Instana', angle: 'Unified security + observability' },
+    'crowdstrike': { ibm: 'IBM Security', angle: 'Managed detection + response' },
+    
+    // Consulting
+    'accenture': { ibm: 'IBM Consulting', angle: 'Technology depth + IBM stack expertise' },
+    'deloitte': { ibm: 'IBM Consulting', angle: 'Technology-led transformation' },
+    'infosys': { ibm: 'IBM Consulting', angle: 'Strategic advisory + co-creation' }
+};
+
+// ============================================
+// APAC MARKET CONTEXT
+// Market-specific keywords and priorities
+// ============================================
+const APAC_MARKET_CONTEXT = {
+    ANZ: {
+        regulators: ['apra', 'asic', 'oaic', 'accc', 'rba', 'rbnz', 'fma', 'comcom'],
+        priorities: ['open banking', 'cdr', 'operational resilience', 'climate risk', 'scams prevention'],
+        watchwords: ['big four banks', 'superannuation', 'nbn', 'asx', 'nzx']
+    },
+    ASEAN: {
+        regulators: ['mas', 'pdpc', 'imda', 'bnm', 'sc malaysia', 'ojk', 'bi', 'bsp', 'sec philippines', 'bot', 'sec thailand'],
+        priorities: ['digital banking license', 'e-payment', 'financial inclusion', 'data localization', 'cross-border payments'],
+        watchwords: ['asean', 'regional integration', 'digital economy', 'smart nation', 'industry 4.0']
+    },
+    GCG: {
+        regulators: ['hkma', 'sfc', 'pcpd', 'fsc taiwan', 'cac', 'pboc', 'csrc'],
+        priorities: ['greater bay area', 'wealth connect', 'fintech sandbox', 'virtual bank', 'data cross-border'],
+        watchwords: ['gba', 'cross-boundary', 'renminbi', 'digital yuan', 'hkex']
+    },
+    ISA: {
+        regulators: ['rbi', 'sebi', 'irdai', 'cert-in', 'meity', 'npci', 'cbsl', 'sbp'],
+        priorities: ['upi', 'account aggregator', 'digital rupee', 'dpdp act', 'data localization'],
+        watchwords: ['digital india', 'make in india', 'fintech hub', 'startup india', 'gift city']
+    },
+    KOREA: {
+        regulators: ['fsc', 'fss', 'kisa', 'pipc', 'bok', 'kdic'],
+        priorities: ['mydata', 'open banking', 'digital asset', 'cbdc', 'ai ethics'],
+        watchwords: ['k-finance', 'new deal', 'digital new deal', 'chaebol', 'kospi', 'kosdaq']
+    }
+};
+
+// ============================================
+// SIGNAL CLASSIFICATION RULES
+// For categorizing detected signals
+// ============================================
+const SIGNAL_CLASSIFICATION = {
+    // Wave 1: AI/Agentic transformation
+    AI_WAVE: [
+        'generative ai', 'genai', 'llm', 'large language model', 'ai agent', 'agentic',
+        'copilot', 'ai assistant', 'chatbot', 'conversational ai', 'ai automation',
+        'machine learning', 'deep learning', 'neural network', 'foundation model',
+        'ai governance', 'responsible ai', 'ai ethics', 'ai safety', 'ai regulation',
+        'ai strategy', 'ai adoption', 'ai transformation', 'ai investment', 'ai platform'
+    ],
+    // Wave 2: Sovereignty & Regulation
+    SOVEREIGNTY_WAVE: [
+        'data sovereignty', 'data localization', 'data residency', 'cross-border data',
+        'sovereign cloud', 'government cloud', 'classified cloud', 'air-gapped',
+        'regulatory compliance', 'gdpr', 'privacy regulation', 'data protection',
+        'operational resilience', 'dora', 'third party risk', 'outsourcing',
+        'critical infrastructure', 'national security', 'supply chain security'
+    ],
+    // Competitive threat level
+    COMPETITIVE_THREAT: [
+        'selects microsoft', 'selects azure', 'selects aws', 'selects google',
+        'partnership with microsoft', 'partnership with amazon', 'partnership with google',
+        'replaces ibm', 'migrates from ibm', 'moves away from ibm',
+        'competitive bid', 'vendor bakeoff', 'platform evaluation'
+    ],
+    // IBM opportunity
+    IBM_OPPORTUNITY: [
+        'hybrid cloud', 'multicloud', 'cloud repatriation', 'on-premise',
+        'mainframe modernization', 'core transformation', 'mission critical',
+        'regulated industry', 'compliance requirements', 'data governance',
+        'ai governance', 'responsible ai', 'open source', 'red hat',
+        'automation', 'integration', 'security', 'observability'
     ]
 };
 
