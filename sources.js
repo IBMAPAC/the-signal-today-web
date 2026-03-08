@@ -1098,6 +1098,8 @@ const MARKETS = {
         accounts: 45,
         priority: "medium"
     }
+};
+
 // Geographic keyword dictionary for market detection
 const GEOGRAPHIC_KEYWORDS = {
     ANZ: {
@@ -1133,8 +1135,6 @@ const GEOGRAPHIC_KEYWORDS = {
         regions: ["korean peninsula"],
         organizations: ["bok", "bank of korea", "fsc", "financial services commission", "fss", "kftc", "msit"]
     }
-};
-
 };
 
 // Client tier definitions

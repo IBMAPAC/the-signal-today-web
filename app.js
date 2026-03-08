@@ -1811,6 +1811,7 @@ class SignalApp {
         }
         
         return matches;
+    }
 
     detectMarket(text) {
         // Detect which APAC market(s) an article is relevant to based on geographic keywords
@@ -1871,7 +1872,6 @@ class SignalApp {
         }
         
         return markets;
-    }
     }
     
     escapeRegex(string) {
@@ -3618,6 +3618,7 @@ Return ONLY valid JSON, no markdown fences:
                 }, 2000);
             }
         });
+    }
 
     // ==========================================
     // ATL Enablement Pack (Phase 4)
@@ -3873,7 +3874,6 @@ Return ONLY valid JSON, no markdown fences:
         navigator.clipboard.writeText(slackMessage).then(() => {
             showToast('✓ Copied to clipboard');
         });
-    }
     }
 
     // ==========================================
