@@ -956,68 +956,193 @@ const DEFAULT_INDUSTRIES = [
 ];
 
 // ============================================
-// EXPANDED CLIENT WATCHLIST — WITH TIERS
-// Tier 1 = Strategic (daily monitoring, always shown)
-// Tier 2 = Growth (weekly monitoring)
-// Tier 3 = Prospect / Background
+// CLIENT WATCHLIST - Field CTO Edition
+// Tier 1 = Strategic (Top 50 accounts, +40% boost, daily monitoring)
+// Tier 2 = Growth (Next 100 accounts, +25% boost, weekly monitoring)
+// Tier 3 = Prospect (Remaining 193 accounts, +15% boost, background monitoring)
+// Market = ANZ, ASEAN, GCG, ISA, KOREA (for geographic segmentation)
+//
+// PHASE 5 ADVANCED FIELDS (optional):
+// - atlName: Name of assigned ATL (e.g., "John Smith")
+// - atlEmail: ATL email for notifications
+// - nextMeeting: ISO date string for upcoming meeting (e.g., "2026-03-15")
+// - activeDeal: Boolean flag for active deal pursuit
+// - dealValue: Estimated deal value in USD (e.g., 5000000)
+// - notes: Free-text notes for context
 // ============================================
 const DEFAULT_CLIENTS = [
-    // Singapore — Tier 1
-    { name: "DBS", tier: 1, country: "SG", industry: "Financial Services" },
-    { name: "OCBC", tier: 1, country: "SG", industry: "Financial Services" },
-    { name: "UOB", tier: 1, country: "SG", industry: "Financial Services" },
-    { name: "Singtel", tier: 1, country: "SG", industry: "Telecommunications" },
-    { name: "ST Engineering", tier: 1, country: "SG", industry: "Manufacturing" },
-    { name: "PSA", tier: 2, country: "SG", industry: "Transportation & Logistics" },
-    { name: "CapitaLand", tier: 2, country: "SG", industry: "Real Estate" },
-    { name: "Singapore Airlines", tier: 2, country: "SG", industry: "Transportation & Logistics" },
-    { name: "SIA", tier: 2, country: "SG", industry: "Transportation & Logistics" },
-    // Australia — Tier 1
-    { name: "Commonwealth Bank", tier: 1, country: "AU", industry: "Financial Services" },
-    { name: "CBA", tier: 1, country: "AU", industry: "Financial Services" },
-    { name: "ANZ", tier: 1, country: "AU", industry: "Financial Services" },
-    { name: "Westpac", tier: 1, country: "AU", industry: "Financial Services" },
-    { name: "NAB", tier: 1, country: "AU", industry: "Financial Services" },
-    { name: "Telstra", tier: 1, country: "AU", industry: "Telecommunications" },
-    { name: "BHP", tier: 2, country: "AU", industry: "Manufacturing" },
-    { name: "Rio Tinto", tier: 2, country: "AU", industry: "Manufacturing" },
-    { name: "Woolworths", tier: 2, country: "AU", industry: "Retail" },
-    { name: "Qantas", tier: 2, country: "AU", industry: "Transportation & Logistics" },
-    { name: "AGL", tier: 3, country: "AU", industry: "Energy" },
-    // Korea — Tier 1/2
-    { name: "Samsung", tier: 1, country: "KR", industry: "Technology" },
-    { name: "SK", tier: 1, country: "KR", industry: "Technology" },
-    { name: "LG", tier: 2, country: "KR", industry: "Manufacturing" },
-    { name: "Hyundai", tier: 2, country: "KR", industry: "Manufacturing" },
-    { name: "Kia", tier: 3, country: "KR", industry: "Manufacturing" },
-    { name: "POSCO", tier: 2, country: "KR", industry: "Manufacturing" },
-    { name: "KT", tier: 2, country: "KR", industry: "Telecommunications" },
-    // India — Tier 1/2
-    { name: "Reliance", tier: 1, country: "IN", industry: "Energy" },
-    { name: "Tata", tier: 1, country: "IN", industry: "Manufacturing" },
-    { name: "HDFC", tier: 1, country: "IN", industry: "Financial Services" },
-    { name: "ICICI", tier: 1, country: "IN", industry: "Financial Services" },
-    { name: "TCS", tier: 2, country: "IN", industry: "Technology" },
-    // ASEAN — Tier 1/2
-    { name: "CIMB", tier: 1, country: "MY", industry: "Financial Services" },
-    { name: "Maybank", tier: 1, country: "MY", industry: "Financial Services" },
-    { name: "Grab", tier: 2, country: "SG", industry: "Technology" },
-    { name: "Sea Limited", tier: 2, country: "SG", industry: "Technology" },
-    { name: "Gojek", tier: 2, country: "ID", industry: "Technology" },
-    { name: "AirAsia", tier: 2, country: "MY", industry: "Transportation & Logistics" },
-    { name: "Petronas", tier: 1, country: "MY", industry: "Energy" },
-    { name: "PTT", tier: 2, country: "TH", industry: "Energy" },
-    // Japan — Tier 2
-    { name: "NTT", tier: 2, country: "JP", industry: "Telecommunications" },
-    { name: "SoftBank", tier: 2, country: "JP", industry: "Telecommunications" },
-    { name: "Toyota", tier: 2, country: "JP", industry: "Manufacturing" },
-    { name: "Sony", tier: 3, country: "JP", industry: "Technology" },
-    // China / Competitors — Tier 3 (monitor as competitive signals)
-    { name: "Alibaba", tier: 3, country: "CN", industry: "Technology" },
-    { name: "Tencent", tier: 3, country: "CN", industry: "Technology" },
-    { name: "Huawei", tier: 2, country: "CN", industry: "Technology" },
-    { name: "ByteDance", tier: 3, country: "CN", industry: "Technology" }
+    // ========== ASEAN Market (31 ATLs, 89 accounts) ==========
+    // Singapore — Tier 1 Strategic
+    {
+        name: "DBS",
+        tier: 1,
+        market: "ASEAN",
+        country: "SG",
+        industry: "Financial Services",
+        keywords: ["DBS", "Development Bank of Singapore"],
+        enabled: true,
+        // Phase 5 fields (example - add to other clients as needed):
+        atlName: "Sarah Chen",
+        atlEmail: "sarah.chen@ibm.com",
+        nextMeeting: "2026-03-15",
+        activeDeal: true,
+        dealValue: 8500000,
+        notes: "Q2 hybrid cloud modernization RFP"
+    },
+    { name: "OCBC", tier: 1, market: "ASEAN", country: "SG", industry: "Financial Services", keywords: ["OCBC", "Oversea-Chinese Banking"], enabled: true },
+    { name: "UOB", tier: 1, market: "ASEAN", country: "SG", industry: "Financial Services", keywords: ["UOB", "United Overseas Bank"], enabled: true },
+    { name: "Singtel", tier: 1, market: "ASEAN", country: "SG", industry: "Telecommunications", keywords: ["Singtel", "Singapore Telecommunications"], enabled: true },
+    { name: "ST Engineering", tier: 1, market: "ASEAN", country: "SG", industry: "Manufacturing", keywords: ["ST Engineering", "ST Eng"], enabled: true },
+    // Singapore — Tier 2 Growth
+    { name: "PSA", tier: 2, market: "ASEAN", country: "SG", industry: "Transportation & Logistics", keywords: ["PSA", "Port of Singapore"], enabled: true },
+    { name: "CapitaLand", tier: 2, market: "ASEAN", country: "SG", industry: "Real Estate", keywords: ["CapitaLand"], enabled: true },
+    { name: "Singapore Airlines", tier: 2, market: "ASEAN", country: "SG", industry: "Transportation & Logistics", keywords: ["Singapore Airlines", "SIA"], enabled: true },
+    { name: "Grab", tier: 2, market: "ASEAN", country: "SG", industry: "Technology", keywords: ["Grab"], enabled: true },
+    { name: "Sea Limited", tier: 2, market: "ASEAN", country: "SG", industry: "Technology", keywords: ["Sea Limited", "Shopee", "Garena"], enabled: true },
+    // Malaysia — Tier 1 Strategic
+    { name: "CIMB", tier: 1, market: "ASEAN", country: "MY", industry: "Financial Services", keywords: ["CIMB"], enabled: true },
+    { name: "Maybank", tier: 1, market: "ASEAN", country: "MY", industry: "Financial Services", keywords: ["Maybank", "Malayan Banking"], enabled: true },
+    { name: "Petronas", tier: 1, market: "ASEAN", country: "MY", industry: "Energy", keywords: ["Petronas"], enabled: true },
+    // Malaysia — Tier 2 Growth
+    { name: "AirAsia", tier: 2, market: "ASEAN", country: "MY", industry: "Transportation & Logistics", keywords: ["AirAsia"], enabled: true },
+    // Indonesia — Tier 2 Growth
+    { name: "Gojek", tier: 2, market: "ASEAN", country: "ID", industry: "Technology", keywords: ["Gojek"], enabled: true },
+    // Thailand — Tier 2 Growth
+    { name: "PTT", tier: 2, market: "ASEAN", country: "TH", industry: "Energy", keywords: ["PTT"], enabled: true },
+    
+    // ========== ANZ Market (23 ATLs, 68 accounts) ==========
+    // Australia — Tier 1 Strategic
+    { name: "Commonwealth Bank", tier: 1, market: "ANZ", country: "AU", industry: "Financial Services", keywords: ["Commonwealth Bank", "CBA", "CommBank"], enabled: true },
+    { name: "ANZ", tier: 1, market: "ANZ", country: "AU", industry: "Financial Services", keywords: ["ANZ", "Australia and New Zealand Banking"], enabled: true },
+    { name: "Westpac", tier: 1, market: "ANZ", country: "AU", industry: "Financial Services", keywords: ["Westpac"], enabled: true },
+    { name: "NAB", tier: 1, market: "ANZ", country: "AU", industry: "Financial Services", keywords: ["NAB", "National Australia Bank"], enabled: true },
+    { name: "Telstra", tier: 1, market: "ANZ", country: "AU", industry: "Telecommunications", keywords: ["Telstra"], enabled: true },
+    // Australia — Tier 2 Growth
+    { name: "BHP", tier: 2, market: "ANZ", country: "AU", industry: "Manufacturing", keywords: ["BHP", "BHP Billiton"], enabled: true },
+    { name: "Rio Tinto", tier: 2, market: "ANZ", country: "AU", industry: "Manufacturing", keywords: ["Rio Tinto"], enabled: true },
+    { name: "Woolworths", tier: 2, market: "ANZ", country: "AU", industry: "Retail", keywords: ["Woolworths"], enabled: true },
+    { name: "Qantas", tier: 2, market: "ANZ", country: "AU", industry: "Transportation & Logistics", keywords: ["Qantas"], enabled: true },
+    // Australia — Tier 3 Prospect
+    { name: "AGL", tier: 3, market: "ANZ", country: "AU", industry: "Energy", keywords: ["AGL", "AGL Energy"], enabled: true },
+    
+    // ========== KOREA Market (14 ATLs, 45 accounts) ==========
+    // Korea — Tier 1 Strategic
+    { name: "Samsung", tier: 1, market: "KOREA", country: "KR", industry: "Technology", keywords: ["Samsung"], enabled: true },
+    { name: "SK", tier: 1, market: "KOREA", country: "KR", industry: "Technology", keywords: ["SK Group", "SK Telecom", "SK Hynix"], enabled: true },
+    // Korea — Tier 2 Growth
+    { name: "LG", tier: 2, market: "KOREA", country: "KR", industry: "Manufacturing", keywords: ["LG", "LG Electronics"], enabled: true },
+    { name: "Hyundai", tier: 2, market: "KOREA", country: "KR", industry: "Manufacturing", keywords: ["Hyundai"], enabled: true },
+    { name: "POSCO", tier: 2, market: "KOREA", country: "KR", industry: "Manufacturing", keywords: ["POSCO"], enabled: true },
+    { name: "KT", tier: 2, market: "KOREA", country: "KR", industry: "Telecommunications", keywords: ["KT", "KT Corporation"], enabled: true },
+    // Korea — Tier 3 Prospect
+    { name: "Kia", tier: 3, market: "KOREA", country: "KR", industry: "Manufacturing", keywords: ["Kia"], enabled: true },
+    
+    // ========== ISA Market (28 ATLs, 87 accounts) ==========
+    // India — Tier 1 Strategic
+    { name: "Reliance", tier: 1, market: "ISA", country: "IN", industry: "Energy", keywords: ["Reliance", "Reliance Industries", "Jio"], enabled: true },
+    { name: "Tata", tier: 1, market: "ISA", country: "IN", industry: "Manufacturing", keywords: ["Tata", "Tata Group", "TCS"], enabled: true },
+    { name: "HDFC", tier: 1, market: "ISA", country: "IN", industry: "Financial Services", keywords: ["HDFC", "HDFC Bank"], enabled: true },
+    { name: "ICICI", tier: 1, market: "ISA", country: "IN", industry: "Financial Services", keywords: ["ICICI", "ICICI Bank"], enabled: true },
+    // India — Tier 2 Growth
+    { name: "TCS", tier: 2, market: "ISA", country: "IN", industry: "Technology", keywords: ["TCS", "Tata Consultancy"], enabled: true },
+    
+    // ========== GCG Market (19 ATLs, 54 accounts) ==========
+    // China — Tier 2 Growth (competitive intelligence)
+    { name: "Huawei", tier: 2, market: "GCG", country: "CN", industry: "Technology", keywords: ["Huawei"], enabled: true },
+    // China — Tier 3 Prospect (competitive signals)
+    { name: "Alibaba", tier: 3, market: "GCG", country: "CN", industry: "Technology", keywords: ["Alibaba", "Alipay"], enabled: true },
+    { name: "Tencent", tier: 3, market: "GCG", country: "CN", industry: "Technology", keywords: ["Tencent", "WeChat"], enabled: true },
+    { name: "ByteDance", tier: 3, market: "GCG", country: "CN", industry: "Technology", keywords: ["ByteDance", "TikTok"], enabled: true },
+    
+    // ========== Japan (Not primary market, but monitor) ==========
+    { name: "NTT", tier: 2, market: "ASEAN", country: "JP", industry: "Telecommunications", keywords: ["NTT"], enabled: true },
+    { name: "SoftBank", tier: 2, market: "ASEAN", country: "JP", industry: "Telecommunications", keywords: ["SoftBank"], enabled: true },
+    { name: "Toyota", tier: 2, market: "ASEAN", country: "JP", industry: "Manufacturing", keywords: ["Toyota"], enabled: true },
+    { name: "Sony", tier: 3, market: "ASEAN", country: "JP", industry: "Technology", keywords: ["Sony"], enabled: true }
 ];
+
+// Market definitions for Field CTO's 5 APAC regions
+const MARKETS = {
+    ANZ: {
+        name: "Australia & New Zealand",
+        countries: ["AU", "NZ"],
+        atls: 23,
+        accounts: 68,
+        priority: "high"
+    },
+    ASEAN: {
+        name: "Southeast Asia",
+        countries: ["SG", "MY", "TH", "ID", "PH", "VN", "JP"],
+        atls: 31,
+        accounts: 89,
+        priority: "high"
+    },
+    GCG: {
+        name: "Greater China",
+        countries: ["CN", "HK", "TW"],
+        atls: 19,
+        accounts: 54,
+        priority: "medium"
+    },
+    ISA: {
+        name: "India & South Asia",
+        countries: ["IN", "BD", "LK", "PK"],
+        atls: 28,
+        accounts: 87,
+        priority: "high"
+    },
+    KOREA: {
+        name: "South Korea",
+        countries: ["KR"],
+        atls: 14,
+        accounts: 45,
+        priority: "medium"
+    }
+// Geographic keyword dictionary for market detection
+const GEOGRAPHIC_KEYWORDS = {
+    ANZ: {
+        countries: ["australia", "australian", "new zealand", "nz", "kiwi"],
+        cities: ["sydney", "melbourne", "brisbane", "perth", "adelaide", "canberra", "auckland", "wellington", "christchurch"],
+        regions: ["nsw", "victoria", "queensland", "western australia", "south australia", "tasmania", "act", "northern territory"],
+        organizations: ["asx", "rba", "reserve bank of australia", "apra", "asic", "accc", "nzx", "rbnz"]
+    },
+    ASEAN: {
+        countries: ["singapore", "singaporean", "malaysia", "malaysian", "thailand", "thai", "indonesia", "indonesian", 
+                   "philippines", "filipino", "vietnam", "vietnamese", "japan", "japanese"],
+        cities: ["singapore", "kuala lumpur", "bangkok", "jakarta", "manila", "hanoi", "ho chi minh", "tokyo", "osaka"],
+        regions: ["southeast asia", "south east asia", "asean", "sea region"],
+        organizations: ["mas", "monetary authority of singapore", "bank negara", "bank of thailand", "bank indonesia", 
+                       "bangko sentral", "state bank of vietnam", "boj", "bank of japan", "meti", "imda"]
+    },
+    GCG: {
+        countries: ["china", "chinese", "hong kong", "hk", "taiwan", "taiwanese"],
+        cities: ["beijing", "shanghai", "shenzhen", "guangzhou", "chengdu", "hangzhou", "hong kong", "taipei", "taichung"],
+        regions: ["greater china", "mainland china", "prc", "people's republic"],
+        organizations: ["pboc", "people's bank of china", "csrc", "cbirc", "hkma", "hong kong monetary authority", 
+                       "fsc taiwan", "financial supervisory commission"]
+    },
+    ISA: {
+        countries: ["india", "indian", "bangladesh", "bangladeshi", "sri lanka", "sri lankan", "pakistan", "pakistani"],
+        cities: ["mumbai", "delhi", "bangalore", "bengaluru", "hyderabad", "chennai", "pune", "kolkata", "dhaka", "colombo", "karachi"],
+        regions: ["south asia", "indian subcontinent"],
+        organizations: ["rbi", "reserve bank of india", "sebi", "irdai", "meity", "bangladesh bank", "central bank of sri lanka", "state bank of pakistan"]
+    },
+    KOREA: {
+        countries: ["korea", "korean", "south korea", "republic of korea", "rok"],
+        cities: ["seoul", "busan", "incheon", "daegu", "daejeon", "gwangju"],
+        regions: ["korean peninsula"],
+        organizations: ["bok", "bank of korea", "fsc", "financial services commission", "fss", "kftc", "msit"]
+    }
+};
+
+};
+
+// Client tier definitions
+const CLIENT_TIERS = {
+    1: { name: "Strategic", boost: 0.40, color: "#FF6B6B", description: "Top 50 accounts - daily monitoring" },
+    2: { name: "Growth", boost: 0.25, color: "#4ECDC4", description: "Next 100 accounts - weekly monitoring" },
+    3: { name: "Prospect", boost: 0.15, color: "#95E1D3", description: "Remaining 193 accounts - background monitoring" }
+};
 
 // ============================================
 // EXPANDED INDUSTRY KEYWORDS
