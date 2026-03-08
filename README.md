@@ -1,148 +1,111 @@
 # 📡 The Signal Today - Web Version
 
-An AI-powered intelligence briefing app for enterprise technology leaders. This web version runs on GitHub Pages and provides:
+An AI-powered intelligence briefing app designed for the **Field CTO of IBM Asia Pacific**, leading 115 ATLs across 343 accounts in 5 markets.
 
-- **52 Curated RSS Sources** across 7 categories
-- **Industry & Client Matching** with configurable priorities
-- **Cross-Reference Detection** for trending topics
-- **AI-Powered Digests** via Claude API
-- **Action-Oriented Summaries** framed for client conversations
+## 🎯 4-Section Layout
+
+| Section | Purpose | Timeframe | AI Analysis |
+|---------|---------|-----------|-------------|
+| **⚡ Today's Signals** | "Act on this TODAY" | Last 24-48h | Action + IBM angle + competitive alert |
+| **📍 Client Radar** | Account-specific intelligence | Real-time | Brief ATL action per client |
+| **📢 ATL Enablement** | Team communication | This week | Slack-ready talking points |
+| **📚 Deep Reads** | Strategic internalization | 7-14 days | Thesis + leadership implication + CxO question |
+
+### Today's Signals vs Deep Reads
+
+| Aspect | ⚡ Today's Signals | 📚 Deep Reads |
+|--------|-------------------|---------------|
+| **Question** | "What do I do TODAY?" | "What should I be thinking about?" |
+| **Output** | 3-5 actionable items | 3-5 strategic pieces |
+| **Format** | Headline + Action + IBM Angle | Thesis + Implication + CxO Question |
+| **Use case** | ATL brief, client meeting prep | Board prep, offsite thinking, CxO conversations |
+| **Wave tag** | AI WAVE or SOVEREIGNTY WAVE | Time horizon (6mo / 12mo / 2-3yr) |
+
+## 🗺️ Market Coverage
+
+| Market | Countries |
+|--------|----------|
+| **ANZ** | Australia, New Zealand |
+| **ASEAN** | Singapore, Malaysia, Thailand, Indonesia, Philippines, Vietnam |
+| **GCG** | Hong Kong, Taiwan, China |
+| **ISA** | India, Bangladesh, Sri Lanka, Pakistan |
+| **KOREA** | South Korea |
 
 ## 🚀 Quick Start
 
-### Deploy to GitHub Pages
+```bash
+git clone https://github.com/IBMAPAC/the-signal-today-web.git
+cd the-signal-today-web
+git push origin main
+```
 
-1. **Fork or Clone this Repository**
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/the-signal-today-web.git
-   cd the-signal-today-web
-   ```
+Enable Pages: **Settings → Pages → Source: main branch**
 
-2. **Push to GitHub**
-   ```bash
-   git add .
-   git commit -m "Initial commit"
-   git push origin main
-   ```
+### Configure Claude API
 
-3. **Enable GitHub Pages**
-   - Go to your repository on GitHub
-   - Navigate to **Settings** → **Pages**
-   - Under "Source", select **main** branch
-   - Click **Save**
-   - Your site will be available at `https://YOUR_USERNAME.github.io/the-signal-today-web/`
+1. Get API key from [console.anthropic.com](https://console.anthropic.com/)
+2. Open app → **⚙️ Settings** → Enter API key
+3. AI synthesis for Today's Signals and Deep Reads now enabled
 
-### Configure Claude API (Optional but Recommended)
+## 👥 Client Portfolio Management
 
-1. Get your API key from [console.anthropic.com](https://console.anthropic.com/)
-2. Open the app and click **⚙️ Settings**
-3. Enter your API key in the **Claude AI** section
-4. Click **Save Settings**
+Click **👥 Clients** to access full client management:
 
-> **Note:** The API key is stored in your browser's localStorage and never sent to any server except Anthropic's API.
+| Feature | Description |
+|---------|-------------|
+| **Market Tabs** | Filter by ANZ, ASEAN, GCG, ISA, Korea |
+| **Bulk Tier Assignment** | Select multiple → Set Tier 1/2/3 |
+| **ATL Assignment** | Link client to ATL name |
+| **CSV Import/Export** | Bulk manage 343+ accounts |
 
-## 📱 Features
+### CSV Format
+```
+Name,Market,Country,Industry,Tier,ATL
+DBS,ASEAN,SG,Financial Services,1,John Smith
+Telstra,ANZ,AU,Telecommunications,1,Jane Doe
+```
 
-### Daily Digest
-- Fetches articles from 52 curated RSS sources
-- Scores articles based on relevance, industry match, and client mentions
-- Generates AI-powered action briefs (with Claude API key)
-- Enforces time budget (default: 15 minutes)
+### Client Tiers
+- **Tier 1 (Strategic)**: +35% boost, daily monitoring
+- **Tier 2 (Growth)**: +25% boost, weekly monitoring
+- **Tier 3 (Prospect)**: +15% boost, background tracking
 
-### Categories
-| Category | Sources | Focus |
-|----------|---------|-------|
-| 🤖 AI & Agentic | 6 | Enterprise AI, LLMs, agents |
-| 🛡️ Sovereignty & Regulation | 7 | Privacy, compliance, governance |
-| 🌏 APAC Enterprise | 9 | Regional tech news |
-| 🇨🇳 China & Geopolitics | 4 | US-China dynamics |
-| ⚔️ Competitive Landscape | 9 | Microsoft, AWS, Google, consultancies |
-| 🏗️ Architecture & Platform | 7 | Cloud native, Kubernetes, platforms |
-| 💭 Strategic Perspectives | 10 | Analysts, thought leadership |
+## 📊 RSS Sources
 
-### Industry Priorities
-Configure tier-based boosts for your focus industries:
-- **Tier 1 (+30%)**: Financial Services, Government, Manufacturing, Energy, Retail
-- **Tier 2 (+20%)**: Telecommunications, Healthcare
-- **Tier 3 (+10%)**: Technology
+**99 curated sources** across 8 categories:
 
-### Client Watchlist
-Add companies to monitor (+25% boost when mentioned):
-- DBS, OCBC, UOB, Singtel, Telstra, ANZ, Commonwealth Bank, etc.
+| Category | Sources | Deep Read Priority |
+|----------|---------|-------------------|
+| 🤖 AI & Agentic | 9 | Medium |
+| 🛡️ Sovereignty & Regulation | 19 | High |
+| 🌏 APAC Enterprise | 22 | Low |
+| 🇨🇳 China & Geopolitics | 6 | Medium |
+| ⚔️ Competitive Landscape | 23 | Medium |
+| 🏗️ Architecture & Platform | 8 | High |
+| 💭 Strategic Perspectives | 7 | **Highest** |
+| 🔵 IBM & Partners | 5 | Low |
 
-## 🔧 Configuration
-
-### Settings
-Access via the ⚙️ button:
+## 🔧 Settings
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Claude API Key | - | For AI-powered digests |
-| Daily Minutes | 15 | Reading time budget |
-| Weekly Articles | 5 | Max articles for weekly digest |
-| Industry Priorities | Tier 1-3 | Boost relevance by industry |
-| Client Watchlist | 13 defaults | Companies to monitor |
+| Claude API Key | — | Enables AI synthesis |
+| This Week's Context | — | Meetings/deals for prioritization |
+| Industry Priorities | Tier 1-3 | Boost by industry |
 
-### Data Storage
-All data is stored in browser localStorage:
-- `signal_api_key` - Claude API key (encrypted in browser)
-- `signal_sources` - RSS source configuration
-- `signal_industries` - Industry priorities
-- `signal_clients` - Client watchlist
-- `signal_articles` - Cached articles
-- `signal_digest` - Last generated digest
+## 📱 Responsive Design
 
-## 🛠️ Development
+Optimized for Mac, iPad, and iPhone with 44px touch targets (Apple HIG).
 
-### Local Development
-```bash
-# Start a local server
-python -m http.server 8000
-# or
-npx serve .
+## 🛠️ Technical
 
-# Open http://localhost:8000
-```
+### Storage
+- **IndexedDB**: 7-day article corpus, 14-day digest history
+- **localStorage**: Settings, clients, sources
 
-### Project Structure
-```
-the-signal-today-web/
-├── index.html      # Main HTML structure
-├── style.css       # Styling (supports dark mode)
-├── sources.js      # Default sources & configuration
-├── app.js          # Application logic
-└── README.md       # Documentation
-```
-
-### Adding Sources
-Edit `sources.js` to add new RSS feeds:
-```javascript
-{
-    name: "Source Name",
-    url: "https://example.com/feed.xml",
-    category: "AI & Agentic",
-    priority: 1,  // 1=high, 2=medium, 3=low
-    credibilityScore: 0.90,
-    digestType: "daily",  // daily, weekly, or both
-    enabled: true
-}
-```
-
-## 🔒 Privacy & Security
-
-- **No server-side storage** - All data stays in your browser
-- **API key security** - Only sent to Anthropic's API
-- **CORS proxy** - Uses allorigins.win for RSS fetching
-- **No tracking** - No analytics or third-party scripts
-
-## 📝 License
-
-MIT License - Feel free to fork and customize for your needs.
-
-## 🙏 Credits
-
-Built for Field CTOs and technical leaders who need to stay informed without drowning in noise.
+### AI Prompts
+All AI prompts use **dynamic client lists** from your configured watchlist. No hardcoded client names.
 
 ---
 
-**Questions?** Open an issue on GitHub.
+**Live**: https://ibmapac.github.io/the-signal-today-web/

@@ -237,6 +237,17 @@ const STORAGE_KEYS = {
     // Instapaper integration now uses the bookmarklet URL only (no credentials needed).
 };
 
+// Utility: Escape HTML entities to prevent XSS
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 class SignalApp {
     constructor() {
         this.articles = [];
@@ -249,21 +260,27 @@ class SignalApp {
         this.settings = {
             dailyMinutes: 15,
             weeklyArticles: 10,
-            weeklyCurrencyDays: 7,   // Used for weekly article cutoff window
-            thisWeekContext: '',      // Current meetings/deals context for Claude
-            autoRefreshTime: '',      // e.g. "06:30" for 6:30 AM auto-refresh
-            keyboardShortcuts: true   // Enable/disable keyboard shortcuts
+            weeklyCurrencyDays: 7,
+            thisWeekContext: '',
+            autoRefreshTime: '',
+            keyboardShortcuts: true
         };
         this.isLoading = false;
         this.currentTab = 'daily';
-        this.crossRefs = []; // Cached cross-reference results to avoid recomputation
-        this.focusedArticleIndex = -1; // For keyboard navigation
+        this.crossRefs = [];
+        this.focusedArticleIndex = -1;
         this.autoRefreshTimer = null;
-        this.articleRatings = {};   // { articleId: 1 (👍) | -1 (👎) }
-        this.sourceScoreDrift = {}; // { sourceName: delta } — accumulated from ratings
-        this.failedSources = [];    // Sources that failed to fetch in the last refresh
+        this.articleRatings = {};
+        this.sourceScoreDrift = {};
+        this.failedSources = [];
         this.debugMode = new URLSearchParams(location.search).get('debug') === '1';
-        this.db = new SignalDB();   // IndexedDB persistence layer (Phase 5)
+        this.db = new SignalDB();
+        
+        // New: Market filtering state
+        this.currentMarket = 'ALL';
+        this.clientManagerMarket = 'ALL';
+        this.selectedClients = new Set();
+        this.lastBriefATLText = '';
         
         this.init();
     }
@@ -332,15 +349,23 @@ class SignalApp {
         const savedIndustries = localStorage.getItem(STORAGE_KEYS.INDUSTRIES);
         this.industries = savedIndustries ? JSON.parse(savedIndustries) : [...DEFAULT_INDUSTRIES];
         
-        // Load clients — migrate legacy flat string array to structured objects
+        // Load clients — migrate legacy flat string array to structured objects with markets
         const savedClients = localStorage.getItem(STORAGE_KEYS.CLIENTS);
         if (savedClients) {
             const parsed = JSON.parse(savedClients);
             // Migration: if stored as flat strings, convert to objects
             if (parsed.length > 0 && typeof parsed[0] === 'string') {
-                this.clients = parsed.map(name => ({ name, tier: 2, country: '' }));
+                this.clients = parsed.map(name => ({ name, tier: 2, country: '', market: 'ASEAN' }));
             } else {
-                this.clients = parsed;
+                // Ensure all clients have market field (migration from pre-market version)
+                this.clients = parsed.map(c => {
+                    if (!c.market && c.country) {
+                        c.market = typeof getMarketFromCountry === 'function' 
+                            ? getMarketFromCountry(c.country) 
+                            : 'ASEAN';
+                    }
+                    return c;
+                });
             }
         } else {
             this.clients = [...DEFAULT_CLIENTS];
@@ -2028,6 +2053,21 @@ Return ONLY valid JSON, no markdown fences:
             ? `\nTHIS WEEK'S CONTEXT (prioritize relevance to these meetings/deals):\n${this.settings.thisWeekContext}\n`
             : '';
 
+        // Build dynamic Tier 1 client list for prompt
+        const tier1Clients = this.clients
+            .filter(c => c.tier === 1)
+            .map(c => c.name)
+            .slice(0, 15); // Limit to avoid prompt bloat
+        const tier1ClientList = tier1Clients.length > 0 
+            ? tier1Clients.join(', ')
+            : 'your configured Tier 1 clients';
+        
+        // Pick 2 sample clients for examples (or use generic)
+        const sampleClients = tier1Clients.length >= 2
+            ? `${tier1Clients[0]} or ${tier1Clients[1]}`
+            : 'a Tier 1 client';
+        const sampleClient = tier1Clients.length > 0 ? tier1Clients[0] : 'a watchlist client';
+
         const prompt = `You are the intelligence briefer for the Field CTO of IBM Asia Pacific.
 ${contextBlock}
 YOUR JOB IS NOT TO SUMMARIZE NEWS. Answer these four questions:
@@ -2053,17 +2093,16 @@ FRAMING RULES (strictly enforced):
 2. BAD: "Microsoft announced new Azure AI services"
 3. GOOD: "[AI WAVE] COMPETITIVE ALERT: Microsoft's Azure AI Foundry [Azure Blog](url) now offers
    on-premises deployment — directly challenges IBM's hybrid cloud positioning. ACTION: Lead with
-   watsonx.ai's enterprise governance in your next Samsung or DBS conversation."
+   watsonx.ai's enterprise governance in your next ${sampleClients} conversation."
 
 CLIENT INTELLIGENCE RULES:
 - Articles tagged with a Client name are watchlist client signals
-- For Tier 1 clients (DBS, Commonwealth Bank, ANZ, Westpac, NAB, Samsung, Reliance,
-  HDFC, ICICI, CIMB, Maybank, Petronas, Singtel, Starhub, Telstra, SK Telecom):
+- For Tier 1 clients (${tier1ClientList}):
   flag their signals explicitly in executiveSummary or the relevant section
 - If thisWeekContext mentions a client by name, that client's signals are MEETING PREP —
   surface them first in executiveSummary
 - When a client article reveals a broader industry pattern, reference it in the
-  corresponding industrySignals entry as evidence (e.g. "DBS's AI announcement signals...")
+  corresponding industrySignals entry as evidence (e.g. "${sampleClient}'s AI announcement signals...")
 
 INDUSTRY SIGNALS RULES:
 - Scan today's articles for each Tier 1 industry: Financial Services, Government, Manufacturing, Energy, Retail
@@ -2206,38 +2245,21 @@ ${articleList}`;
     }
 
     renderDailyTab() {
-        // 1. Action Brief — synthesised headline, read this first
-        if (this.digest) {
-            document.getElementById('executive-summary').innerHTML = this.formatMarkdownLinks(this.digest.executiveSummary);
-        }
-
-        // 2. Client Watch — account-specific intel (highest urgency: meeting prep)
-        this.renderClientWatch();
-
-        // 3. Conversation Openers — talking points, contextualised by Client Watch above
-        if (this.digest) {
-            this.renderStarters(this.digest.conversationStarters || []);
-        }
-
-        // 4. Industry Signals — AI-generated per-industry strategic guidance (ATL team framing)
-        if (this.digest) {
-            this.renderIndustrySignals();
-        }
-
-        // 5. AI Digest Sections — thematic deep-dives (AI-generated block stays together)
-        if (this.digest) {
-            this.renderSections(this.digest.sections || []);
-        }
-
-        // 6. Cross-Source Signals — keyword-matched multi-source themes (supporting context)
-        // Use cached crossRefs computed during scoring (avoids recomputing O(articles×themes×keywords))
-        this.renderCrossSourceSignals(this.crossRefs);
-
-        // 7. Multi-Day Trending — topics rising across the 7-day IDB corpus
-        this.renderTrending();
+        // NEW 4-SECTION LAYOUT:
+        // 1. Today's Signals — synthesized intelligence with IBM angles
+        renderTodaysSignals();
         
-        // 8. All Daily Articles — full reference list
-        this.renderDailyArticles();
+        // 2. Client Radar — market-based view with Brief ATL action
+        renderClientRadar();
+        
+        // 3. ATL Enablement — what to tell your 115 ATLs
+        renderATLEnablement();
+        
+        // 4. Deep Reads — collapsed by default
+        renderDeepReads();
+        
+        // Update portfolio stats
+        updateClientManagerCounts();
     }
 
     // ==========================================
@@ -3702,20 +3724,29 @@ function closeGTMDigest() {
     if (modal) modal.classList.add('hidden');
 }
 
+// Helper: find article across all pools (master list + daily + weekly)
+function findArticleById(articleId) {
+    return app.articles.find(a => a.id === articleId)
+        || app.dailyArticles.find(a => a.id === articleId)
+        || app.weeklyArticles.find(a => a.id === articleId);
+}
+
 function copyArticleLink() {
     const articleId = document.getElementById('article-modal').dataset.articleId;
-    const article = app.articles.find(a => a.id === articleId);
+    const article = findArticleById(articleId);
     if (article) {
         navigator.clipboard.writeText(article.url);
-        alert('Link copied!');
+        showToast('Link copied to clipboard');
     }
 }
 
 function saveToInstapaper() {
     const articleId = document.getElementById('article-modal').dataset.articleId;
-    const article = app.articles.find(a => a.id === articleId);
+    const article = findArticleById(articleId);
     if (article) {
         saveArticleToInstapaper(article.url, article.title);
+    } else {
+        showToast('Article not found');
     }
 }
 
@@ -3733,8 +3764,11 @@ function quickSaveToInstapaper(articleId, event) {
         event.stopPropagation();
     }
     
-    const article = app.articles.find(a => a.id === articleId);
-    if (!article) return;
+    const article = findArticleById(articleId);
+    if (!article) {
+        showToast('Article not found');
+        return;
+    }
     
     saveArticleToInstapaper(article.url, article.title);
     
@@ -3962,6 +3996,994 @@ function deleteCurrentSource() {
         updateSourcesCount();
         closeSourceEditor();
     }
+}
+
+// ==========================================
+// CLIENT MANAGER FUNCTIONS
+// ==========================================
+
+function openClientManager() {
+    document.getElementById('client-manager-modal').classList.remove('hidden');
+    app.clientManagerMarket = 'ALL';
+    app.selectedClients.clear();
+    updateClientManagerCounts();
+    renderClientTable();
+}
+
+function closeClientManager() {
+    document.getElementById('client-manager-modal').classList.add('hidden');
+    app.selectedClients.clear();
+}
+
+function switchClientManagerTab(market) {
+    app.clientManagerMarket = market;
+    document.querySelectorAll('.cm-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.market === market);
+    });
+    app.selectedClients.clear();
+    document.getElementById('cm-select-all').checked = false;
+    updateBulkActionsVisibility();
+    renderClientTable();
+}
+
+function updateClientManagerCounts() {
+    const counts = { ALL: 0, ANZ: 0, ASEAN: 0, GCG: 0, ISA: 0, KOREA: 0 };
+    app.clients.forEach(c => {
+        counts.ALL++;
+        if (counts[c.market] !== undefined) counts[c.market]++;
+    });
+    Object.keys(counts).forEach(market => {
+        const el = document.getElementById(`cm-count-${market.toLowerCase()}`);
+        if (el) el.textContent = counts[market];
+    });
+    // Update portfolio stats in header
+    const statsEl = document.getElementById('portfolio-stats');
+    if (statsEl) {
+        const tier1 = app.clients.filter(c => c.tier === 1).length;
+        statsEl.textContent = `${counts.ALL} clients (${tier1} Tier 1)`;
+    }
+}
+
+function renderClientTable() {
+    const tbody = document.getElementById('client-table-body');
+    const searchTerm = (document.getElementById('cm-search-input')?.value || '').toLowerCase();
+    
+    let filtered = app.clients.filter(c => {
+        if (app.clientManagerMarket !== 'ALL' && c.market !== app.clientManagerMarket) return false;
+        if (searchTerm && !c.name.toLowerCase().includes(searchTerm)) return false;
+        return true;
+    });
+    
+    // Sort by tier then name
+    filtered.sort((a, b) => (a.tier - b.tier) || a.name.localeCompare(b.name));
+    
+    tbody.innerHTML = filtered.map((client, idx) => {
+        const originalIdx = app.clients.indexOf(client);
+        const lastSignal = client.lastMentioned ? formatRelativeDate(new Date(client.lastMentioned)) : '—';
+        const isRecent = client.lastMentioned && (Date.now() - new Date(client.lastMentioned).getTime()) < 7 * 24 * 60 * 60 * 1000;
+        return `
+            <tr data-idx="${originalIdx}">
+                <td class="col-checkbox"><input type="checkbox" onchange="toggleClientSelection(${originalIdx})" ${app.selectedClients.has(originalIdx) ? 'checked' : ''}></td>
+                <td class="client-name-cell">${escapeHtml(client.name)}</td>
+                <td>${client.market || '—'}</td>
+                <td>${client.industry || '—'}</td>
+                <td><span class="client-tier-badge tier-${client.tier}">Tier ${client.tier}</span></td>
+                <td>${escapeHtml(client.atl || '—')}</td>
+                <td class="client-last-signal ${isRecent ? 'recent' : ''}">${lastSignal}</td>
+                <td class="col-actions">
+                    <button class="client-action-btn" onclick="editClient(${originalIdx})" title="Edit">✏️</button>
+                    <button class="client-action-btn" onclick="deleteClient(${originalIdx})" title="Delete">🗑️</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filterClientManager() {
+    renderClientTable();
+}
+
+function toggleClientSelection(idx) {
+    if (app.selectedClients.has(idx)) {
+        app.selectedClients.delete(idx);
+    } else {
+        app.selectedClients.add(idx);
+    }
+    updateBulkActionsVisibility();
+}
+
+function toggleSelectAllClients() {
+    const selectAll = document.getElementById('cm-select-all').checked;
+    const searchTerm = (document.getElementById('cm-search-input')?.value || '').toLowerCase();
+    
+    app.clients.forEach((client, idx) => {
+        if (app.clientManagerMarket !== 'ALL' && client.market !== app.clientManagerMarket) return;
+        if (searchTerm && !client.name.toLowerCase().includes(searchTerm)) return;
+        
+        if (selectAll) {
+            app.selectedClients.add(idx);
+        } else {
+            app.selectedClients.delete(idx);
+        }
+    });
+    updateBulkActionsVisibility();
+    renderClientTable();
+}
+
+function updateBulkActionsVisibility() {
+    const bulkEl = document.getElementById('cm-bulk-actions');
+    const countEl = document.getElementById('cm-selected-count');
+    if (app.selectedClients.size > 0) {
+        bulkEl.classList.remove('hidden');
+        countEl.textContent = `${app.selectedClients.size} selected`;
+    } else {
+        bulkEl.classList.add('hidden');
+    }
+}
+
+function bulkSetTier(tier) {
+    app.selectedClients.forEach(idx => {
+        if (app.clients[idx]) app.clients[idx].tier = tier;
+    });
+    app.saveToStorage();
+    app.selectedClients.clear();
+    document.getElementById('cm-select-all').checked = false;
+    updateBulkActionsVisibility();
+    renderClientTable();
+    showToast(`Updated ${app.selectedClients.size} clients to Tier ${tier}`);
+}
+
+function bulkDeleteClients() {
+    if (!confirm(`Delete ${app.selectedClients.size} clients?`)) return;
+    const toDelete = Array.from(app.selectedClients).sort((a, b) => b - a);
+    toDelete.forEach(idx => app.clients.splice(idx, 1));
+    app.saveToStorage();
+    app.selectedClients.clear();
+    document.getElementById('cm-select-all').checked = false;
+    updateBulkActionsVisibility();
+    updateClientManagerCounts();
+    renderClientTable();
+    showToast('Clients deleted');
+}
+
+function openAddClientForm() {
+    document.getElementById('client-form-modal').classList.remove('hidden');
+    document.getElementById('client-form-title').textContent = 'Add Client';
+    document.getElementById('client-form-id').value = '';
+    document.getElementById('client-form-name').value = '';
+    document.getElementById('client-form-market').value = app.clientManagerMarket !== 'ALL' ? app.clientManagerMarket : '';
+    document.getElementById('client-form-country').innerHTML = '<option value="">Select</option>';
+    document.getElementById('client-form-industry').value = '';
+    document.getElementById('client-form-tier').value = '2';
+    document.getElementById('client-form-atl').value = '';
+    document.getElementById('client-form-aliases').value = '';
+    updateCountryOptions();
+}
+
+function editClient(idx) {
+    const client = app.clients[idx];
+    if (!client) return;
+    
+    document.getElementById('client-form-modal').classList.remove('hidden');
+    document.getElementById('client-form-title').textContent = 'Edit Client';
+    document.getElementById('client-form-id').value = idx;
+    document.getElementById('client-form-name').value = client.name;
+    document.getElementById('client-form-market').value = client.market || '';
+    updateCountryOptions();
+    document.getElementById('client-form-country').value = client.country || '';
+    document.getElementById('client-form-industry').value = client.industry || '';
+    document.getElementById('client-form-tier').value = client.tier || 2;
+    document.getElementById('client-form-atl').value = client.atl || '';
+    document.getElementById('client-form-aliases').value = (client.aliases || []).join(', ');
+}
+
+function closeClientForm() {
+    document.getElementById('client-form-modal').classList.add('hidden');
+}
+
+function updateCountryOptions() {
+    const market = document.getElementById('client-form-market').value;
+    const countrySelect = document.getElementById('client-form-country');
+    const currentValue = countrySelect.value;
+    
+    const countryMap = {
+        'ANZ': [['AU', 'Australia'], ['NZ', 'New Zealand']],
+        'ASEAN': [['SG', 'Singapore'], ['MY', 'Malaysia'], ['TH', 'Thailand'], ['ID', 'Indonesia'], ['PH', 'Philippines'], ['VN', 'Vietnam']],
+        'GCG': [['HK', 'Hong Kong'], ['TW', 'Taiwan'], ['CN', 'China']],
+        'ISA': [['IN', 'India'], ['BD', 'Bangladesh'], ['LK', 'Sri Lanka'], ['PK', 'Pakistan']],
+        'KOREA': [['KR', 'South Korea']]
+    };
+    
+    const countries = countryMap[market] || [];
+    countrySelect.innerHTML = '<option value="">Select</option>' + 
+        countries.map(([code, name]) => `<option value="${code}">${name}</option>`).join('');
+    
+    if (countries.some(([code]) => code === currentValue)) {
+        countrySelect.value = currentValue;
+    }
+}
+
+function saveClient() {
+    const idxStr = document.getElementById('client-form-id').value;
+    const name = document.getElementById('client-form-name').value.trim();
+    const market = document.getElementById('client-form-market').value;
+    const country = document.getElementById('client-form-country').value;
+    const industry = document.getElementById('client-form-industry').value;
+    const tier = parseInt(document.getElementById('client-form-tier').value) || 2;
+    const atl = document.getElementById('client-form-atl').value.trim();
+    const aliasesStr = document.getElementById('client-form-aliases').value;
+    const aliases = aliasesStr ? aliasesStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+    
+    if (!name || !market) {
+        showToast('Name and Market are required');
+        return;
+    }
+    
+    const clientData = { name, market, country, industry, tier, atl, aliases };
+    
+    if (idxStr !== '') {
+        // Update existing
+        const idx = parseInt(idxStr);
+        app.clients[idx] = { ...app.clients[idx], ...clientData };
+    } else {
+        // Add new
+        app.clients.push(clientData);
+    }
+    
+    app.saveToStorage();
+    updateClientManagerCounts();
+    renderClientTable();
+    closeClientForm();
+    showToast(idxStr ? 'Client updated' : 'Client added');
+}
+
+function deleteClient(idx) {
+    const client = app.clients[idx];
+    if (confirm(`Delete "${client.name}"?`)) {
+        app.clients.splice(idx, 1);
+        app.saveToStorage();
+        updateClientManagerCounts();
+        renderClientTable();
+        showToast('Client deleted');
+    }
+}
+
+function importClientsCSV() {
+    document.getElementById('csv-import-modal').classList.remove('hidden');
+    document.getElementById('csv-import-data').value = '';
+    document.getElementById('csv-file-input').value = '';
+}
+
+function closeCSVImport() {
+    document.getElementById('csv-import-modal').classList.add('hidden');
+}
+
+function handleCSVFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        document.getElementById('csv-import-data').value = e.target.result;
+    };
+    reader.readAsText(file);
+}
+
+function processCSVImport() {
+    const data = document.getElementById('csv-import-data').value.trim();
+    if (!data) {
+        showToast('No data to import');
+        return;
+    }
+    
+    const lines = data.split('\n').filter(l => l.trim());
+    let imported = 0;
+    
+    lines.forEach(line => {
+        const parts = line.split(',').map(s => s.trim());
+        if (parts.length < 2) return;
+        
+        const [name, market, country, industry, tierStr, atl] = parts;
+        if (!name || !market) return;
+        
+        // Check for duplicate
+        if (app.clients.some(c => c.name.toLowerCase() === name.toLowerCase())) return;
+        
+        app.clients.push({
+            name,
+            market: market.toUpperCase(),
+            country: country || '',
+            industry: industry || '',
+            tier: parseInt(tierStr) || 2,
+            atl: atl || '',
+            aliases: []
+        });
+        imported++;
+    });
+    
+    app.saveToStorage();
+    updateClientManagerCounts();
+    renderClientTable();
+    closeCSVImport();
+    showToast(`Imported ${imported} clients`);
+}
+
+function exportClientsCSV() {
+    const csv = app.clients.map(c => 
+        [c.name, c.market, c.country, c.industry, c.tier, c.atl || ''].join(',')
+    ).join('\n');
+    
+    const blob = new Blob([`Name,Market,Country,Industry,Tier,ATL\n${csv}`], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'signal-today-clients.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ==========================================
+// MARKET FILTERING (Client Radar)
+// ==========================================
+
+function switchMarket(market) {
+    app.currentMarket = market;
+    document.querySelectorAll('.market-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.market === market);
+    });
+    renderClientRadar();
+}
+
+function filterClientRadar() {
+    renderClientRadar();
+}
+
+function renderClientRadar() {
+    const list = document.getElementById('client-radar-list');
+    const emptyEl = document.getElementById('client-radar-empty');
+    
+    const showTier1 = document.getElementById('filter-tier-1')?.checked ?? true;
+    const showTier2 = document.getElementById('filter-tier-2')?.checked ?? true;
+    const showTier3 = document.getElementById('filter-tier-3')?.checked ?? false;
+    
+    // Get articles with client matches
+    const clientArticles = {};
+    const allArticles = [...app.dailyArticles, ...app.articles.filter(a => {
+        const age = Date.now() - new Date(a.date).getTime();
+        return age < 24 * 60 * 60 * 1000;
+    })];
+    
+    allArticles.forEach(article => {
+        if (!article.matchedClients || article.matchedClients.length === 0) return;
+        article.matchedClients.forEach(clientName => {
+            const client = app.clients.find(c => 
+                c.name.toLowerCase() === clientName.toLowerCase() ||
+                (c.aliases || []).some(a => a.toLowerCase() === clientName.toLowerCase())
+            );
+            if (!client) return;
+            if (!clientArticles[client.name]) {
+                clientArticles[client.name] = { client, articles: [] };
+            }
+            if (!clientArticles[client.name].articles.some(a => a.id === article.id)) {
+                clientArticles[client.name].articles.push(article);
+            }
+        });
+    });
+    
+    // Filter by market and tier
+    let entries = Object.values(clientArticles).filter(({ client }) => {
+        if (app.currentMarket !== 'ALL' && client.market !== app.currentMarket) return false;
+        if (client.tier === 1 && !showTier1) return false;
+        if (client.tier === 2 && !showTier2) return false;
+        if (client.tier === 3 && !showTier3) return false;
+        return true;
+    });
+    
+    // Sort by tier then article count
+    entries.sort((a, b) => (a.client.tier - b.client.tier) || (b.articles.length - a.articles.length));
+    
+    // Update count badge
+    const countEl = document.getElementById('client-signals-count');
+    if (countEl) countEl.textContent = entries.length;
+    
+    if (entries.length === 0) {
+        list.innerHTML = '';
+        emptyEl?.classList.remove('hidden');
+        return;
+    }
+    
+    emptyEl?.classList.add('hidden');
+    
+    list.innerHTML = entries.map(({ client, articles }) => `
+        <div class="client-radar-item">
+            <div class="client-radar-header">
+                <span class="client-radar-name">${escapeHtml(client.name)}</span>
+                <div class="client-radar-meta">
+                    <span class="client-radar-tier tier-${client.tier}">Tier ${client.tier}</span>
+                    <span class="client-radar-industry">${client.industry || ''}</span>
+                </div>
+            </div>
+            <div class="client-radar-articles">
+                ${articles.slice(0, 3).map(a => `
+                    <div class="client-radar-article" onclick="openArticle('${a.id}')">
+                        <span class="client-radar-article-source">${escapeHtml(a.source)}</span>
+                        <span class="client-radar-article-title">${escapeHtml(a.title)}</span>
+                    </div>
+                `).join('')}
+            </div>
+            <div class="client-radar-actions">
+                <button class="btn btn-sm btn-brief-atl" onclick="openBriefATL('${escapeHtml(client.name)}')">
+                    📤 Brief ATL
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// ==========================================
+// BRIEF ATL MODAL
+// ==========================================
+
+async function openBriefATL(clientName) {
+    const modal = document.getElementById('brief-atl-modal');
+    const titleEl = document.getElementById('brief-atl-title');
+    const contentEl = document.getElementById('brief-atl-content');
+    
+    const client = app.clients.find(c => c.name === clientName);
+    if (!client) return;
+    
+    titleEl.textContent = `Brief ATL: ${clientName}`;
+    modal.classList.remove('hidden');
+    
+    // Get articles for this client
+    const allArticles = [...app.dailyArticles, ...app.articles];
+    const clientArticles = allArticles.filter(a => 
+        a.matchedClients?.some(c => c.toLowerCase() === clientName.toLowerCase() ||
+            (client.aliases || []).some(al => al.toLowerCase() === c.toLowerCase()))
+    );
+    
+    if (clientArticles.length === 0) {
+        contentEl.innerHTML = '<p>No recent articles for this client.</p>';
+        app.lastBriefATLText = '';
+        return;
+    }
+    
+    // Check for API key
+    const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+    
+    if (!apiKey) {
+        // No AI - generate simple brief
+        const articleList = clientArticles.slice(0, 5).map(a => 
+            `• ${a.title} (${a.source})`
+        ).join('\n');
+        
+        const briefText = `🔔 Client Signal: ${clientName}
+
+${client.atl ? `ATL: ${client.atl}` : ''}
+Market: ${client.market} | Industry: ${client.industry || 'N/A'}
+
+Recent coverage:
+${articleList}
+
+Review these signals and consider client outreach.`;
+        
+        contentEl.innerHTML = `<div class="brief-atl-slack">${escapeHtml(briefText)}</div>`;
+        app.lastBriefATLText = briefText;
+        return;
+    }
+    
+    // AI-powered brief
+    contentEl.innerHTML = '<p>Generating AI brief...</p>';
+    
+    const articleSummaries = clientArticles.slice(0, 5).map(a => 
+        `- "${a.title}" (${a.source}): ${a.summary || 'No summary'}`
+    ).join('\n');
+    
+    const prompt = `You are helping a Field CTO brief their Account Technical Leader (ATL) about a client. Generate a concise Slack message.
+
+Client: ${clientName}
+Market: ${client.market}
+Industry: ${client.industry || 'N/A'}
+ATL: ${client.atl || 'Not assigned'}
+
+Recent articles:
+${articleSummaries}
+
+Write a brief Slack message (max 150 words) that:
+1. Summarizes the key signal(s) about this client
+2. Suggests an IBM angle or conversation starter
+3. Recommends a specific action for the ATL
+
+Format for Slack (use emoji sparingly). Start with "🔔 Client Signal: ${clientName}"`;
+
+    try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 500,
+                messages: [{ role: 'user', content: prompt }]
+            })
+        });
+        
+        const data = await response.json();
+        const briefText = data.content?.[0]?.text || 'Failed to generate brief';
+        
+        contentEl.innerHTML = `<div class="brief-atl-slack">${escapeHtml(briefText)}</div>`;
+        app.lastBriefATLText = briefText;
+        
+    } catch (err) {
+        contentEl.innerHTML = `<p>Error: ${err.message}</p>`;
+        app.lastBriefATLText = '';
+    }
+}
+
+function closeBriefATL() {
+    document.getElementById('brief-atl-modal').classList.add('hidden');
+}
+
+function copyBriefATL() {
+    if (!app.lastBriefATLText) {
+        showToast('No brief to copy');
+        return;
+    }
+    navigator.clipboard.writeText(app.lastBriefATLText).then(() => {
+        showToast('Copied to clipboard');
+    }).catch(() => {
+        showToast('Failed to copy');
+    });
+}
+
+// ==========================================
+// ATL ENABLEMENT RENDERING
+// ==========================================
+
+function renderATLEnablement() {
+    const list = document.getElementById('atl-enablement-list');
+    if (!list) return;
+    
+    // Group signals by market
+    const marketSignals = {
+        'ANZ': [],
+        'ASEAN': [],
+        'GCG': [],
+        'ISA': [],
+        'KOREA': []
+    };
+    
+    // Get today's articles with industry matches
+    const todayArticles = app.dailyArticles.length > 0 ? app.dailyArticles : app.articles.slice(0, 30);
+    
+    // Group by industry and find key themes
+    const industryArticles = {};
+    todayArticles.forEach(article => {
+        const industries = article.matchedIndustries || [];
+        industries.forEach(ind => {
+            if (!industryArticles[ind]) industryArticles[ind] = [];
+            industryArticles[ind].push(article);
+        });
+    });
+    
+    // Assign to markets based on where clients operate
+    Object.entries(industryArticles).forEach(([industry, articles]) => {
+        if (articles.length === 0) return;
+        
+        // Find which markets have clients in this industry
+        const relevantMarkets = new Set();
+        app.clients.forEach(c => {
+            if (c.industry === industry && marketSignals[c.market]) {
+                relevantMarkets.add(c.market);
+            }
+        });
+        
+        // If no specific clients, distribute to all
+        if (relevantMarkets.size === 0) {
+            relevantMarkets.add('ASEAN'); // Default
+        }
+        
+        relevantMarkets.forEach(market => {
+            marketSignals[market].push({
+                industry,
+                articles: articles.slice(0, 2),
+                headline: articles[0].title
+            });
+        });
+    });
+    
+    // Generate briefs for each market with content
+    const briefs = Object.entries(marketSignals)
+        .filter(([_, signals]) => signals.length > 0)
+        .map(([market, signals]) => {
+            const topSignals = signals.slice(0, 3);
+            const content = topSignals.map(s => 
+                `📌 ${s.industry}: ${s.articles[0].title} (${s.articles[0].source})`
+            ).join('\n\n');
+            
+            return { market, content, signalCount: signals.length };
+        });
+    
+    if (briefs.length === 0) {
+        list.innerHTML = '<p class="card-description">No industry signals today. Refresh to fetch latest.</p>';
+        return;
+    }
+    
+    list.innerHTML = briefs.map(({ market, content }) => `
+        <div class="atl-brief">
+            <div class="atl-brief-header">
+                <span class="atl-brief-market">${market}</span>
+                <button class="atl-brief-copy" onclick="copyATLBrief(this, '${market}')" title="Copy">📋</button>
+            </div>
+            <div class="atl-brief-content">${escapeHtml(content)}</div>
+        </div>
+    `).join('');
+}
+
+function copyATLBrief(btn, market) {
+    const content = btn.closest('.atl-brief').querySelector('.atl-brief-content').textContent;
+    navigator.clipboard.writeText(content).then(() => {
+        btn.textContent = '✓';
+        btn.classList.add('copied');
+        setTimeout(() => {
+            btn.textContent = '📋';
+            btn.classList.remove('copied');
+        }, 2000);
+    });
+}
+
+// ==========================================
+// TODAY'S SIGNALS RENDERING (AI-powered)
+// Purpose: "Act on this TODAY" - tactical, immediate
+// ==========================================
+
+async function renderTodaysSignals() {
+    const list = document.getElementById('signals-list');
+    const introEl = document.getElementById('signals-intro');
+    const countEl = document.getElementById('signals-count');
+    if (!list) return;
+    
+    const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+    
+    // Gather raw signals from cross-refs and high-priority articles
+    const rawSignals = [];
+    
+    // 1. Cross-source signals (themes appearing in multiple sources)
+    if (app.crossRefs && app.crossRefs.length > 0) {
+        app.crossRefs.slice(0, 3).forEach(ref => {
+            rawSignals.push({
+                type: 'cross-ref',
+                headline: ref.theme,
+                sources: ref.sources || [],
+                articles: ref.articles || [],
+                industries: ref.industries || [],
+                clients: ref.clients || []
+            });
+        });
+    }
+    
+    // 2. High-score client articles (Tier 1 priority)
+    const clientArticles = (app.dailyArticles.length > 0 ? app.dailyArticles : app.articles)
+        .filter(a => a.matchedClients && a.matchedClients.length > 0)
+        .slice(0, 3);
+    
+    clientArticles.forEach(article => {
+        if (!rawSignals.some(s => s.articles?.some(a => a.id === article.id))) {
+            rawSignals.push({
+                type: 'client',
+                headline: article.title,
+                sources: [article.source],
+                articles: [article],
+                industries: article.matchedIndustries || [],
+                clients: article.matchedClients || []
+            });
+        }
+    });
+    
+    // 3. Competitive signals (AWS, Azure, Google, etc.)
+    const competitiveArticles = (app.dailyArticles.length > 0 ? app.dailyArticles : app.articles)
+        .filter(a => a.signalType === 'competitor' || 
+            /aws|azure|google cloud|microsoft|salesforce|servicenow/i.test(a.title))
+        .slice(0, 2);
+    
+    competitiveArticles.forEach(article => {
+        if (!rawSignals.some(s => s.articles?.some(a => a.id === article.id))) {
+            rawSignals.push({
+                type: 'competitive',
+                headline: article.title,
+                sources: [article.source],
+                articles: [article],
+                industries: article.matchedIndustries || [],
+                clients: []
+            });
+        }
+    });
+    
+    countEl.textContent = Math.min(rawSignals.length, 5);
+    
+    if (rawSignals.length === 0) {
+        introEl.textContent = 'Pull to refresh to generate signals.';
+        list.innerHTML = '';
+        return;
+    }
+    
+    // Without API key: render basic signals
+    if (!apiKey) {
+        introEl.textContent = `${rawSignals.length} signals detected. Add API key for AI synthesis.`;
+        list.innerHTML = rawSignals.slice(0, 5).map(signal => renderBasicSignal(signal)).join('');
+        return;
+    }
+    
+    // With API key: generate AI-powered synthesis
+    introEl.textContent = 'Synthesizing actionable intelligence...';
+    
+    const signalSummaries = rawSignals.slice(0, 5).map(s => 
+        `- ${s.headline} (${s.sources.join(', ')})${s.clients.length > 0 ? ` [Clients: ${s.clients.join(', ')}]` : ''}`
+    ).join('\n');
+    
+    const tier1Clients = app.clients.filter(c => c.tier === 1).map(c => c.name).slice(0, 10).join(', ');
+    
+    const prompt = `You are the intelligence briefer for the IBM APAC Field CTO.
+
+TODAY'S RAW SIGNALS:
+${signalSummaries}
+
+ROLE CONTEXT:
+- Field CTO leading 115 ATLs across 343 accounts in APAC
+- Tier 1 clients: ${tier1Clients || 'configured in watchlist'}
+- Focus: AI/Agentic wave + Sovereignty/Regulation wave
+
+For each signal, provide a JSON array with EXACTLY this structure:
+[
+  {
+    "headline": "Action-oriented headline (10 words max)",
+    "wave": "AI" or "SOVEREIGNTY",
+    "action": "What the Field CTO should DO today (one sentence)",
+    "ibmAngle": "Specific IBM product/capability to position (watsonx.ai, watsonx.governance, Red Hat OpenShift, IBM Consulting, etc.)",
+    "competitive": "Competitor affected or threatening (or null if not applicable)"
+  }
+]
+
+Return ONLY valid JSON array, no markdown, max 5 signals.`;
+
+    try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 800,
+                messages: [{ role: 'user', content: prompt }]
+            })
+        });
+        
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
+        
+        const data = await response.json();
+        const text = data.content?.[0]?.text || '';
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        
+        if (jsonMatch) {
+            const synthesized = JSON.parse(jsonMatch[0]);
+            introEl.textContent = `${synthesized.length} actionable signals for today`;
+            
+            list.innerHTML = synthesized.map((signal, idx) => {
+                const rawSignal = rawSignals[idx] || {};
+                const sourcesHtml = rawSignal.articles?.map(a => 
+                    `<span class="signal-card-source" onclick="openArticle('${a.id}')">${escapeHtml(a.source)}</span>`
+                ).join('') || '';
+                
+                return `
+                    <div class="signal-card">
+                        <div class="signal-card-header">
+                            <span class="signal-card-headline">${escapeHtml(signal.headline)}</span>
+                            <div class="signal-card-tags">
+                                <span class="signal-card-tag ${signal.wave === 'AI' ? 'industry' : 'client'}">${signal.wave} WAVE</span>
+                                ${signal.competitive ? `<span class="signal-card-tag competitive">⚔️ ${escapeHtml(signal.competitive)}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="signal-card-body"><strong>Action:</strong> ${escapeHtml(signal.action)}</div>
+                        <div class="signal-card-ibm"><strong>IBM Angle:</strong> ${escapeHtml(signal.ibmAngle)}</div>
+                        <div class="signal-card-sources">${sourcesHtml}</div>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            throw new Error('No valid JSON in response');
+        }
+    } catch (err) {
+        console.error('Signal synthesis error:', err);
+        introEl.textContent = `${rawSignals.length} signals (AI synthesis unavailable)`;
+        list.innerHTML = rawSignals.slice(0, 5).map(signal => renderBasicSignal(signal)).join('');
+    }
+}
+
+function renderBasicSignal(signal) {
+    const tagHtml = [
+        ...signal.industries.map(t => `<span class="signal-card-tag industry">${escapeHtml(t)}</span>`),
+        ...signal.clients.map(c => `<span class="signal-card-tag client">${escapeHtml(c)}</span>`),
+        signal.type === 'competitive' ? '<span class="signal-card-tag competitive">⚔️ Competitive</span>' : ''
+    ].join('');
+    
+    const sourcesHtml = signal.articles?.map(a => 
+        `<span class="signal-card-source" onclick="openArticle('${a.id}')">${escapeHtml(a.source)}</span>`
+    ).join('') || '';
+    
+    return `
+        <div class="signal-card">
+            <div class="signal-card-header">
+                <span class="signal-card-headline">${escapeHtml(signal.headline)}</span>
+                <div class="signal-card-tags">${tagHtml}</div>
+            </div>
+            <div class="signal-card-body">Sources: ${signal.sources.join(', ')}</div>
+            <div class="signal-card-sources">${sourcesHtml}</div>
+        </div>
+    `;
+}
+
+// ==========================================
+// DEEP READS RENDERING (AI-powered)
+// Purpose: "Internalize for strategic conversations"
+// Long-form thinking for CxO/board-level discourse
+// ==========================================
+
+async function renderDeepReads() {
+    const list = document.getElementById('deep-reads-list');
+    const countEl = document.getElementById('deep-reads-count');
+    if (!list) return;
+    
+    const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+    
+    // Select deep read candidates: strategic sources, analyst content, thought leadership
+    const strategicCategories = ['Strategic Perspectives', 'Architecture & Platform'];
+    const strategicSources = ['a]6z', 'Benedict Evans', 'Stratechery', 'MIT Technology Review', 'Harvard Business Review'];
+    
+    // Prioritize: 1) Strategic category, 2) High credibility, 3) Longer content
+    let candidates = app.weeklyArticles.length > 0 
+        ? app.weeklyArticles 
+        : app.articles.filter(a => {
+            const isStrategic = strategicCategories.includes(a.category);
+            const isAnalyst = strategicSources.some(s => a.source?.includes(s));
+            const isHighValue = (a.relevanceScore || 0) > 60;
+            return isStrategic || isAnalyst || isHighValue;
+        });
+    
+    // Sort by strategic value (category weight + credibility)
+    candidates = candidates.slice(0, 8);
+    
+    countEl.textContent = Math.min(candidates.length, 5);
+    
+    if (candidates.length === 0) {
+        list.innerHTML = '<p class="card-description">No strategic content this week. Check back after refresh.</p>';
+        return;
+    }
+    
+    // Without API key: render basic list
+    if (!apiKey) {
+        list.innerHTML = candidates.slice(0, 5).map(article => renderBasicDeepRead(article)).join('');
+        return;
+    }
+    
+    // With API key: generate strategic synthesis
+    list.innerHTML = '<p class="card-description">Synthesizing strategic insights...</p>';
+    
+    const articleSummaries = candidates.slice(0, 5).map((a, i) => 
+        `[${i + 1}] "${a.title}" (${a.source})\nSummary: ${a.summary?.substring(0, 200) || 'No summary'}`
+    ).join('\n\n');
+    
+    const prompt = `You are preparing a strategic reading brief for the IBM APAC Field CTO.
+
+These are long-form articles selected for weekend/travel reading — strategic content, not breaking news.
+
+ARTICLES:
+${articleSummaries}
+
+ROLE CONTEXT:
+- Field CTO leading 115 ATLs across 343 enterprise accounts
+- Needs strategic perspectives for CxO conversations and offsites
+- Focus: market shifts, technology evolution, competitive landscape
+
+For each article, provide a JSON array with this structure:
+[
+  {
+    "title": "Original article title",
+    "strategicThesis": "The big idea in one sentence — what market shift or technology evolution does this represent?",
+    "leadershipImplication": "What should a CTO be thinking about or preparing for based on this?",
+    "conversationTopic": "A CxO-level question this raises (for board discussions, customer exec meetings)",
+    "timeHorizon": "6 months" or "12 months" or "2-3 years" — when will this matter most?
+  }
+]
+
+Return ONLY valid JSON array, no markdown. Max 5 articles.`;
+
+    try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 1000,
+                messages: [{ role: 'user', content: prompt }]
+            })
+        });
+        
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
+        
+        const data = await response.json();
+        const text = data.content?.[0]?.text || '';
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        
+        if (jsonMatch) {
+            const synthesized = JSON.parse(jsonMatch[0]);
+            
+            list.innerHTML = synthesized.map((insight, idx) => {
+                const article = candidates[idx];
+                if (!article) return '';
+                
+                return `
+                    <div class="deep-read-item" onclick="openArticle('${article.id}')">
+                        <div class="deep-read-item-header">
+                            <span class="deep-read-item-source">${escapeHtml(article.source)}</span>
+                            <span class="deep-read-item-time">${escapeHtml(insight.timeHorizon)} horizon</span>
+                        </div>
+                        <div class="deep-read-item-title">${escapeHtml(insight.title)}</div>
+                        <div class="deep-read-strategic">
+                            <div class="deep-read-thesis"><strong>Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
+                            <div class="deep-read-implication"><strong>Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication)}</div>
+                            <div class="deep-read-conversation"><strong>CxO Question:</strong> ${escapeHtml(insight.conversationTopic)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            throw new Error('No valid JSON in response');
+        }
+    } catch (err) {
+        console.error('Deep read synthesis error:', err);
+        list.innerHTML = candidates.slice(0, 5).map(article => renderBasicDeepRead(article)).join('');
+    }
+}
+
+function renderBasicDeepRead(article) {
+    return `
+        <div class="deep-read-item" onclick="openArticle('${article.id}')">
+            <div class="deep-read-item-header">
+                <span class="deep-read-item-source">${escapeHtml(article.source)}</span>
+                <span class="deep-read-item-time">${article.readingTime || '5'} min</span>
+            </div>
+            <div class="deep-read-item-title">${escapeHtml(article.title)}</div>
+            <div class="deep-read-item-summary">${escapeHtml(article.summary || '')}</div>
+        </div>
+    `;
+}
+
+// ==========================================
+// HELPER: Format relative date
+// ==========================================
+
+function formatRelativeDate(date) {
+    const now = new Date();
+    const diff = now - date;
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days < 7) return `${days}d ago`;
+    if (days < 30) return `${Math.floor(days / 7)}w ago`;
+    return date.toLocaleDateString();
 }
 
 // Initialize app

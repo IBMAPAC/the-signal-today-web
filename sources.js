@@ -956,67 +956,128 @@ const DEFAULT_INDUSTRIES = [
 ];
 
 // ============================================
-// EXPANDED CLIENT WATCHLIST — WITH TIERS
-// Tier 1 = Strategic (daily monitoring, always shown)
+// MARKET CONFIGURATION
+// Maps countries to IBM APAC markets
+// ============================================
+const MARKET_COUNTRIES = {
+    'ANZ': ['AU', 'NZ'],
+    'ASEAN': ['SG', 'MY', 'TH', 'ID', 'PH', 'VN', 'MM', 'KH', 'LA', 'BN'],
+    'GCG': ['HK', 'TW', 'CN', 'MO'],  // Greater China Group
+    'ISA': ['IN', 'BD', 'LK', 'PK', 'NP'],  // India & South Asia
+    'KOREA': ['KR'],
+    'JAPAN': ['JP']  // Japan often separate in IBM structure
+};
+
+// Helper to get market from country code
+function getMarketFromCountry(countryCode) {
+    for (const [market, countries] of Object.entries(MARKET_COUNTRIES)) {
+        if (countries.includes(countryCode)) return market;
+    }
+    return 'OTHER';
+}
+
+// ============================================
+// EXPANDED CLIENT WATCHLIST — WITH MARKETS
+// Tier 1 = Strategic (daily monitoring)
 // Tier 2 = Growth (weekly monitoring)
 // Tier 3 = Prospect / Background
 // ============================================
 const DEFAULT_CLIENTS = [
-    // Singapore — Tier 1
-    { name: "DBS", tier: 1, country: "SG", industry: "Financial Services" },
-    { name: "OCBC", tier: 1, country: "SG", industry: "Financial Services" },
-    { name: "UOB", tier: 1, country: "SG", industry: "Financial Services" },
-    { name: "Singtel", tier: 1, country: "SG", industry: "Telecommunications" },
-    { name: "ST Engineering", tier: 1, country: "SG", industry: "Manufacturing" },
-    { name: "PSA", tier: 2, country: "SG", industry: "Transportation & Logistics" },
-    { name: "CapitaLand", tier: 2, country: "SG", industry: "Real Estate" },
-    { name: "Singapore Airlines", tier: 2, country: "SG", industry: "Transportation & Logistics" },
-    { name: "SIA", tier: 2, country: "SG", industry: "Transportation & Logistics" },
-    // Australia — Tier 1
-    { name: "Commonwealth Bank", tier: 1, country: "AU", industry: "Financial Services" },
-    { name: "CBA", tier: 1, country: "AU", industry: "Financial Services" },
-    { name: "ANZ", tier: 1, country: "AU", industry: "Financial Services" },
-    { name: "Westpac", tier: 1, country: "AU", industry: "Financial Services" },
-    { name: "NAB", tier: 1, country: "AU", industry: "Financial Services" },
-    { name: "Telstra", tier: 1, country: "AU", industry: "Telecommunications" },
-    { name: "BHP", tier: 2, country: "AU", industry: "Manufacturing" },
-    { name: "Rio Tinto", tier: 2, country: "AU", industry: "Manufacturing" },
-    { name: "Woolworths", tier: 2, country: "AU", industry: "Retail" },
-    { name: "Qantas", tier: 2, country: "AU", industry: "Transportation & Logistics" },
-    { name: "AGL", tier: 3, country: "AU", industry: "Energy" },
-    // Korea — Tier 1/2
-    { name: "Samsung", tier: 1, country: "KR", industry: "Technology" },
-    { name: "SK", tier: 1, country: "KR", industry: "Technology" },
-    { name: "LG", tier: 2, country: "KR", industry: "Manufacturing" },
-    { name: "Hyundai", tier: 2, country: "KR", industry: "Manufacturing" },
-    { name: "Kia", tier: 3, country: "KR", industry: "Manufacturing" },
-    { name: "POSCO", tier: 2, country: "KR", industry: "Manufacturing" },
-    { name: "KT", tier: 2, country: "KR", industry: "Telecommunications" },
-    // India — Tier 1/2
-    { name: "Reliance", tier: 1, country: "IN", industry: "Energy" },
-    { name: "Tata", tier: 1, country: "IN", industry: "Manufacturing" },
-    { name: "HDFC", tier: 1, country: "IN", industry: "Financial Services" },
-    { name: "ICICI", tier: 1, country: "IN", industry: "Financial Services" },
-    { name: "TCS", tier: 2, country: "IN", industry: "Technology" },
-    // ASEAN — Tier 1/2
-    { name: "CIMB", tier: 1, country: "MY", industry: "Financial Services" },
-    { name: "Maybank", tier: 1, country: "MY", industry: "Financial Services" },
-    { name: "Grab", tier: 2, country: "SG", industry: "Technology" },
-    { name: "Sea Limited", tier: 2, country: "SG", industry: "Technology" },
-    { name: "Gojek", tier: 2, country: "ID", industry: "Technology" },
-    { name: "AirAsia", tier: 2, country: "MY", industry: "Transportation & Logistics" },
-    { name: "Petronas", tier: 1, country: "MY", industry: "Energy" },
-    { name: "PTT", tier: 2, country: "TH", industry: "Energy" },
-    // Japan — Tier 2
-    { name: "NTT", tier: 2, country: "JP", industry: "Telecommunications" },
-    { name: "SoftBank", tier: 2, country: "JP", industry: "Telecommunications" },
-    { name: "Toyota", tier: 2, country: "JP", industry: "Manufacturing" },
-    { name: "Sony", tier: 3, country: "JP", industry: "Technology" },
-    // China / Competitors — Tier 3 (monitor as competitive signals)
-    { name: "Alibaba", tier: 3, country: "CN", industry: "Technology" },
-    { name: "Tencent", tier: 3, country: "CN", industry: "Technology" },
-    { name: "Huawei", tier: 2, country: "CN", industry: "Technology" },
-    { name: "ByteDance", tier: 3, country: "CN", industry: "Technology" }
+    // ─── ANZ MARKET ───────────────────────────────────
+    // Australia
+    { name: "Commonwealth Bank", tier: 1, country: "AU", market: "ANZ", industry: "Financial Services", aliases: ["CBA", "CommBank"] },
+    { name: "ANZ Bank", tier: 1, country: "AU", market: "ANZ", industry: "Financial Services", aliases: ["ANZ"] },
+    { name: "Westpac", tier: 1, country: "AU", market: "ANZ", industry: "Financial Services" },
+    { name: "NAB", tier: 1, country: "AU", market: "ANZ", industry: "Financial Services", aliases: ["National Australia Bank"] },
+    { name: "Telstra", tier: 1, country: "AU", market: "ANZ", industry: "Telecommunications" },
+    { name: "BHP", tier: 2, country: "AU", market: "ANZ", industry: "Energy", aliases: ["BHP Group", "BHP Billiton"] },
+    { name: "Rio Tinto", tier: 2, country: "AU", market: "ANZ", industry: "Manufacturing" },
+    { name: "Woolworths", tier: 2, country: "AU", market: "ANZ", industry: "Retail", aliases: ["Woolworths Group"] },
+    { name: "Qantas", tier: 2, country: "AU", market: "ANZ", industry: "Transportation & Logistics" },
+    { name: "AGL", tier: 3, country: "AU", market: "ANZ", industry: "Energy", aliases: ["AGL Energy"] },
+    { name: "Macquarie", tier: 2, country: "AU", market: "ANZ", industry: "Financial Services", aliases: ["Macquarie Group"] },
+    { name: "CSL", tier: 2, country: "AU", market: "ANZ", industry: "Healthcare" },
+    // New Zealand
+    { name: "Spark NZ", tier: 2, country: "NZ", market: "ANZ", industry: "Telecommunications", aliases: ["Spark New Zealand"] },
+    { name: "Air New Zealand", tier: 3, country: "NZ", market: "ANZ", industry: "Transportation & Logistics" },
+    
+    // ─── ASEAN MARKET ─────────────────────────────────
+    // Singapore
+    { name: "DBS", tier: 1, country: "SG", market: "ASEAN", industry: "Financial Services", aliases: ["DBS Bank", "DBS Group"] },
+    { name: "OCBC", tier: 1, country: "SG", market: "ASEAN", industry: "Financial Services", aliases: ["OCBC Bank"] },
+    { name: "UOB", tier: 1, country: "SG", market: "ASEAN", industry: "Financial Services", aliases: ["United Overseas Bank"] },
+    { name: "Singtel", tier: 1, country: "SG", market: "ASEAN", industry: "Telecommunications", aliases: ["Singapore Telecommunications"] },
+    { name: "ST Engineering", tier: 1, country: "SG", market: "ASEAN", industry: "Manufacturing" },
+    { name: "PSA", tier: 2, country: "SG", market: "ASEAN", industry: "Transportation & Logistics", aliases: ["PSA International"] },
+    { name: "CapitaLand", tier: 2, country: "SG", market: "ASEAN", industry: "Real Estate" },
+    { name: "Singapore Airlines", tier: 2, country: "SG", market: "ASEAN", industry: "Transportation & Logistics", aliases: ["SIA"] },
+    { name: "Grab", tier: 2, country: "SG", market: "ASEAN", industry: "Technology" },
+    { name: "Sea Limited", tier: 2, country: "SG", market: "ASEAN", industry: "Technology", aliases: ["Sea", "Shopee"] },
+    // Malaysia
+    { name: "Maybank", tier: 1, country: "MY", market: "ASEAN", industry: "Financial Services", aliases: ["Malayan Banking"] },
+    { name: "CIMB", tier: 1, country: "MY", market: "ASEAN", industry: "Financial Services", aliases: ["CIMB Group"] },
+    { name: "Petronas", tier: 1, country: "MY", market: "ASEAN", industry: "Energy", aliases: ["Petroliam Nasional"] },
+    { name: "AirAsia", tier: 2, country: "MY", market: "ASEAN", industry: "Transportation & Logistics" },
+    { name: "Tenaga Nasional", tier: 2, country: "MY", market: "ASEAN", industry: "Energy", aliases: ["TNB"] },
+    // Thailand
+    { name: "PTT", tier: 2, country: "TH", market: "ASEAN", industry: "Energy", aliases: ["PTT Public Company"] },
+    { name: "SCB", tier: 2, country: "TH", market: "ASEAN", industry: "Financial Services", aliases: ["Siam Commercial Bank"] },
+    { name: "Bangkok Bank", tier: 2, country: "TH", market: "ASEAN", industry: "Financial Services" },
+    // Indonesia
+    { name: "Bank Central Asia", tier: 2, country: "ID", market: "ASEAN", industry: "Financial Services", aliases: ["BCA"] },
+    { name: "Bank Mandiri", tier: 2, country: "ID", market: "ASEAN", industry: "Financial Services" },
+    { name: "Telkom Indonesia", tier: 2, country: "ID", market: "ASEAN", industry: "Telecommunications", aliases: ["Telkom"] },
+    { name: "Gojek", tier: 2, country: "ID", market: "ASEAN", industry: "Technology" },
+    // Philippines
+    { name: "BDO", tier: 2, country: "PH", market: "ASEAN", industry: "Financial Services", aliases: ["BDO Unibank"] },
+    { name: "PLDT", tier: 2, country: "PH", market: "ASEAN", industry: "Telecommunications" },
+    { name: "Globe Telecom", tier: 3, country: "PH", market: "ASEAN", industry: "Telecommunications" },
+    
+    // ─── GCG MARKET ───────────────────────────────────
+    // Hong Kong
+    { name: "HSBC", tier: 1, country: "HK", market: "GCG", industry: "Financial Services" },
+    { name: "Hang Seng Bank", tier: 2, country: "HK", market: "GCG", industry: "Financial Services" },
+    { name: "Cathay Pacific", tier: 2, country: "HK", market: "GCG", industry: "Transportation & Logistics" },
+    { name: "CLP", tier: 2, country: "HK", market: "GCG", industry: "Energy", aliases: ["CLP Holdings"] },
+    // Taiwan
+    { name: "TSMC", tier: 1, country: "TW", market: "GCG", industry: "Technology", aliases: ["Taiwan Semiconductor"] },
+    { name: "Foxconn", tier: 2, country: "TW", market: "GCG", industry: "Manufacturing", aliases: ["Hon Hai"] },
+    { name: "ASUS", tier: 2, country: "TW", market: "GCG", industry: "Technology" },
+    { name: "Acer", tier: 3, country: "TW", market: "GCG", industry: "Technology" },
+    // China (competitive intel)
+    { name: "Alibaba", tier: 3, country: "CN", market: "GCG", industry: "Technology" },
+    { name: "Tencent", tier: 3, country: "CN", market: "GCG", industry: "Technology" },
+    { name: "Huawei", tier: 2, country: "CN", market: "GCG", industry: "Technology" },
+    { name: "ByteDance", tier: 3, country: "CN", market: "GCG", industry: "Technology" },
+    { name: "Baidu", tier: 3, country: "CN", market: "GCG", industry: "Technology" },
+    
+    // ─── ISA MARKET ───────────────────────────────────
+    // India
+    { name: "Reliance", tier: 1, country: "IN", market: "ISA", industry: "Energy", aliases: ["Reliance Industries"] },
+    { name: "Tata Group", tier: 1, country: "IN", market: "ISA", industry: "Manufacturing", aliases: ["Tata", "Tata Sons"] },
+    { name: "HDFC Bank", tier: 1, country: "IN", market: "ISA", industry: "Financial Services", aliases: ["HDFC"] },
+    { name: "ICICI Bank", tier: 1, country: "IN", market: "ISA", industry: "Financial Services", aliases: ["ICICI"] },
+    { name: "Infosys", tier: 2, country: "IN", market: "ISA", industry: "Technology" },
+    { name: "TCS", tier: 2, country: "IN", market: "ISA", industry: "Technology", aliases: ["Tata Consultancy Services"] },
+    { name: "Wipro", tier: 2, country: "IN", market: "ISA", industry: "Technology" },
+    { name: "SBI", tier: 2, country: "IN", market: "ISA", industry: "Financial Services", aliases: ["State Bank of India"] },
+    { name: "Bharti Airtel", tier: 2, country: "IN", market: "ISA", industry: "Telecommunications", aliases: ["Airtel"] },
+    { name: "Mahindra", tier: 2, country: "IN", market: "ISA", industry: "Manufacturing", aliases: ["Mahindra Group"] },
+    // Bangladesh
+    { name: "Grameenphone", tier: 3, country: "BD", market: "ISA", industry: "Telecommunications" },
+    
+    // ─── KOREA MARKET ─────────────────────────────────
+    { name: "Samsung", tier: 1, country: "KR", market: "KOREA", industry: "Technology", aliases: ["Samsung Electronics", "Samsung Group"] },
+    { name: "SK Group", tier: 1, country: "KR", market: "KOREA", industry: "Technology", aliases: ["SK", "SK Hynix"] },
+    { name: "LG", tier: 2, country: "KR", market: "KOREA", industry: "Manufacturing", aliases: ["LG Electronics", "LG Group"] },
+    { name: "Hyundai", tier: 2, country: "KR", market: "KOREA", industry: "Manufacturing", aliases: ["Hyundai Motor", "Hyundai Group"] },
+    { name: "Kia", tier: 3, country: "KR", market: "KOREA", industry: "Manufacturing" },
+    { name: "POSCO", tier: 2, country: "KR", market: "KOREA", industry: "Manufacturing" },
+    { name: "KT", tier: 2, country: "KR", market: "KOREA", industry: "Telecommunications", aliases: ["Korea Telecom"] },
+    { name: "Shinhan Bank", tier: 2, country: "KR", market: "KOREA", industry: "Financial Services" },
+    { name: "KB Financial", tier: 2, country: "KR", market: "KOREA", industry: "Financial Services", aliases: ["Kookmin Bank"] },
+    { name: "Naver", tier: 2, country: "KR", market: "KOREA", industry: "Technology" },
+    { name: "Kakao", tier: 2, country: "KR", market: "KOREA", industry: "Technology" }
 ];
 
 // ============================================

@@ -8,225 +8,257 @@
     <meta name="apple-mobile-web-app-title" content="Signal Today">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#161616">
-    <meta name="description" content="AI-powered intelligence briefing for enterprise technology leaders">
+    <meta name="description" content="Field CTO Intelligence Briefing - IBM Asia Pacific">
     <meta name="format-detection" content="telephone=no">
     <title>The Signal Today</title>
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>" rel="noopener noreferrer">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="app">
-        <!-- Header -->
         <header class="header">
             <div class="header-content">
                 <h1>📡 The Signal Today</h1>
                 <div class="header-actions">
-                    <span id="source-health-badge" class="source-health-badge hidden" title=""></span>
-                    <span id="reading-time" class="reading-badge">~0 min unread</span>
+                    <span id="source-health-badge" class="source-health-badge hidden"></span>
                     <button id="refresh-btn" class="btn btn-primary" title="Refresh (R)">
                         <span class="refresh-icon">↻</span> Refresh
                     </button>
+                    <button id="clients-btn" class="btn btn-secondary" title="Manage Clients" onclick="openClientManager()">👥 Clients</button>
                     <button id="settings-btn" class="btn btn-secondary" title="Settings">⚙️</button>
                 </div>
             </div>
             <div class="header-meta">
                 <span id="current-date"></span>
                 <span id="last-updated"></span>
+                <span id="portfolio-stats" class="portfolio-stats"></span>
             </div>
         </header>
 
-        <!-- Main Content -->
         <main class="main-content">
-            <!-- Loading State -->
             <div id="loading" class="loading hidden">
                 <div class="spinner"></div>
                 <p id="loading-status">Fetching articles...</p>
             </div>
 
-            <!-- Error State -->
             <div id="error" class="error-state hidden">
                 <p id="error-message"></p>
                 <button class="btn btn-primary" onclick="app.refresh()">Try Again</button>
             </div>
 
-            <!-- Digest Content -->
             <div id="digest-content" class="digest-content hidden">
                 
-                <!-- Digest Tabs -->
-                <div class="digest-tabs">
-                    <button class="digest-tab active" data-tab="daily" onclick="switchDigestTab('daily')">
-                        📰 Daily Brief
-                        <span id="daily-count-badge" class="tab-badge">0</span>
-                    </button>
-                    <button class="digest-tab" data-tab="weekly" onclick="switchDigestTab('weekly')">
-                        📚 Weekly Deep Reads
-                        <span id="weekly-count-badge" class="tab-badge">0</span>
-                    </button>
-                </div>
+                <!-- SECTION 1: TODAY'S SIGNALS -->
+                <section id="signals-section" class="card signals-card">
+                    <div class="card-header">
+                        <h2>⚡ Today's Signals</h2>
+                        <span id="signals-count" class="badge">0</span>
+                    </div>
+                    <div id="signals-content" class="card-body">
+                        <p id="signals-intro" class="signals-intro">Generating intelligence brief...</p>
+                        <div id="signals-list"></div>
+                    </div>
+                </section>
 
-                <!-- Daily Digest Tab -->
-                <div id="daily-tab" class="digest-tab-content">
+                <!-- SECTION 2: CLIENT RADAR -->
+                <section id="client-radar-section" class="card client-radar-card">
+                    <div class="card-header">
+                        <h2>📍 Client Radar</h2>
+                        <span id="client-signals-count" class="badge badge-purple">0</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="market-tabs">
+                            <button class="market-tab active" data-market="ALL" onclick="switchMarket('ALL')">All</button>
+                            <button class="market-tab" data-market="ANZ" onclick="switchMarket('ANZ')">ANZ</button>
+                            <button class="market-tab" data-market="ASEAN" onclick="switchMarket('ASEAN')">ASEAN</button>
+                            <button class="market-tab" data-market="GCG" onclick="switchMarket('GCG')">GCG</button>
+                            <button class="market-tab" data-market="ISA" onclick="switchMarket('ISA')">ISA</button>
+                            <button class="market-tab" data-market="KOREA" onclick="switchMarket('KOREA')">Korea</button>
+                        </div>
+                        <div class="tier-filter">
+                            <label class="tier-filter-option"><input type="checkbox" id="filter-tier-1" checked onchange="filterClientRadar()"> Tier 1</label>
+                            <label class="tier-filter-option"><input type="checkbox" id="filter-tier-2" checked onchange="filterClientRadar()"> Tier 2</label>
+                            <label class="tier-filter-option"><input type="checkbox" id="filter-tier-3" onchange="filterClientRadar()"> Tier 3</label>
+                        </div>
+                        <div id="client-radar-list"></div>
+                        <div id="client-radar-empty" class="client-radar-empty hidden">
+                            <p>No client signals in this market today.</p>
+                        </div>
+                    </div>
+                </section>
 
-                    <!-- Action Brief — synthesised headline, read this first -->
-                    <section id="summary-section" class="card summary-card">
-                        <div class="card-header">
-                            <h2>⚡ Action Brief</h2>
-                        </div>
-                        <div id="summary-content" class="card-body">
-                            <p id="executive-summary">Pull to refresh to generate your daily digest.</p>
-                        </div>
-                    </section>
+                <!-- SECTION 3: ATL ENABLEMENT -->
+                <section id="atl-enablement-section" class="card atl-enablement-card">
+                    <div class="card-header">
+                        <h2>📢 ATL Enablement</h2>
+                        <button class="btn btn-sm btn-secondary" onclick="app.copyAllATLBriefs()" title="Copy all">📋 Copy All</button>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-description">Key talking points for your 115 ATLs — copy to Slack</p>
+                        <div id="atl-enablement-list"></div>
+                    </div>
+                </section>
 
-                    <!-- Client Watch — account-specific intel (highest urgency: meeting prep) -->
-                    <section id="clients-section" class="card clients-card hidden">
-                        <div class="card-header card-header--collapsible" onclick="toggleSection('clients')">
-                            <h2>👁️ Client Watch</h2>
-                            <span id="clients-count" class="badge badge-purple">0</span>
-                            <span class="chevron">▼</span>
-                        </div>
-                        <div id="clients-content" class="card-body">
-                            <p class="card-description">Recent coverage of your watchlist accounts - useful for meeting prep and competitive intel</p>
-                            <div id="clients-list"></div>
-                        </div>
-                    </section>
+                <!-- SECTION 4: DEEP READS -->
+                <section id="deep-reads-section" class="card deep-reads-card">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('deep-reads')">
+                        <h2>📚 Deep Reads</h2>
+                        <span id="deep-reads-count" class="badge badge-teal">0</span>
+                        <span class="chevron collapsed">▼</span>
+                    </div>
+                    <div id="deep-reads-content" class="card-body collapsed">
+                        <p class="card-description">Strategic perspectives for CxO conversations — weekend reading</p>
+                        <div id="deep-reads-list"></div>
+                    </div>
+                </section>
 
-                    <!-- Conversation Starters — talking points, contextualised by Client Watch above -->
-                    <section id="starters-section" class="card starters-card hidden">
-                        <div class="card-header">
-                            <h2>💬 Conversation Openers</h2>
-                        </div>
-                        <div id="starters-content" class="card-body">
-                            <div id="starters-list"></div>
-                        </div>
-                    </section>
-
-                    <!-- Industry Signals — AI-generated per-industry strategic guidance -->
-                    <section id="industry-signals-section" class="card industry-signals-card hidden">
-                        <div class="card-header">
-                            <h2>📊 Industry Signals</h2>
-                            <span id="industry-signals-count" class="badge badge-blue">0</span>
-                        </div>
-                        <div class="card-body">
-                            <p class="card-description">AI-generated strategic signal per industry — IBM angle and sales action for your ATL team</p>
-                            <div id="industry-signals-list"></div>
-                        </div>
-                    </section>
-
-                    <!-- Digest Sections — AI thematic deep-dives -->
-                    <div id="digest-sections"></div>
-
-                    <!-- Cross-Source Signals — keyword-matched multi-source themes (supporting context) -->
-                    <section id="signals-section" class="card signals-card hidden">
-                        <div class="card-header card-header--collapsible" onclick="toggleSection('signals')">
-                            <h2>🔥 Cross-Source Signals</h2>
-                            <span id="signals-count" class="badge">0</span>
-                            <span class="chevron">▼</span>
-                        </div>
-                        <div id="signals-content" class="card-body">
-                            <p class="card-description">Topics covered by multiple independent sources - higher signal, lower noise</p>
-                            <div id="signals-list"></div>
-                        </div>
-                    </section>
-
-                    <!-- Multi-Day Trending — topics rising across the 7-day IDB corpus -->
-                    <section id="trending-section" class="card trending-card hidden">
-                        <div class="card-header card-header--collapsible" onclick="toggleSection('trending')">
-                            <h2>📈 Trending Topics</h2>
-                            <span id="trending-count" class="badge badge-orange">0</span>
-                            <span class="chevron">▼</span>
-                        </div>
-                        <div id="trending-content" class="card-body">
-                            <p class="card-description">Topics appearing across multiple days and sources — sustained signals, not one-day noise</p>
-                            <div id="trending-list"></div>
-                        </div>
-                    </section>
-
-                    <!-- All Daily Articles — full reference list -->
-                    <section id="articles-section" class="card">
-                        <div class="card-header card-header--collapsible" onclick="toggleSection('articles')">
-                            <h2>📰 All Daily Articles</h2>
-                            <span id="articles-count" class="badge">0</span>
-                            <span class="chevron">▼</span>
-                        </div>
-                        <div id="articles-content" class="card-body">
-                            <div id="articles-list"></div>
-                        </div>
-                    </section>
-                </div>
-
-                <!-- Weekly Digest Tab -->
-                <div id="weekly-tab" class="digest-tab-content hidden">
-                    
-                    <!-- Weekly Overview -->
-                    <section class="card weekly-overview-card">
-                        <div class="card-header">
-                            <h2>📚 This Week's Deep Reads</h2>
-                        </div>
-                        <div class="card-body">
-                            <p id="weekly-summary" class="weekly-summary">Strategic content and analyst insights worth your extended attention. Max 2 articles per source for diversity.</p>
-                            <div class="weekly-stats">
-                                <div class="weekly-stat">
-                                    <span class="weekly-stat-value" id="weekly-article-count">0</span>
-                                    <span class="weekly-stat-label">Articles</span>
-                                </div>
-                                <div class="weekly-stat">
-                                    <span class="weekly-stat-value" id="weekly-reading-time">0</span>
-                                    <span class="weekly-stat-label">Minutes</span>
-                                </div>
-                                <div class="weekly-stat">
-                                    <span class="weekly-stat-value" id="weekly-source-count">0</span>
-                                    <span class="weekly-stat-label">Sources</span>
-                                </div>
-                            </div>
-                            <div class="weekly-export-actions">
-                                <button class="btn btn-secondary btn-sm" onclick="app.exportBrief()" title="Export daily brief as Markdown">📤 Export Daily Brief</button>
-                                <button class="btn btn-primary btn-sm" id="gtm-digest-btn" onclick="app.openGTMDigest()" title="Generate GTM team email digest">📧 GTM Digest Email</button>
-                            </div>
-                        </div>
-                    </section>
-
-                    <!-- Top 3 Must Reads -->
-                    <section id="weekly-top3-section" class="card weekly-top3-card hidden">
-                        <div class="card-header">
-                            <h2>⭐ Top 3 Must Reads This Week</h2>
-                        </div>
-                        <div id="weekly-top3-list" class="card-body"></div>
-                    </section>
-
-                    <!-- Weekly Articles by Category -->
-                    <div id="weekly-categories"></div>
-
-                    <!-- All Weekly Articles -->
-                    <section id="weekly-articles-section" class="card">
-                        <div class="card-header card-header--collapsible" onclick="toggleSection('weekly-articles')">
-                            <h2>📖 All Weekly Articles</h2>
-                            <span id="weekly-articles-count" class="badge">0</span>
-                            <span class="chevron">▼</span>
-                        </div>
-                        <div id="weekly-articles-content" class="card-body">
-                            <div id="weekly-articles-list"></div>
-                        </div>
-                    </section>
+                <div class="export-actions">
+                    <button class="btn btn-secondary" onclick="app.exportBrief()">📤 Export Brief</button>
+                    <button class="btn btn-primary" onclick="app.openGTMDigest()">📧 GTM Digest</button>
                 </div>
             </div>
 
-            <!-- Empty State -->
-            <div id="empty-state" class="empty-state">
+            <div id="empty-state" class="empty-state hidden">
                 <div class="empty-icon">📡</div>
                 <h2>Welcome to The Signal Today</h2>
-                <p>Your AI-powered intelligence briefing for enterprise technology.</p>
-                <button class="btn btn-primary btn-large" onclick="app.refresh()">
-                    Generate Your First Digest
-                </button>
+                <p>Field CTO Intelligence Briefing for IBM Asia Pacific</p>
+                <button class="btn btn-primary btn-large" onclick="app.refresh()">Generate Your First Digest</button>
                 <p class="empty-hint">Configure your Claude API key in Settings for AI summaries.</p>
             </div>
         </main>
 
-        <!-- Settings Modal -->
+        <!-- CLIENT MANAGER MODAL -->
+        <div id="client-manager-modal" class="modal hidden">
+            <div class="modal-backdrop" onclick="closeClientManager()"></div>
+            <div class="modal-content modal-fullscreen">
+                <div class="modal-header">
+                    <h2>👥 Client Portfolio</h2>
+                    <div class="client-manager-actions">
+                        <button class="btn btn-sm btn-secondary" onclick="importClientsCSV()">📥 Import</button>
+                        <button class="btn btn-sm btn-secondary" onclick="exportClientsCSV()">📤 Export</button>
+                        <button class="btn btn-sm btn-primary" onclick="openAddClientForm()">+ Add Client</button>
+                    </div>
+                    <button class="modal-close" onclick="closeClientManager()">×</button>
+                </div>
+                <div class="modal-body client-manager-body">
+                    <div class="client-manager-tabs">
+                        <button class="cm-tab active" data-market="ALL" onclick="switchClientManagerTab('ALL')">All <span id="cm-count-all" class="tab-badge">0</span></button>
+                        <button class="cm-tab" data-market="ANZ" onclick="switchClientManagerTab('ANZ')">ANZ <span id="cm-count-anz" class="tab-badge">0</span></button>
+                        <button class="cm-tab" data-market="ASEAN" onclick="switchClientManagerTab('ASEAN')">ASEAN <span id="cm-count-asean" class="tab-badge">0</span></button>
+                        <button class="cm-tab" data-market="GCG" onclick="switchClientManagerTab('GCG')">GCG <span id="cm-count-gcg" class="tab-badge">0</span></button>
+                        <button class="cm-tab" data-market="ISA" onclick="switchClientManagerTab('ISA')">ISA <span id="cm-count-isa" class="tab-badge">0</span></button>
+                        <button class="cm-tab" data-market="KOREA" onclick="switchClientManagerTab('KOREA')">Korea <span id="cm-count-korea" class="tab-badge">0</span></button>
+                    </div>
+                    <div class="client-manager-toolbar">
+                        <div class="cm-search">
+                            <input type="text" id="cm-search-input" placeholder="Search clients..." oninput="filterClientManager()">
+                        </div>
+                        <div class="cm-bulk-actions hidden" id="cm-bulk-actions">
+                            <span id="cm-selected-count">0 selected</span>
+                            <button class="btn btn-sm" onclick="bulkSetTier(1)">Tier 1</button>
+                            <button class="btn btn-sm" onclick="bulkSetTier(2)">Tier 2</button>
+                            <button class="btn btn-sm" onclick="bulkSetTier(3)">Tier 3</button>
+                            <button class="btn btn-sm btn-danger" onclick="bulkDeleteClients()">Delete</button>
+                        </div>
+                    </div>
+                    <div class="client-table-container">
+                        <table class="client-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-checkbox"><input type="checkbox" id="cm-select-all" onchange="toggleSelectAllClients()"></th>
+                                    <th class="col-name">Client</th>
+                                    <th class="col-market">Market</th>
+                                    <th class="col-industry">Industry</th>
+                                    <th class="col-tier">Tier</th>
+                                    <th class="col-atl">ATL</th>
+                                    <th class="col-last">Last Signal</th>
+                                    <th class="col-actions"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="client-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADD/EDIT CLIENT MODAL -->
+        <div id="client-form-modal" class="modal hidden">
+            <div class="modal-backdrop" onclick="closeClientForm()"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="client-form-title">Add Client</h2>
+                    <button class="modal-close" onclick="closeClientForm()">×</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="client-form-id">
+                    <div class="form-group">
+                        <label for="client-form-name">Client Name *</label>
+                        <input type="text" id="client-form-name" placeholder="e.g. DBS Bank" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="client-form-market">Market *</label>
+                            <select id="client-form-market" required onchange="updateCountryOptions()">
+                                <option value="">Select</option>
+                                <option value="ANZ">ANZ</option>
+                                <option value="ASEAN">ASEAN</option>
+                                <option value="GCG">GCG</option>
+                                <option value="ISA">ISA</option>
+                                <option value="KOREA">Korea</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="client-form-country">Country</label>
+                            <select id="client-form-country"></select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="client-form-industry">Industry</label>
+                            <select id="client-form-industry">
+                                <option value="">Select</option>
+                                <option value="Financial Services">Financial Services</option>
+                                <option value="Government">Government</option>
+                                <option value="Manufacturing">Manufacturing</option>
+                                <option value="Energy">Energy</option>
+                                <option value="Retail">Retail</option>
+                                <option value="Telecommunications">Telecommunications</option>
+                                <option value="Healthcare">Healthcare</option>
+                                <option value="Technology">Technology</option>
+                                <option value="Transportation & Logistics">Transportation & Logistics</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="client-form-tier">Tier *</label>
+                            <select id="client-form-tier" required>
+                                <option value="1">Tier 1 (Strategic)</option>
+                                <option value="2" selected>Tier 2 (Growth)</option>
+                                <option value="3">Tier 3 (Prospect)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="client-form-atl">Assigned ATL</label>
+                        <input type="text" id="client-form-atl" placeholder="e.g. John Smith">
+                    </div>
+                    <div class="form-group">
+                        <label for="client-form-aliases">Aliases (comma-separated)</label>
+                        <input type="text" id="client-form-aliases" placeholder="e.g. DBS, DBS Bank, DBS Group">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeClientForm()">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveClient()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS MODAL -->
         <div id="settings-modal" class="modal hidden">
             <div class="modal-backdrop" onclick="closeSettings()"></div>
             <div class="modal-content">
@@ -235,106 +267,61 @@
                     <button class="modal-close" onclick="closeSettings()">×</button>
                 </div>
                 <div class="modal-body">
-                    <!-- API Key -->
                     <section class="settings-section">
                         <h3>🤖 Claude AI</h3>
                         <div class="form-group">
                             <label for="api-key">API Key</label>
                             <input type="password" id="api-key" placeholder="sk-ant-...">
-                            <p class="form-hint">⚠️ Your API key is stored unencrypted in browser localStorage. Do not use on shared devices.</p>
-                            <p class="form-hint">Get your API key from <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">console.anthropic.com</a></p>
+                            <p class="form-hint">Get from <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></p>
                         </div>
                         <div class="form-group">
                             <label for="week-context">This Week's Context</label>
-                            <textarea id="week-context" rows="3" placeholder="e.g. Meeting DBS CTO on Tuesday re: watsonx POC. Telstra deal review Thursday. OCBC RFP deadline Friday."></textarea>
-                            <p class="form-hint">Claude will prioritize articles relevant to your current meetings and deals.</p>
+                            <textarea id="week-context" rows="3" placeholder="e.g. Meeting DBS CTO Tuesday. Telstra deal review Thursday."></textarea>
                         </div>
                     </section>
-
-                    <!-- Time Budget -->
-                    <section class="settings-section">
-                        <h3>⏱️ Time Budget</h3>
-                        <div class="form-group">
-                            <label for="daily-minutes">Daily Reading Minutes</label>
-                            <input type="number" id="daily-minutes" min="5" max="60" value="15">
-                        </div>
-                        <div class="form-group">
-                            <label for="weekly-articles">Weekly Article Count</label>
-                            <input type="number" id="weekly-articles" min="3" max="20" value="5">
-                        </div>
-                        <div class="form-group">
-                            <label for="auto-refresh-time">Auto-Refresh Time (24h format)</label>
-                            <input type="time" id="auto-refresh-time" placeholder="06:30">
-                            <p class="form-hint">Leave blank to disable. Browser must be open at this time.</p>
-                        </div>
-                    </section>
-
-                    <!-- Industry Priorities -->
                     <section class="settings-section">
                         <h3>🏢 Industry Priorities</h3>
-                        <p class="form-hint">Select your priority industries (Tier 1 = +30%, Tier 2 = +20%, Tier 3 = +10%)</p>
+                        <p class="form-hint">Tier 1 = +30%, Tier 2 = +20%, Tier 3 = +10%</p>
                         <div id="industry-settings"></div>
                     </section>
-
-                    <!-- Client Watchlist -->
-                    <section class="settings-section">
-                        <h3>👤 Client Watchlist</h3>
-                        <p class="form-hint">Companies to monitor. Tier 1 (Strategic) = +35% boost, Tier 2 (Growth) = +25%, Tier 3 (Prospect) = +15%. Tiers are set automatically from defaults or can be edited in sources.js.</p>
-                        <div id="client-settings">
-                            <textarea id="clients-input" rows="4" placeholder="DBS, Singtel, Telstra, OCBC, UOB..."></textarea>
-                        </div>
-                    </section>
-
-                    <!-- Instapaper Integration -->
-                    <section class="settings-section">
-                        <h3>📥 Instapaper</h3>
-                        <p class="form-hint">Save articles to Instapaper. Articles open the Instapaper save page in a new tab.</p>
-                    </section>
-
-                    <!-- Auto-Disabled Sources (Phase 8) -->
                     <div id="disabled-sources-container"></div>
-
-                    <!-- Source Management -->
                     <section class="settings-section">
                         <h3>📰 News Sources</h3>
                         <div class="sources-header">
-                            <span id="sources-count">Loading sources...</span>
+                            <span id="sources-count">Loading...</span>
                             <div class="sources-actions">
-                                <button class="btn btn-secondary btn-sm" onclick="addNewSource()">+ Add Source</button>
-                                <button class="btn btn-secondary btn-sm" onclick="resetSources()">Reset Defaults</button>
+                                <button class="btn btn-secondary btn-sm" onclick="addNewSource()">+ Add</button>
+                                <button class="btn btn-secondary btn-sm" onclick="resetSources()">Reset</button>
                             </div>
                         </div>
                         <div class="sources-filter">
                             <select id="sources-category-filter" onchange="filterSources()">
                                 <option value="all">All Categories</option>
                                 <option value="AI & Agentic">🤖 AI & Agentic</option>
-                                <option value="Sovereignty & Regulation">🛡️ Sovereignty & Regulation</option>
-                                <option value="APAC Enterprise">🌏 APAC Enterprise</option>
-                                <option value="China & Geopolitics">🇨🇳 China & Geopolitics</option>
-                                <option value="Competitive Landscape">⚔️ Competitive Landscape</option>
-                                <option value="Architecture & Platform">🏗️ Architecture & Platform</option>
-                                <option value="Strategic Perspectives">💭 Strategic Perspectives</option>
-                                <option value="IBM & Partners">🔵 IBM & Partners</option>
+                                <option value="Sovereignty & Regulation">🛡️ Sovereignty</option>
+                                <option value="APAC Enterprise">🌏 APAC</option>
+                                <option value="China & Geopolitics">🇨🇳 China</option>
+                                <option value="Competitive Landscape">⚔️ Competitive</option>
+                                <option value="Architecture & Platform">🏗️ Architecture</option>
+                                <option value="Strategic Perspectives">💭 Strategic</option>
+                                <option value="IBM & Partners">🔵 IBM</option>
                             </select>
                         </div>
                         <div id="sources-list" class="sources-list"></div>
                     </section>
-
-                    <!-- Data Management -->
                     <section class="settings-section">
-                        <h3>🗑️ Data Management</h3>
+                        <h3>🗑️ Data</h3>
                         <button class="btn btn-danger" onclick="clearAllData()">Clear All Data</button>
-                        <p class="form-hint">This will reset all settings and cached articles.</p>
                     </section>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
-                    <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+                    <button class="btn btn-primary" onclick="saveSettings()">Save</button>
                 </div>
             </div>
         </div>
 
-        <!-- Article Modal -->
+        <!-- ARTICLE MODAL -->
         <div id="article-modal" class="modal hidden">
             <div class="modal-backdrop" onclick="closeArticle()"></div>
             <div class="modal-content modal-large">
@@ -348,114 +335,71 @@
                         <span id="article-date" class="article-date"></span>
                         <span id="article-score" class="article-score"></span>
                     </div>
-                    <div id="article-summary" class="article-summary"></div>
-                    <div class="article-actions">
-                        <a id="article-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Read Full Article →</a>
-                        <button id="deep-read-btn" class="btn btn-secondary hidden" onclick="app.deepReadArticle(document.getElementById('article-modal').dataset.articleId)">🤖 Deep Read</button>
-                        <button class="btn btn-instapaper" onclick="saveToInstapaper()">📥 Save to Instapaper</button>
-                        <button class="btn btn-secondary" onclick="copyArticleLink()">📋 Copy Link</button>
-                    </div>
+                    <div id="article-client-tag" class="article-client-tag hidden"></div>
+                    <p id="article-summary" class="article-summary"></p>
                     <div id="deep-read-content" class="deep-read-content hidden"></div>
                 </div>
+                <div class="modal-footer article-actions">
+                    <a id="article-link" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Read Article</a>
+                    <button id="deep-read-btn" class="btn btn-secondary hidden" onclick="app.deepReadArticle(document.getElementById('article-modal').dataset.articleId)">🤖 Deep Read</button>
+                    <button class="btn btn-secondary" onclick="saveToInstapaper()">📥 Save</button>
+                    <button class="btn btn-secondary" onclick="copyArticleLink()">🔗 Copy</button>
+                </div>
             </div>
         </div>
 
-        <!-- Meeting Brief Modal -->
-        <div id="meeting-brief-modal" class="modal hidden">
-            <div class="modal-backdrop" onclick="closeMeetingBrief()"></div>
-            <div class="modal-content modal-large">
+        <!-- BRIEF ATL MODAL -->
+        <div id="brief-atl-modal" class="modal hidden">
+            <div class="modal-backdrop" onclick="closeBriefATL()"></div>
+            <div class="modal-content">
                 <div class="modal-header">
-                    <h2>📋 Meeting Brief: <span id="meeting-brief-client"></span></h2>
-                    <button class="modal-close" onclick="closeMeetingBrief()">×</button>
+                    <h2 id="brief-atl-title">Brief ATL</h2>
+                    <button class="modal-close" onclick="closeBriefATL()">×</button>
                 </div>
-                <div class="modal-body">
-                    <div id="meeting-brief-body">
-                        <div class="meeting-brief-loading">Generating brief...</div>
-                    </div>
-                </div>
+                <div class="modal-body" id="brief-atl-content"></div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" onclick="closeMeetingBrief()">Close</button>
-                    <button class="btn btn-slack hidden" id="copy-slack-btn" onclick="app.copyMeetingBriefSlack()">💬 Copy for Slack</button>
+                    <button class="btn btn-secondary" onclick="closeBriefATL()">Close</button>
+                    <button class="btn btn-primary" onclick="copyBriefATL()">📋 Copy to Slack</button>
                 </div>
             </div>
         </div>
 
-        <!-- GTM Digest Modal -->
+        <!-- GTM DIGEST MODAL -->
         <div id="gtm-digest-modal" class="modal hidden">
             <div class="modal-backdrop" onclick="closeGTMDigest()"></div>
             <div class="modal-content modal-large">
                 <div class="modal-header">
-                    <h2>📧 GTM Weekly Digest</h2>
+                    <h2>📧 GTM Digest Email</h2>
                     <button class="modal-close" onclick="closeGTMDigest()">×</button>
                 </div>
-                <div class="modal-body">
-                    <p class="form-hint">Plain-text email for your GTM sales team — organised by industry vertical. Copy and paste into email or Slack.</p>
-                    <div id="gtm-digest-body">
-                        <div class="meeting-brief-loading">Generating GTM digest...</div>
-                    </div>
-                </div>
+                <div class="modal-body" id="gtm-digest-body"></div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="closeGTMDigest()">Close</button>
-                    <button class="btn btn-primary hidden" id="copy-gtm-btn" onclick="app.copyGTMDigest()">📋 Copy to Clipboard</button>
+                    <button id="copy-gtm-btn" class="btn btn-primary hidden" onclick="copyGTMDigest()">📋 Copy</button>
                 </div>
             </div>
         </div>
 
-        <!-- Source Editor Modal -->
-        <div id="source-modal" class="modal hidden">
-            <div class="modal-backdrop" onclick="closeSourceEditor()"></div>
+        <!-- CSV IMPORT MODAL -->
+        <div id="csv-import-modal" class="modal hidden">
+            <div class="modal-backdrop" onclick="closeCSVImport()"></div>
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2 id="source-modal-title">Add Source</h2>
-                    <button class="modal-close" onclick="closeSourceEditor()">×</button>
+                    <h2>📥 Import Clients</h2>
+                    <button class="modal-close" onclick="closeCSVImport()">×</button>
                 </div>
                 <div class="modal-body">
+                    <p class="form-hint">CSV: Name, Market, Country, Industry, Tier, ATL</p>
                     <div class="form-group">
-                        <label for="source-name">Source Name</label>
-                        <input type="text" id="source-name" placeholder="e.g., TechCrunch">
+                        <textarea id="csv-import-data" rows="8" placeholder="DBS,ASEAN,SG,Financial Services,1,John Smith"></textarea>
                     </div>
                     <div class="form-group">
-                        <label for="source-url">RSS Feed URL</label>
-                        <input type="text" id="source-url" placeholder="https://example.com/feed.xml">
-                    </div>
-                    <div class="form-group">
-                        <label for="source-category">Category</label>
-                        <select id="source-category">
-                            <option value="AI & Agentic">🤖 AI & Agentic</option>
-                            <option value="Sovereignty & Regulation">🛡️ Sovereignty & Regulation</option>
-                            <option value="APAC Enterprise">🌏 APAC Enterprise</option>
-                            <option value="China & Geopolitics">🇨🇳 China & Geopolitics</option>
-                            <option value="Competitive Landscape">⚔️ Competitive Landscape</option>
-                            <option value="Architecture & Platform">🏗️ Architecture & Platform</option>
-                            <option value="Strategic Perspectives">💭 Strategic Perspectives</option>
-                            <option value="IBM & Partners">🔵 IBM & Partners</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Priority</label>
-                        <div class="priority-selector">
-                            <button type="button" class="priority-btn priority-1" data-priority="1" onclick="selectPriority(1)">🔴 P1 - Must Read</button>
-                            <button type="button" class="priority-btn priority-2 active" data-priority="2" onclick="selectPriority(2)">🟠 P2 - Important</button>
-                            <button type="button" class="priority-btn priority-3" data-priority="3" onclick="selectPriority(3)">⚪ P3 - Nice to Have</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="source-credibility">Credibility Score: <span id="credibility-value">80%</span></label>
-                        <input type="range" id="source-credibility" min="50" max="100" value="80" oninput="updateCredibilityDisplay()">
-                    </div>
-                    <div class="form-group">
-                        <label>Include In</label>
-                        <div class="digest-type-selector">
-                            <button type="button" class="digest-btn active" data-type="daily" onclick="selectDigestType('daily')">Daily</button>
-                            <button type="button" class="digest-btn" data-type="weekly" onclick="selectDigestType('weekly')">Weekly</button>
-                            <button type="button" class="digest-btn" data-type="both" onclick="selectDigestType('both')">Both</button>
-                        </div>
+                        <input type="file" id="csv-file-input" accept=".csv" onchange="handleCSVFile(event)">
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-danger" id="delete-source-btn" onclick="deleteCurrentSource()" style="margin-right: auto; display: none;">Delete</button>
-                    <button class="btn btn-secondary" onclick="closeSourceEditor()">Cancel</button>
-                    <button class="btn btn-primary" onclick="saveSource()">Save Source</button>
+                    <button class="btn btn-secondary" onclick="closeCSVImport()">Cancel</button>
+                    <button class="btn btn-primary" onclick="processCSVImport()">Import</button>
                 </div>
             </div>
         </div>
