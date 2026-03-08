@@ -1549,16 +1549,29 @@ class SignalApp {
             }
             
             // Client match - tier-weighted boost
+            // Tier 1 (Strategic): +40%, Tier 2 (Growth): +25%, Tier 3 (Prospect): +15%
             bd.client = 0;
             if (allClients.length > 0) {
                 const topClient = allClients[0];
                 const clientObj = this.clients.find(c => (typeof c === 'string' ? c : c.name) === topClient);
                 const clientTier = (clientObj && typeof clientObj === 'object') ? clientObj.tier : 2;
-                bd.client = { 1: 0.35, 2: 0.25, 3: 0.15 }[clientTier] || 0.25;
+                
+                // Use CLIENT_TIERS from sources.js if available, otherwise fallback to hardcoded values
+                const tierBoosts = typeof CLIENT_TIERS !== 'undefined'
+                    ? { 1: CLIENT_TIERS[1].boost, 2: CLIENT_TIERS[2].boost, 3: CLIENT_TIERS[3].boost }
+                    : { 1: 0.40, 2: 0.25, 3: 0.15 };
+                
+                bd.client = tierBoosts[clientTier] || 0.25;
                 bd.clientName = topClient;
+                bd.clientTier = clientTier;
                 score += bd.client;
                 article.matchedClient = topClient;
                 article.allMatchedClients = allClients;
+                
+                // Add market info if available
+                if (clientObj && typeof clientObj === 'object' && clientObj.market) {
+                    article.matchedMarket = clientObj.market;
+                }
             }
             
             // Cross-reference boost
@@ -1743,23 +1756,53 @@ class SignalApp {
 
     detectAllClients(text) {
         // Return all matched client names for an article.
-        // Works with both structured objects {name, tier} and legacy strings.
-        // Uses word boundary matching to avoid false positives
-        // e.g., "SK" shouldn't match "risk", "ANZ" shouldn't match "organization"
+        // Works with both structured objects {name, tier, keywords} and legacy strings.
+        // Uses keywords array for better matching (e.g., "DBS", "Development Bank of Singapore")
+        // Falls back to name-only matching for backward compatibility
         const matches = [];
         
         for (const clientEntry of this.clients) {
             const clientName = typeof clientEntry === 'string' ? clientEntry : clientEntry.name;
-            const clientLower = clientName.toLowerCase();
+            
+            // Skip if client is disabled
+            if (typeof clientEntry === 'object' && clientEntry.enabled === false) {
+                continue;
+            }
             
             let isMatch = false;
             
-            if (clientName.length <= 3) {
-                const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}\\b`, 'i');
-                isMatch = regex.test(text);
+            // Use keywords array if available (new structure)
+            if (typeof clientEntry === 'object' && clientEntry.keywords && Array.isArray(clientEntry.keywords)) {
+                for (const keyword of clientEntry.keywords) {
+                    const keywordLower = keyword.toLowerCase();
+                    
+                    // For short keywords (<=3 chars), require word boundaries
+                    if (keyword.length <= 3) {
+                        const regex = new RegExp(`\\b${this.escapeRegex(keywordLower)}\\b`, 'i');
+                        if (regex.test(text)) {
+                            isMatch = true;
+                            break;
+                        }
+                    } else {
+                        // For longer keywords, partial match is OK
+                        const regex = new RegExp(`\\b${this.escapeRegex(keywordLower)}`, 'i');
+                        if (regex.test(text)) {
+                            isMatch = true;
+                            break;
+                        }
+                    }
+                }
             } else {
-                const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}`, 'i');
-                isMatch = regex.test(text);
+                // Fallback to name-only matching (legacy support)
+                const clientLower = clientName.toLowerCase();
+                
+                if (clientName.length <= 3) {
+                    const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}\\b`, 'i');
+                    isMatch = regex.test(text);
+                } else {
+                    const regex = new RegExp(`\\b${this.escapeRegex(clientLower)}`, 'i');
+                    isMatch = regex.test(text);
+                }
             }
             
             if (isMatch) {
@@ -1768,6 +1811,67 @@ class SignalApp {
         }
         
         return matches;
+    }
+
+    detectMarket(text) {
+        // Detect which APAC market(s) an article is relevant to based on geographic keywords
+        // Returns array of market codes (e.g., ['ANZ', 'ASEAN'])
+        const markets = [];
+        const textLower = text.toLowerCase();
+        
+        // Use GEOGRAPHIC_KEYWORDS from sources.js if available
+        const geoKeywords = typeof GEOGRAPHIC_KEYWORDS !== 'undefined' ? GEOGRAPHIC_KEYWORDS : {};
+        
+        for (const [marketCode, keywords] of Object.entries(geoKeywords)) {
+            let isMatch = false;
+            
+            // Check countries
+            if (keywords.countries) {
+                for (const country of keywords.countries) {
+                    if (textLower.includes(country.toLowerCase())) {
+                        isMatch = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Check cities
+            if (!isMatch && keywords.cities) {
+                for (const city of keywords.cities) {
+                    const regex = new RegExp(`\\b${this.escapeRegex(city.toLowerCase())}\\b`, 'i');
+                    if (regex.test(textLower)) {
+                        isMatch = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Check regions
+            if (!isMatch && keywords.regions) {
+                for (const region of keywords.regions) {
+                    if (textLower.includes(region.toLowerCase())) {
+                        isMatch = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Check organizations (regulatory bodies, exchanges, etc.)
+            if (!isMatch && keywords.organizations) {
+                for (const org of keywords.organizations) {
+                    if (textLower.includes(org.toLowerCase())) {
+                        isMatch = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (isMatch) {
+                markets.push(marketCode);
+            }
+        }
+        
+        return markets;
     }
     
     escapeRegex(string) {
@@ -2206,38 +2310,30 @@ ${articleList}`;
     }
 
     renderDailyTab() {
-        // 1. Action Brief — synthesised headline, read this first
+        // 1. Executive Brief — synthesised headline with industry insights inline
         if (this.digest) {
             document.getElementById('executive-summary').innerHTML = this.formatMarkdownLinks(this.digest.executiveSummary);
+            
+            // Merge Industry Signals inline into Executive Brief
+            this.renderIndustrySignalsInline();
         }
 
-        // 2. Client Watch — account-specific intel (highest urgency: meeting prep)
+        // 2. Account Intelligence — client mentions (conversation starters embedded per client)
         this.renderClientWatch();
 
-        // 3. Conversation Openers — talking points, contextualised by Client Watch above
-        if (this.digest) {
-            this.renderStarters(this.digest.conversationStarters || []);
-        }
+        // 3. Market Pulse — geographic intelligence for 5 APAC markets
+        this.renderMarketPulse();
 
-        // 4. Industry Signals — AI-generated per-industry strategic guidance (ATL team framing)
-        if (this.digest) {
-            this.renderIndustrySignals();
-        }
-
-        // 5. AI Digest Sections — thematic deep-dives (AI-generated block stays together)
+        // 4. AI Digest Sections — thematic deep-dives (Competitive Alerts, etc.)
         if (this.digest) {
             this.renderSections(this.digest.sections || []);
         }
 
-        // 6. Cross-Source Signals — keyword-matched multi-source themes (supporting context)
-        // Use cached crossRefs computed during scoring (avoids recomputing O(articles×themes×keywords))
-        this.renderCrossSourceSignals(this.crossRefs);
-
-        // 7. Multi-Day Trending — topics rising across the 7-day IDB corpus
-        this.renderTrending();
+        // 5. Pattern Detection — merged cross-source + trending (collapsed by default)
+        this.renderPatternDetection();
         
-        // 8. All Daily Articles — full reference list
-        this.renderDailyArticles();
+        // 6. Deep Context — optional reference (collapsed by default)
+        this.renderDeepContext();
     }
 
     // ==========================================
@@ -2583,6 +2679,143 @@ ${articleList}`;
         return `Multiple sources reporting on related developments: ${titles[0]?.substring(0, 80)}...`;
     }
 
+    renderMarketPulse() {
+        // Render market-specific intelligence for 5 APAC regions
+        const section = document.getElementById('market-pulse-section');
+        if (!section) return;
+        
+        // Use MARKETS from sources.js if available
+        const markets = typeof MARKETS !== 'undefined' ? MARKETS : {
+            ANZ: { name: "Australia & New Zealand", countries: ["AU", "NZ"], atls: 23, accounts: 68 },
+            ASEAN: { name: "Southeast Asia", countries: ["SG", "MY", "TH", "ID", "PH", "VN", "JP"], atls: 31, accounts: 89 },
+            GCG: { name: "Greater China", countries: ["CN", "HK", "TW"], atls: 19, accounts: 54 },
+            ISA: { name: "India & South Asia", countries: ["IN", "BD", "LK", "PK"], atls: 28, accounts: 87 },
+            KOREA: { name: "South Korea", countries: ["KR"], atls: 14, accounts: 45 }
+        };
+        
+        // Detect market relevance for all articles
+        const marketArticles = {};
+        for (const [marketCode, marketInfo] of Object.entries(markets)) {
+            marketArticles[marketCode] = [];
+        }
+        
+        for (const article of this.dailyArticles) {
+            const text = `${article.title} ${article.summary}`.toLowerCase();
+            const detectedMarkets = this.detectMarket(text);
+            
+            for (const marketCode of detectedMarkets) {
+                if (marketArticles[marketCode]) {
+                    marketArticles[marketCode].push(article);
+                }
+            }
+        }
+        
+        // Count total articles across all markets
+        const totalMarketArticles = Object.values(marketArticles).reduce((sum, arr) => sum + arr.length, 0);
+        
+        if (totalMarketArticles === 0) {
+            section.classList.add('hidden');
+            return;
+        }
+        
+        section.classList.remove('hidden');
+        
+        // Render market tabs content
+        for (const [marketCode, marketInfo] of Object.entries(markets)) {
+            const articles = marketArticles[marketCode] || [];
+            const contentDiv = document.getElementById(`market-${marketCode.toLowerCase()}`);
+            if (!contentDiv) continue;
+            
+            // Count clients in this market
+            const marketClients = this.clients.filter(c => {
+                if (typeof c === 'string') return false;
+                return c.market === marketCode && c.enabled !== false;
+            });
+            
+            const tier1Count = marketClients.filter(c => c.tier === 1).length;
+            const tier2Count = marketClients.filter(c => c.tier === 2).length;
+            const tier3Count = marketClients.filter(c => c.tier === 3).length;
+            
+            // Render market stats
+            const statsHtml = `
+                <div class="market-stats">
+                    <div class="market-stat">
+                        <div class="market-stat-label">ATLs</div>
+                        <div class="market-stat-value">${marketInfo.atls}</div>
+                    </div>
+                    <div class="market-stat">
+                        <div class="market-stat-label">Accounts</div>
+                        <div class="market-stat-value">${marketInfo.accounts}</div>
+                    </div>
+                    <div class="market-stat">
+                        <div class="market-stat-label">T1 Clients</div>
+                        <div class="market-stat-value">${tier1Count}</div>
+                    </div>
+                    <div class="market-stat">
+                        <div class="market-stat-label">Articles Today</div>
+                        <div class="market-stat-value">${articles.length}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Render articles
+            let articlesHtml = '';
+            if (articles.length === 0) {
+                articlesHtml = '<div class="empty-state">No market-specific articles today</div>';
+            } else {
+                // Sort by relevance score
+                const sortedArticles = [...articles].sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+                
+                // Show top 10 articles per market
+                for (const article of sortedArticles.slice(0, 10)) {
+                    const safeTitle = this.escapeHtml(article.title);
+                    const safeSource = this.escapeHtml(article.sourceName);
+                    const safeUrl = this.escapeAttr(article.link);
+                    const relevanceScore = article.relevanceScore ? Math.round(article.relevanceScore * 100) : 0;
+                    const relevanceClass = relevanceScore >= 70 ? 'high' : relevanceScore >= 50 ? 'medium' : 'low';
+                    
+                    // Detect clients mentioned in this article
+                    const text = `${article.title} ${article.summary}`.toLowerCase();
+                    const matchedClients = this.detectAllClients(text);
+                    const clientBadges = matchedClients.length > 0 
+                        ? matchedClients.slice(0, 3).map(c => `<span class="client-badge">${this.escapeHtml(c)}</span>`).join('')
+                        : '';
+                    
+                    articlesHtml += `
+                        <div class="market-article">
+                            <div class="market-article-header">
+                                <a href="${safeUrl}" target="_blank" class="market-article-title">${safeTitle}</a>
+                                <span class="relevance-indicator ${relevanceClass}">${relevanceScore}%</span>
+                            </div>
+                            <div class="market-article-meta">
+                                <span class="source-name">${safeSource}</span>
+                                ${clientBadges}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            contentDiv.innerHTML = statsHtml + articlesHtml;
+        }
+        
+        // Set up tab switching
+        const tabs = document.querySelectorAll('.market-tab');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active from all tabs and contents
+                document.querySelectorAll('.market-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.market-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active to clicked tab and corresponding content
+                tab.classList.add('active');
+                const marketCode = tab.dataset.market;
+                const content = document.getElementById(`market-${marketCode}`);
+                if (content) content.classList.add('active');
+            });
+        });
+    }
+
     renderClientWatch() {
         const section = document.getElementById('clients-section');
         const list = document.getElementById('clients-list');
@@ -2673,12 +2906,38 @@ ${articleList}`;
             const dominantSignal = Object.entries(signalCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'background';
             const badge = this.getSignalTypeBadge(dominantSignal);
             
+            // Get client object for Phase 5 advanced fields
+            const clientObj = this.clients.find(c =>
+                (typeof c === 'string' ? c : c.name) === clientName
+            );
+            
+            // Build Phase 5 metadata badges
+            let metadataBadges = '';
+            if (clientObj && typeof clientObj === 'object') {
+                if (clientObj.atlName) {
+                    metadataBadges += `<span class="client-meta-badge" title="Assigned ATL">👤 ${this.escapeHtml(clientObj.atlName)}</span>`;
+                }
+                if (clientObj.nextMeeting) {
+                    const meetingDate = new Date(clientObj.nextMeeting);
+                    const daysUntil = Math.ceil((meetingDate - new Date()) / (1000 * 60 * 60 * 24));
+                    const urgencyClass = daysUntil <= 3 ? 'urgent' : daysUntil <= 7 ? 'soon' : '';
+                    metadataBadges += `<span class="client-meta-badge meeting-badge ${urgencyClass}" title="Next meeting in ${daysUntil} days">📅 ${meetingDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>`;
+                }
+                if (clientObj.activeDeal) {
+                    const dealText = clientObj.dealValue
+                        ? `$${(clientObj.dealValue / 1000000).toFixed(1)}M`
+                        : 'Active';
+                    metadataBadges += `<span class="client-meta-badge deal-badge" title="Active deal pursuit">💰 ${dealText}</span>`;
+                }
+            }
+            
             return `
                 <div class="client-group">
                     <div class="client-name-row">
                         ${tierLabel}
                         <span class="client-name">${this.escapeHtml(clientName)}</span>
                         <span class="signal-type-badge ${badge.cssClass}">${badge.emoji} ${badge.label}</span>
+                        ${metadataBadges}
                         <button class="btn-meeting-brief" onclick="app.openMeetingBrief('${safeClientName}')" title="Meeting Brief">📋</button>
                     </div>
                     <div class="client-articles">
@@ -2774,6 +3033,150 @@ ${articleList}`;
         
         list.innerHTML = this.dailyArticles.slice(0, 30).map(article => this.renderArticleItem(article)).join('');
     }
+
+    // ==========================================
+    // Phase 2: Simplified UI Rendering Functions
+    // ==========================================
+
+    renderIndustrySignalsInline() {
+        const container = document.getElementById('industry-signals-inline');
+        
+        // Get industry signals from digest or generate from matched articles
+        const industrySignals = this.generateIndustrySignals();
+        
+        if (industrySignals.length === 0) {
+            container.classList.add('hidden');
+            return;
+        }
+        
+        container.classList.remove('hidden');
+        container.innerHTML = `
+            <h3>📊 Industry Signals</h3>
+            ${industrySignals.map(signal => `
+                <div class="industry-signal-item">
+                    <div class="industry-signal-header">
+                        <span class="industry-signal-name">${signal.industry}</span>
+                    </div>
+                    <div class="industry-signal-content">
+                        ${this.formatMarkdownLinks(signal.content)}
+                    </div>
+                </div>
+            `).join('')}
+        `;
+    }
+
+    generateIndustrySignals() {
+        // Generate industry-specific signals from matched articles
+        const industryArticles = {};
+        
+        for (const article of this.dailyArticles) {
+            if (article.matchedIndustry) {
+                if (!industryArticles[article.matchedIndustry]) {
+                    industryArticles[article.matchedIndustry] = [];
+                }
+                industryArticles[article.matchedIndustry].push(article);
+            }
+        }
+        
+        // Create signals for top industries
+        const signals = [];
+        for (const [industry, articles] of Object.entries(industryArticles)) {
+            if (articles.length > 0) {
+                const topArticle = articles[0];
+                signals.push({
+                    industry: industry,
+                    content: `${articles.length} relevant ${articles.length === 1 ? 'article' : 'articles'} — lead with [${topArticle.sourceName}](${topArticle.url}): ${topArticle.title}`
+                });
+            }
+        }
+        
+        return signals.slice(0, 3); // Top 3 industries
+    }
+
+    renderPatternDetection() {
+        const section = document.getElementById('patterns-section');
+        const countBadge = document.getElementById('patterns-count');
+        
+        // Render cross-source signals
+        const crossSourceDiv = document.getElementById('cross-source-patterns');
+        const signalsList = document.getElementById('signals-list');
+        
+        if (this.crossRefs && this.crossRefs.length > 0) {
+            crossSourceDiv.classList.remove('hidden');
+            signalsList.innerHTML = this.crossRefs.slice(0, 10).map(ref => `
+                <div class="signal-item">
+                    <div class="signal-header">
+                        <span class="signal-theme">${this.escapeHtml(ref.topic)}</span>
+                        <span class="signal-sources">${ref.sourceCount} sources</span>
+                    </div>
+                    ${ref.description ? `<div class="signal-description">${this.escapeHtml(ref.description)}</div>` : ''}
+                    <div class="signal-source-list">
+                        <span class="signal-source-label">Sources:</span>
+                        ${ref.articles.slice(0, 5).map(a => 
+                            `<a href="${a.url}" target="_blank" rel="noopener noreferrer" class="signal-source-link">${this.escapeHtml(a.sourceName)}</a>`
+                        ).join('')}
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            crossSourceDiv.classList.add('hidden');
+        }
+        
+        // Render trending (will be populated by renderTrendingInline)
+        this.renderTrendingInline();
+        
+        // Update count and visibility
+        const totalPatterns = (this.crossRefs?.length || 0) + (this.trendingTopics?.length || 0);
+        countBadge.textContent = totalPatterns;
+        
+        if (totalPatterns > 0) {
+            section.classList.remove('hidden');
+        } else {
+            section.classList.add('hidden');
+        }
+    }
+
+    async renderTrendingInline() {
+        const trendingDiv = document.getElementById('trending-patterns');
+        const trendingList = document.getElementById('trending-list');
+        
+        // Get trending topics from IDB
+        const trending = await this.detectMultiDayTrending();
+        this.trendingTopics = trending;
+        
+        if (trending.length > 0) {
+            trendingDiv.classList.remove('hidden');
+            trendingList.innerHTML = trending.slice(0, 10).map((item, index) => `
+                <div class="trending-item">
+                    <div class="trending-rank">${index + 1}</div>
+                    <div class="trending-content">
+                        <div class="trending-topic">${this.escapeHtml(item.topic)}</div>
+                        <div class="trending-count">${item.days} days × ${item.sources} sources</div>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            trendingDiv.classList.add('hidden');
+        }
+    }
+
+    renderDeepContext() {
+        const section = document.getElementById('deep-context-section');
+        const list = document.getElementById('deep-context-list');
+        const count = document.getElementById('deep-context-count');
+        
+        // Show top 20 articles as reference
+        const contextArticles = this.dailyArticles.slice(0, 20);
+        
+        if (contextArticles.length > 0) {
+            count.textContent = contextArticles.length;
+            list.innerHTML = contextArticles.map(article => this.renderArticleItem(article)).join('');
+            section.classList.remove('hidden');
+        } else {
+            section.classList.add('hidden');
+        }
+    }
+
 
     renderArticleItem(article) {
         const scoreClass = article.relevanceScore >= 0.7 ? 'high' : article.relevanceScore >= 0.5 ? 'medium' : '';
@@ -3060,12 +3463,28 @@ Return ONLY valid JSON, no markdown fences:
             ? `\nTHIS WEEK'S CONTEXT:\n${this.settings.thisWeekContext}\n`
             : '';
 
+        // Phase 5: Extract advanced client metadata
+        const atlName = clientObj?.atlName || null;
+        const nextMeeting = clientObj?.nextMeeting || null;
+        const activeDeal = clientObj?.activeDeal || false;
+        const dealValue = clientObj?.dealValue || null;
+        const clientNotes = clientObj?.notes || null;
+
         // Determine if this is a live meeting brief or ATL enablement brief
-        const isMeetingThisWeek = !!(this.settings.thisWeekContext &&
-            this.settings.thisWeekContext.toLowerCase().includes(clientName.toLowerCase()));
+        const isMeetingThisWeek = !!(nextMeeting || (this.settings.thisWeekContext &&
+            this.settings.thisWeekContext.toLowerCase().includes(clientName.toLowerCase())));
         const briefPurpose = isMeetingThisWeek
-            ? `LIVE MEETING BRIEF — you are meeting ${clientName} this week`
-            : `ATL ENABLEMENT BRIEF — for the ATL aligned to ${clientName}`;
+            ? `LIVE MEETING BRIEF — you are meeting ${clientName} ${nextMeeting ? `on ${nextMeeting}` : 'this week'}`
+            : `ATL ENABLEMENT BRIEF — for ${atlName || 'the ATL'} aligned to ${clientName}`;
+
+        // Phase 5: Client metadata block
+        const metadataBlock = `
+CLIENT METADATA:
+- Assigned ATL: ${atlName || 'Not assigned'}
+- Next Meeting: ${nextMeeting || 'Not scheduled'}
+- Active Deal: ${activeDeal ? `Yes${dealValue ? ` ($${(dealValue / 1000000).toFixed(1)}M)` : ''}` : 'No'}
+${clientNotes ? `- Notes: ${clientNotes}` : ''}
+`;
 
         // Industry context block
         const industryBlock = clientIndustry ? `
@@ -3077,18 +3496,19 @@ Frame all talking points through ${clientIndustry} challenges and priorities.
         
         const prompt = `You are preparing a meeting brief for the IBM APAC Field CTO.
 Brief purpose: ${briefPurpose}
-${contextBlock}${industryBlock}
+${metadataBlock}${contextBlock}${industryBlock}
 Recent news about ${clientName}:
 ${articleList || 'No recent news found.'}
 
 BRIEF RULES:
-- If LIVE MEETING BRIEF: lead with the most time-sensitive signal; frame talking points as what to say in the room today
-- If ATL ENABLEMENT BRIEF: frame talking points as intelligence the ATL can use in their next client touchpoint or QBR
+- If LIVE MEETING BRIEF: lead with the most time-sensitive signal; frame talking points as what to say in the room today${nextMeeting ? ` (meeting scheduled for ${nextMeeting})` : ''}
+- If ATL ENABLEMENT BRIEF: frame talking points as intelligence ${atlName || 'the ATL'} can use in their next client touchpoint or QBR
+${activeDeal ? `- ACTIVE DEAL: This is an active deal pursuit${dealValue ? ` worth $${(dealValue / 1000000).toFixed(1)}M` : ''}. Prioritize deal-closing angles.` : ''}
 - talkingPoints: produce EXACTLY 3 points, each framed as a ${clientIndustry || 'enterprise'} challenge with a specific IBM product angle (watsonx.ai, watsonx.governance, IBM Consulting, Red Hat OpenShift, IBM Security, IBM Z, hybrid cloud)
 - riskFlags: specific risks only — reputational issues, known competitor relationships, regulatory exposure, C-suite changes, or deal blockers. Omit array if none.
 - openingQuestion: frame as a hypothesis to test, not an open-ended probe. Style: "I've been thinking that [observation from the news] — is that consistent with what you're seeing?" Peer CTO tone, not a sales pitch.
-- salesAngle: name a specific IBM product AND a specific trigger (regulatory deadline, competitor move, or client news) that makes NOW the right time
-- atlNote: one sentence the ATL aligned to ${clientName} should know — what to watch for or act on this week, even if the Field CTO is not personally meeting the client
+- salesAngle: name a specific IBM product AND a specific trigger (regulatory deadline, competitor move, or client news) that makes NOW the right time${activeDeal ? '. Focus on closing this active deal.' : ''}
+- atlNote: one sentence for ${atlName || 'the ATL'} aligned to ${clientName} — what to watch for or act on this week, even if the Field CTO is not personally meeting the client
 - slackMessage: under 280 characters total
 
 Return ONLY valid JSON, no markdown fences:
@@ -3098,7 +3518,7 @@ Return ONLY valid JSON, no markdown fences:
     "riskFlags": ["Specific risk only — reputational, competitive, regulatory, C-suite, or deal blocker. Omit array if none."],
     "openingQuestion": "Hypothesis-framed. Peer CTO tone. Not a sales pitch.",
     "salesAngle": "Specific IBM product + specific trigger for why now.",
-    "atlNote": "One sentence for the ATL aligned to ${clientName} — what to watch for or act on this week.",
+    "atlNote": "One sentence for ${atlName || 'the ATL'} aligned to ${clientName} — what to watch for or act on this week.",
     "slackMessage": "*${clientName} — Signal Alert*\\n📊 [1-sentence situation]\\n💡 [top talking point]\\n⚡ [sales angle]\\n💬 Q: [opening question]"
 }`;
         
@@ -3197,6 +3617,262 @@ Return ONLY valid JSON, no markdown fences:
                     btn.classList.remove('copied');
                 }, 2000);
             }
+        });
+    }
+
+    // ==========================================
+    // ATL Enablement Pack (Phase 4)
+    // ==========================================
+
+    async generateATLBriefs(event) {
+        // Prevent event bubbling to avoid collapsing the section
+        if (event) event.stopPropagation();
+        
+        const modal = document.getElementById('atl-enablement-modal');
+        const bodyEl = document.getElementById('atl-enablement-body');
+        const copyBtn = document.getElementById('copy-atl-btn');
+        
+        if (!modal || !bodyEl) return;
+        
+        modal.classList.remove('hidden');
+        bodyEl.innerHTML = '<div class="meeting-brief-loading">🤖 Generating ATL briefs for all clients with coverage...</div>';
+        if (copyBtn) copyBtn.classList.add('hidden');
+        
+        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+        
+        // Get all clients with articles today
+        const clientArticles = [];
+        for (const article of this.dailyArticles) {
+            const text = `${article.title} ${article.summary}`.toLowerCase();
+            const matchedClients = this.detectAllClients(text);
+            if (matchedClients.length > 0) {
+                clientArticles.push({ ...article, matchedClients });
+            }
+        }
+        
+        // Group by client
+        const byClient = {};
+        for (const article of clientArticles) {
+            for (const client of article.matchedClients) {
+                if (!byClient[client]) byClient[client] = [];
+                if (!byClient[client].find(a => a.id === article.id)) {
+                    byClient[client].push(article);
+                }
+            }
+        }
+        
+        if (Object.keys(byClient).length === 0) {
+            bodyEl.innerHTML = '<div class="meeting-brief-empty">No client coverage today. ATL briefs are generated when clients appear in the news.</div>';
+            return;
+        }
+        
+        if (!apiKey) {
+            // No API key: show basic list
+            let html = '<div class="atl-brief-section"><p class="meeting-brief-hint">Add a Claude API key in Settings to generate AI-powered ATL briefs.</p>';
+            html += '<div class="atl-brief-label">📊 Clients with Coverage Today</div><ul class="meeting-brief-list">';
+            for (const [clientName, articles] of Object.entries(byClient)) {
+                html += `<li><strong>${this.escapeHtml(clientName)}</strong> — ${articles.length} article${articles.length > 1 ? 's' : ''}</li>`;
+            }
+            html += '</ul></div>';
+            bodyEl.innerHTML = html;
+            return;
+        }
+        
+        // Generate briefs for top clients (limit to 10 to avoid rate limits)
+        const clientList = Object.entries(byClient)
+            .sort((a, b) => b[1].length - a[1].length) // Sort by article count
+            .slice(0, 10);
+        
+        const briefs = [];
+        let processedCount = 0;
+        
+        for (const [clientName, articles] of clientList) {
+            processedCount++;
+            bodyEl.innerHTML = `<div class="meeting-brief-loading">🤖 Generating brief ${processedCount}/${clientList.length}: ${this.escapeHtml(clientName)}...</div>`;
+            
+            try {
+                const brief = await this.generateSingleATLBrief(clientName, articles, apiKey);
+                if (brief) briefs.push({ clientName, brief, articles });
+            } catch (error) {
+                console.error(`Failed to generate brief for ${clientName}:`, error);
+            }
+            
+            // Small delay to avoid rate limits
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        // Render all briefs
+        this.renderATLBriefs(briefs);
+        
+        // Store for copy function
+        this._atlBriefs = briefs;
+        if (copyBtn) copyBtn.classList.remove('hidden');
+    }
+    
+    async generateSingleATLBrief(clientName, articles, apiKey) {
+        // Look up client object
+        const clientObj = this.clients.find(c =>
+            (typeof c === 'string' ? c : c.name).toLowerCase() === clientName.toLowerCase()
+        );
+        const clientIndustry = clientObj?.industry || 'Enterprise';
+        const clientMarket = clientObj?.market || 'APAC';
+        const clientTier = clientObj?.tier || 2;
+        
+        // Get market info
+        const markets = typeof MARKETS !== 'undefined' ? MARKETS : {};
+        const marketInfo = markets[clientMarket] || { name: clientMarket, atls: 0 };
+        
+        const articleList = articles.slice(0, 5).map((a, i) =>
+            `[${i + 1}] ${a.sourceName}: ${a.title}\n${a.summary?.substring(0, 250) || ''}`
+        ).join('\n\n');
+        
+        const prompt = `You are preparing an ATL enablement brief for IBM APAC Field CTO's team.
+Client: ${clientName} (${clientIndustry}, ${marketInfo.name}, Tier ${clientTier})
+Recent news (${articles.length} articles):
+${articleList}
+
+BRIEF RULES:
+- situationSummary: 1-2 sentences on what's happening with ${clientName} right now
+- talkingPoint: ONE specific talking point the ATL can use in their next touchpoint — frame as "${clientIndustry} challenge + IBM product angle"
+- slackMessage: Under 280 characters total, ready to send to the ATL. Format: "*${clientName}* — [1-sentence situation] 💡 [talking point]"
+
+Return ONLY valid JSON, no markdown fences:
+{
+    "situationSummary": "1-2 sentences on ${clientName}'s current situation.",
+    "talkingPoint": "${clientIndustry} challenge + specific IBM product angle.",
+    "slackMessage": "*${clientName}* — [situation] 💡 [talking point]"
+}`;
+        
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 400,
+                messages: [{ role: 'user', content: prompt }]
+            })
+        });
+        
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
+        
+        const data = await response.json();
+        const text = data.content[0].text;
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        
+        if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
+        }
+        return null;
+    }
+    
+    renderATLBriefs(briefs) {
+        const bodyEl = document.getElementById('atl-enablement-body');
+        if (!bodyEl) return;
+        
+        // Group by market
+        const byMarket = {};
+        for (const { clientName, brief, articles } of briefs) {
+            const clientObj = this.clients.find(c =>
+                (typeof c === 'string' ? c : c.name).toLowerCase() === clientName.toLowerCase()
+            );
+            const market = clientObj?.market || 'OTHER';
+            if (!byMarket[market]) byMarket[market] = [];
+            byMarket[market].push({ clientName, brief, articles, tier: clientObj?.tier || 2 });
+        }
+        
+        let html = '<div class="atl-enablement-summary">';
+        html += `<p><strong>${briefs.length} ATL briefs generated</strong> — organized by market and ready to distribute to your team.</p>`;
+        html += '</div>';
+        
+        // Render by market
+        const markets = typeof MARKETS !== 'undefined' ? MARKETS : {};
+        for (const [marketCode, marketBriefs] of Object.entries(byMarket)) {
+            const marketInfo = markets[marketCode] || { name: marketCode };
+            html += `<div class="atl-market-section">`;
+            html += `<h3 class="atl-market-title">🌏 ${marketInfo.name} (${marketBriefs.length} clients)</h3>`;
+            
+            // Sort by tier
+            marketBriefs.sort((a, b) => a.tier - b.tier);
+            
+            for (const { clientName, brief, articles, tier } of marketBriefs) {
+                const tierLabel = tier === 1 ? '<span class="client-tier-badge tier-1">T1</span>' :
+                                 tier === 2 ? '<span class="client-tier-badge tier-2">T2</span>' :
+                                              '<span class="client-tier-badge tier-3">T3</span>';
+                
+                html += `<div class="atl-brief-card">`;
+                html += `<div class="atl-brief-header">`;
+                html += `${tierLabel} <strong>${this.escapeHtml(clientName)}</strong>`;
+                html += `<span class="atl-brief-article-count">${articles.length} article${articles.length > 1 ? 's' : ''}</span>`;
+                html += `</div>`;
+                html += `<div class="atl-brief-situation">${this.escapeHtml(brief.situationSummary || '')}</div>`;
+                html += `<div class="atl-brief-talking-point">💡 ${this.escapeHtml(brief.talkingPoint || '')}</div>`;
+                html += `<div class="atl-brief-slack">`;
+                html += `<div class="atl-brief-slack-label">Slack Message:</div>`;
+                html += `<div class="atl-brief-slack-text">${this.escapeHtml(brief.slackMessage || '')}</div>`;
+                html += `<button class="btn-copy-slack-mini" onclick="app.copySingleSlack('${this.escapeAttr(brief.slackMessage || '')}')">📋 Copy</button>`;
+                html += `</div>`;
+                html += `</div>`;
+            }
+            
+            html += `</div>`;
+        }
+        
+        bodyEl.innerHTML = html;
+    }
+    
+    copyATLBriefs() {
+        if (!this._atlBriefs || this._atlBriefs.length === 0) return;
+        
+        let text = '# ATL Enablement Pack\n\n';
+        text += `Generated: ${new Date().toLocaleString()}\n`;
+        text += `Total Clients: ${this._atlBriefs.length}\n\n`;
+        
+        // Group by market
+        const byMarket = {};
+        for (const { clientName, brief } of this._atlBriefs) {
+            const clientObj = this.clients.find(c =>
+                (typeof c === 'string' ? c : c.name).toLowerCase() === clientName.toLowerCase()
+            );
+            const market = clientObj?.market || 'OTHER';
+            if (!byMarket[market]) byMarket[market] = [];
+            byMarket[market].push({ clientName, brief, tier: clientObj?.tier || 2 });
+        }
+        
+        const markets = typeof MARKETS !== 'undefined' ? MARKETS : {};
+        for (const [marketCode, marketBriefs] of Object.entries(byMarket)) {
+            const marketInfo = markets[marketCode] || { name: marketCode };
+            text += `## ${marketInfo.name}\n\n`;
+            
+            marketBriefs.sort((a, b) => a.tier - b.tier);
+            
+            for (const { clientName, brief, tier } of marketBriefs) {
+                text += `### ${clientName} (Tier ${tier})\n`;
+                text += `${brief.slackMessage}\n\n`;
+            }
+        }
+        
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = document.getElementById('copy-atl-btn');
+            if (btn) {
+                const original = btn.textContent;
+                btn.textContent = '✓ Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = original;
+                    btn.classList.remove('copied');
+                }, 2000);
+            }
+        });
+    }
+    
+    copySingleSlack(slackMessage) {
+        navigator.clipboard.writeText(slackMessage).then(() => {
+            showToast('✓ Copied to clipboard');
         });
     }
 
@@ -3700,6 +4376,11 @@ function closeMeetingBrief() {
 function closeGTMDigest() {
     const modal = document.getElementById('gtm-digest-modal');
     if (modal) modal.classList.add('hidden');
+
+function closeATLEnablement() {
+    const modal = document.getElementById('atl-enablement-modal');
+    if (modal) modal.classList.add('hidden');
+}
 }
 
 function copyArticleLink() {
@@ -3713,38 +4394,89 @@ function copyArticleLink() {
 
 function saveToInstapaper() {
     const articleId = document.getElementById('article-modal').dataset.articleId;
-    const article = app.articles.find(a => a.id === articleId);
-    if (article) {
-        saveArticleToInstapaper(article.url, article.title);
+    
+    // Search in all article arrays to handle articles in dailyArticles/weeklyArticles
+    const article = app.articles.find(a => a.id === articleId)
+        || app.dailyArticles.find(a => a.id === articleId)
+        || app.weeklyArticles.find(a => a.id === articleId);
+    
+    if (!article) {
+        showToast('❌ Article not found');
+        console.error('Instapaper: Article not found:', articleId);
+        return;
     }
+    
+    if (!article.url) {
+        showToast('❌ Article URL missing');
+        console.error('Instapaper: Article URL missing for:', article.title);
+        return;
+    }
+    
+    saveArticleToInstapaper(article.url, article.title);
+    showToast('📥 Opening Instapaper...');
 }
 
 // Instapaper integration uses the bookmarklet-style URL only.
 // Credential-based API calls through third-party CORS proxies were removed because
 // they exposed the user's password to proxy operators in plaintext GET query strings.
 function saveArticleToInstapaper(url, title) {
-    const instapaperUrl = `https://www.instapaper.com/hello2?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`;
-    window.open(instapaperUrl, '_blank', 'noopener,noreferrer,width=500,height=600');
+    // Use Instapaper's current bookmarklet endpoint (text endpoint)
+    // The 'text' endpoint properly saves articles when users are logged in
+    const instapaperUrl = `https://www.instapaper.com/text?u=${encodeURIComponent(url)}`;
+    
+    // Try to open popup
+    const popup = window.open(instapaperUrl, '_blank', 'noopener,noreferrer,width=500,height=600');
+    
+    // Check if popup was blocked
+    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        // Popup blocked - provide fallback
+        showToast('⚠️ Popup blocked. Opening in new tab...');
+        // Fallback: open in new tab instead
+        setTimeout(() => {
+            window.open(instapaperUrl, '_blank');
+        }, 100);
+    }
 }
 
 function quickSaveToInstapaper(articleId, event) {
     // Prevent opening the article modal
     if (event) {
         event.stopPropagation();
+        event.preventDefault();
     }
     
-    const article = app.articles.find(a => a.id === articleId);
-    if (!article) return;
+    // Search in all article arrays
+    const article = app.articles.find(a => a.id === articleId)
+        || app.dailyArticles.find(a => a.id === articleId)
+        || app.weeklyArticles.find(a => a.id === articleId);
+    
+    if (!article) {
+        showToast('❌ Article not found');
+        console.error('Instapaper: Article not found:', articleId);
+        return;
+    }
+    
+    if (!article.url) {
+        showToast('❌ Article URL missing');
+        return;
+    }
     
     saveArticleToInstapaper(article.url, article.title);
     
-    // Visual feedback
+    // Show truncated title in toast
+    const truncatedTitle = article.title.length > 50
+        ? article.title.substring(0, 50) + '...'
+        : article.title;
+    showToast(`📥 Saving "${truncatedTitle}" to Instapaper`);
+    
+    // Visual feedback on button
     const btn = event?.target;
     if (btn) {
+        const originalText = btn.textContent;
         btn.textContent = '✓';
         btn.classList.add('saved');
         setTimeout(() => {
-            btn.textContent = '📥';
+            btn.textContent = originalText;
             btn.classList.remove('saved');
         }, 2000);
     }
