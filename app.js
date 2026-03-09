@@ -2280,7 +2280,10 @@ ${articleList}`;
     }
 
     renderDailyTab(forceRefresh = false) {
-        // NEW 4-SECTION LAYOUT:
+        // NEW 5-SECTION LAYOUT:
+        // 0. Executive Summary — 3 things to know today with synthesis
+        renderExecutiveSummary(forceRefresh);
+        
         // 1. Today's Signals — synthesized intelligence with IBM angles
         renderTodaysSignals(forceRefresh);
         
@@ -2288,7 +2291,7 @@ ${articleList}`;
         renderClientRadar();
         
         // 3. ATL Enablement — what to tell your 115 ATLs
-        renderATLEnablement();
+        renderATLEnablement(forceRefresh);
         
         // 4. Deep Reads — collapsed by default
         renderDeepReads(forceRefresh);
@@ -3406,17 +3409,14 @@ Return ONLY valid JSON, no markdown fences:
                         if (insight.timeHorizon) lines.push(`*${insight.timeHorizon} horizon*`);
                         lines.push('');
                         if (insight.strategicThesis) lines.push(`**💡 Strategic Thesis:** ${insight.strategicThesis}`);
-                        if (insight.boardQuestion) lines.push(`**🎯 Board Question:** "${insight.boardQuestion}"`);
-                        if (insight.atlEnablement) lines.push(`**📢 ATL Enablement:** ${insight.atlEnablement}`);
-                        if (insight.ibmNarrative) lines.push(`**🔵 IBM Narrative:** ${insight.ibmNarrative}`);
-                        if (insight.clientTypes) lines.push(`**🏢 Target Clients:** ${insight.clientTypes}`);
+                        if (insight.leadershipImplication) lines.push(`**📊 Leadership Implication:** ${insight.leadershipImplication}`);
+                        if (insight.cxoQuestion) lines.push(`**🎯 CxO Question:** "${insight.cxoQuestion}"`);
                         lines.push('');
                     }
                 }
             }
         } catch (e) { /* ignore cache errors */ }
         
-        // Competitive Landscape
         // Competitive Landscape - use DEAL_RELEVANCE_SIGNALS if available
         const competitorPattern = typeof DEAL_RELEVANCE_SIGNALS !== 'undefined'
             ? new RegExp(DEAL_RELEVANCE_SIGNALS.COMPETITOR_KEYWORDS.slice(0, 30).join('|'), 'i')
@@ -4747,30 +4747,65 @@ function renderClientRadar() {
     
     emptyEl?.classList.add('hidden');
     
-    list.innerHTML = entries.map(({ client, articles }) => `
-        <div class="client-radar-item">
+    list.innerHTML = entries.map(({ client, articles }) => {
+        // Determine dominant signal type for client
+        const signalCounts = { risk: 0, opportunity: 0, competitive: 0, regulatory: 0, relationship: 0 };
+        articles.forEach(a => {
+            const type = a.signalType || classifySignalType(a);
+            if (signalCounts[type] !== undefined) signalCounts[type]++;
+        });
+        const dominantSignal = Object.entries(signalCounts)
+            .sort((a, b) => b[1] - a[1])
+            .filter(([_, count]) => count > 0)[0];
+        
+        const dominantType = dominantSignal ? dominantSignal[0] : 'general';
+        const dominantEmoji = {
+            'risk': '🔴',
+            'opportunity': '🟢',
+            'competitive': '⚔️',
+            'regulatory': '🛡️',
+            'relationship': '🤝',
+            'general': '📰'
+        }[dominantType];
+        
+        return `
+        <div class="client-radar-item signal-${dominantType}">
             <div class="client-radar-header">
                 <span class="client-radar-name">${escapeHtml(client.name)}</span>
                 <div class="client-radar-meta">
+                    <span class="client-radar-signal-type" title="${dominantType} signal">${dominantEmoji}</span>
                     <span class="client-radar-tier tier-${client.tier}">Tier ${client.tier}</span>
                     <span class="client-radar-industry">${client.industry || ''}</span>
                 </div>
             </div>
             <div class="client-radar-articles">
-                ${articles.slice(0, 3).map(a => `
+                ${articles.slice(0, 3).map(a => {
+                    const articleType = a.signalType || classifySignalType(a);
+                    const articleEmoji = {
+                        'risk': '🔴',
+                        'opportunity': '🟢',
+                        'competitive': '⚔️',
+                        'regulatory': '🛡️',
+                        'relationship': '🤝',
+                        'ibm': '🔵',
+                        'general': '📰'
+                    }[articleType] || '📰';
+                    
+                    return `
                     <div class="client-radar-article">
+                        <span class="client-radar-article-signal" title="${articleType}">${articleEmoji}</span>
                         <a class="client-radar-article-link" href="${a.url || '#'}" target="_blank">${escapeHtml(a.title)}</a>
                         <span class="client-radar-article-source">(${escapeHtml(a.source || a.sourceName || 'Source')})</span>
-                    </div>
-                `).join('')}
+                    </div>`;
+                }).join('')}
             </div>
             <div class="client-radar-actions">
                 <button class="btn btn-sm btn-brief-atl" onclick="openBriefATL('${escapeHtml(client.name)}')">
                     📤 Brief ATL
                 </button>
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
 }
 
 // ==========================================
@@ -4898,9 +4933,27 @@ function copyBriefATL() {
 // Shows industry signals grouped by market for quick Slack sharing
 // ==========================================
 
-function renderATLEnablement() {
+function renderATLEnablement(forceRefresh = false) {
     const list = document.getElementById('atl-enablement-list');
     if (!list) return;
+    
+    // Check cache first
+    const STORAGE_KEY_ATL = 'signal-today-atl-enablement-cache';
+    if (!forceRefresh) {
+        try {
+            const cached = localStorage.getItem(STORAGE_KEY_ATL);
+            if (cached) {
+                const { briefs, timestamp } = JSON.parse(cached);
+                const age = Date.now() - timestamp;
+                if (age < 8 * 60 * 60 * 1000 && briefs && briefs.length > 0) {
+                    list.innerHTML = briefs.map(renderATLBriefCard).join('');
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log('ATL enablement cache error:', e);
+        }
+    }
     
     // Group signals by market
     const marketSignals = {
@@ -4915,7 +4968,6 @@ function renderATLEnablement() {
     const todayArticles = app.dailyArticles.length > 0 ? app.dailyArticles : app.articles.slice(0, 30);
     
     // Step 1: Detect market-specific signals using APAC_MARKET_CONTEXT
-    // This catches regulatory, priority, and watchword mentions
     if (typeof APAC_MARKET_CONTEXT !== 'undefined') {
         todayArticles.forEach(article => {
             const text = `${article.title} ${article.summary || ''}`.toLowerCase();
@@ -4923,67 +4975,56 @@ function renderATLEnablement() {
             Object.entries(APAC_MARKET_CONTEXT).forEach(([market, context]) => {
                 if (!marketSignals[market]) return;
                 
-                // Check regulators (highest priority for market assignment)
+                // Check regulators (highest priority)
                 const matchedRegulator = context.regulators?.find(r => text.includes(r.toLowerCase()));
                 if (matchedRegulator) {
-                    // Check if already added
-                    if (!marketSignals[market].some(s => s.articles?.[0]?.id === article.id)) {
+                    if (!marketSignals[market].some(s => s.article?.id === article.id)) {
                         marketSignals[market].push({
                             type: 'regulatory',
-                            industry: 'Regulatory',
-                            marketSignal: matchedRegulator.toUpperCase(),
-                            articles: [article],
-                            headline: article.title,
-                            priority: 1 // Highest priority
+                            signal: matchedRegulator.toUpperCase(),
+                            article,
+                            priority: 1
                         });
                     }
-                    return; // Don't double-add
+                    return;
                 }
                 
                 // Check countries/cities (geographic routing)
                 const matchedCountry = context.countries?.find(c => text.includes(c.toLowerCase()));
                 if (matchedCountry) {
-                    if (!marketSignals[market].some(s => s.articles?.[0]?.id === article.id)) {
-                        // Capitalize first letter for display
-                        const displayName = matchedCountry.charAt(0).toUpperCase() + matchedCountry.slice(1);
+                    if (!marketSignals[market].some(s => s.article?.id === article.id)) {
                         marketSignals[market].push({
                             type: 'geographic',
-                            industry: 'Regional',
-                            marketSignal: displayName,
-                            articles: [article],
-                            headline: article.title,
-                            priority: 1.5 // Between regulatory and priority
+                            signal: matchedCountry,
+                            article,
+                            priority: 1.5
                         });
                     }
-                    return; // Don't double-add
+                    return;
                 }
                 
-                // Check priorities (market-specific themes)
+                // Check priorities
                 const matchedPriority = context.priorities?.find(p => text.includes(p.toLowerCase()));
                 if (matchedPriority) {
-                    if (!marketSignals[market].some(s => s.articles?.[0]?.id === article.id)) {
+                    if (!marketSignals[market].some(s => s.article?.id === article.id)) {
                         marketSignals[market].push({
                             type: 'priority',
-                            industry: 'Market Priority',
-                            marketSignal: matchedPriority,
-                            articles: [article],
-                            headline: article.title,
+                            signal: matchedPriority,
+                            article,
                             priority: 2
                         });
                     }
                     return;
                 }
                 
-                // Check watchwords (market-specific entities/concepts)
+                // Check watchwords
                 const matchedWatchword = context.watchwords?.find(w => text.includes(w.toLowerCase()));
                 if (matchedWatchword) {
-                    if (!marketSignals[market].some(s => s.articles?.[0]?.id === article.id)) {
+                    if (!marketSignals[market].some(s => s.article?.id === article.id)) {
                         marketSignals[market].push({
                             type: 'watchword',
-                            industry: 'Market Signal',
-                            marketSignal: matchedWatchword,
-                            articles: [article],
-                            headline: article.title,
+                            signal: matchedWatchword,
+                            article,
                             priority: 3
                         });
                     }
@@ -4992,177 +5033,250 @@ function renderATLEnablement() {
         });
     }
     
-    // Step 2: Group by industry and find key themes
-    const industryArticles = {};
-    todayArticles.forEach(article => {
-        // Use matchedIndustries array, falling back to matchedIndustry singular
-        let industries = article.matchedIndustries || [];
-        if (industries.length === 0 && article.matchedIndustry) {
-            industries = [article.matchedIndustry];
-        }
-        
-        industries.forEach(ind => {
-            if (!industryArticles[ind]) industryArticles[ind] = [];
-            industryArticles[ind].push(article);
-        });
-    });
-    
-    // Step 3: Assign industry signals to markets based on where clients operate
-    Object.entries(industryArticles).forEach(([industry, articles]) => {
-        if (articles.length === 0) return;
-        
-        // Find which markets have clients in this industry
-        const relevantMarkets = new Set();
-        app.clients.forEach(c => {
-            if (c.industry === industry && marketSignals[c.market]) {
-                relevantMarkets.add(c.market);
-            }
-        });
-        
-        // If no specific clients match, distribute to all markets
-        if (relevantMarkets.size === 0) {
-            Object.keys(marketSignals).forEach(m => relevantMarkets.add(m));
-        }
-        
-        relevantMarkets.forEach(market => {
-            // Check if article already added via market signal detection
-            const article = articles[0];
-            if (marketSignals[market].some(s => s.articles?.[0]?.id === article.id)) return;
-            
-            marketSignals[market].push({
-                type: 'industry',
-                industry,
-                articles: articles.slice(0, 2),
-                headline: articles[0].title,
-                priority: 4
-            });
-        });
-    });
-    
-    // Step 4: Add client-specific signals (highest relevance)
+    // Step 2: Add client-specific signals
     todayArticles.forEach(article => {
         if (!article.matchedClients || article.matchedClients.length === 0) return;
         
         article.matchedClients.forEach(clientName => {
             const client = app.clients.find(c => c.name === clientName);
             if (client && marketSignals[client.market]) {
-                // Check if we already have this article for this market
-                const existing = marketSignals[client.market].find(s => 
-                    s.articles?.some(a => a.id === article.id)
-                );
-                if (!existing) {
+                if (!marketSignals[client.market].some(s => s.article?.id === article.id)) {
                     marketSignals[client.market].push({
                         type: 'client',
-                        industry: client.industry || 'Client News',
-                        client: clientName,
+                        signal: clientName,
                         clientTier: client.tier,
-                        articles: [article],
-                        headline: article.title,
-                        signalType: article.signalType,
-                        priority: 0 // Highest priority - client-specific
+                        article,
+                        priority: 0
                     });
                 }
             }
         });
     });
     
-    // Step 5: Sort signals within each market by priority, then by client tier
+    // Step 3: Sort by priority
     Object.keys(marketSignals).forEach(market => {
         marketSignals[market].sort((a, b) => {
-            // Sort by priority first (0 = client, 1 = regulatory, etc.)
             if (a.priority !== b.priority) return a.priority - b.priority;
-            // Then by client tier (if both are client signals)
             if (a.clientTier && b.clientTier) return a.clientTier - b.clientTier;
             return 0;
         });
     });
     
-    // Step 6: Generate briefs for each market with content
-    const briefs = Object.entries(marketSignals)
+    // Filter to markets with signals
+    const activeMarkets = Object.entries(marketSignals)
         .filter(([_, signals]) => signals.length > 0)
-        .map(([market, signals]) => {
-            const topSignals = signals.slice(0, 5); // Show top 5 per market
-            
-            // Build HTML content with clickable links
-            const contentHtml = topSignals.map(s => {
-                const article = s.articles[0];
-                const sourceName = article.source || article.sourceName || 'Source';
-                
-                // Determine prefix based on signal type
-                let prefix, prefixClass;
-                if (s.client) {
-                    const tierEmoji = { 1: '🔴', 2: '🟡', 3: '🟢' }[s.clientTier] || '⚪';
-                    prefix = `${tierEmoji} ${s.client}`;
-                    prefixClass = 'client';
-                } else if (s.type === 'regulatory') {
-                    prefix = `🛡️ ${s.marketSignal}`;
-                    prefixClass = 'regulatory';
-                } else if (s.type === 'geographic') {
-                    prefix = `🌏 ${s.marketSignal}`;
-                    prefixClass = 'geographic';
-                } else if (s.type === 'priority') {
-                    prefix = `📌 ${s.marketSignal}`;
-                    prefixClass = 'priority';
-                } else if (s.type === 'watchword') {
-                    prefix = `📍 ${s.marketSignal}`;
-                    prefixClass = 'watchword';
-                } else {
-                    prefix = `📌 ${s.industry}`;
-                    prefixClass = 'industry';
-                }
-                
-                return `<div class="atl-brief-signal ${prefixClass}">
-                    <span class="atl-brief-prefix">${prefix}</span>
-                    <a class="atl-brief-link" href="${article.url || '#'}" target="_blank">${escapeHtml(article.title)}</a>
-                    <span class="atl-brief-source">(${escapeHtml(sourceName)})</span>
-                </div>`;
-            }).join('');
-            
-            // Plain text for copying
-            const date = new Date().toLocaleDateString('en-SG', { weekday: 'short', month: 'short', day: 'numeric' });
-            const contentText = `📡 The Signal Today | ${market} | ${date}\n\n` + 
-                topSignals.map(s => {
-                    const article = s.articles[0];
-                    const sourceName = article.source || article.sourceName || 'Source';
-                    
-                    let prefix;
-                    if (s.client) {
-                        prefix = `🎯 ${s.client}`;
-                    } else if (s.type === 'regulatory') {
-                        prefix = `🛡️ ${s.marketSignal}`;
-                    } else if (s.type === 'geographic') {
-                        prefix = `🌏 ${s.marketSignal}`;
-                    } else if (s.type === 'priority' || s.type === 'watchword') {
-                        prefix = `📍 ${s.marketSignal}`;
-                    } else {
-                        prefix = `📌 ${s.industry}`;
-                    }
-                    
-                    return `${prefix}: ${article.title} (${sourceName})\n${article.url || ''}`;
-                }).join('\n\n');
-            
-            return { market, contentHtml, contentText, signalCount: signals.length };
-        });
+        .map(([market, signals]) => ({ market, signals: signals.slice(0, 5) }));
     
-    // Update count badge
-    const countEl = document.getElementById('atl-signals-count');
-    if (countEl) countEl.textContent = briefs.reduce((sum, b) => sum + b.signalCount, 0);
-    
-    if (briefs.length === 0) {
-        list.innerHTML = '<p class="card-description">No signals today. Click Refresh to fetch latest articles.</p>';
+    if (activeMarkets.length === 0) {
+        list.innerHTML = '<p class="card-description">No market signals today. Click Refresh to fetch latest articles.</p>';
         return;
     }
     
-    list.innerHTML = briefs.map(({ market, contentHtml, contentText, signalCount }) => `
-        <div class="atl-brief" data-copy-text="${escapeHtml(contentText)}">
+    // Check for API key
+    const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+    
+    if (!apiKey) {
+        // Without API: Show article list with sources
+        const briefs = activeMarkets.map(({ market, signals }) => ({
+            market,
+            synthesis: `${signals.length} signals detected for ${market} market today.`,
+            sources: signals.map(s => ({
+                title: s.article.title,
+                url: s.article.url,
+                source: s.article.source || s.article.sourceName
+            })),
+            copyText: generateATLCopyText(market, signals)
+        }));
+        
+        list.innerHTML = briefs.map(renderATLBriefCard).join('');
+        cacheATLEnablement(briefs);
+        return;
+    }
+    
+    // With API: Generate AI synthesis per market
+    list.innerHTML = '<p class="card-description">Synthesizing ATL briefs...</p>';
+    generateATLSynthesis(activeMarkets, apiKey, list);
+}
+
+async function generateATLSynthesis(activeMarkets, apiKey, listEl) {
+    const briefs = [];
+    
+    for (const { market, signals } of activeMarkets) {
+        const articleSummaries = signals.map((s, i) => {
+            const a = s.article;
+            return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nType: ${s.type}, Signal: ${s.signal}\nSummary: ${(a.summary || '').substring(0, 100)}`;
+        }).join('\n\n');
+        
+        const prompt = `You are briefing ATLs (Account Technical Leaders) in ${market} market for IBM APAC.
+
+TODAY'S ${market} SIGNALS:
+${articleSummaries}
+
+Write ONE synthesized paragraph (3-4 sentences) that:
+1. Opens with the key theme for ${market} this week
+2. Connects 2-3 of the articles into a coherent narrative
+3. Ends with a specific IBM positioning or action point
+
+Rules:
+- Sound like a senior technical leader, not a news aggregator
+- Reference specific companies/regulators mentioned
+- Include ONE actionable takeaway
+
+Return ONLY a JSON object:
+{
+  "synthesis": "Your 3-4 sentence synthesis here",
+  "keyMessage": "One-line key message for ATL to remember"
+}`;
+
+        try {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 300,
+                    messages: [{ role: 'user', content: prompt }]
+                })
+            });
+            
+            if (!response.ok) throw new Error(`API error: ${response.status}`);
+            
+            const data = await response.json();
+            const text = data.content?.[0]?.text || '';
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            
+            if (jsonMatch) {
+                const result = JSON.parse(jsonMatch[0]);
+                briefs.push({
+                    market,
+                    synthesis: result.synthesis,
+                    keyMessage: result.keyMessage,
+                    sources: signals.map(s => ({
+                        title: s.article.title,
+                        url: s.article.url,
+                        source: s.article.source || s.article.sourceName
+                    })),
+                    copyText: generateATLCopyText(market, signals, result.synthesis, result.keyMessage)
+                });
+            } else {
+                // Fallback
+                briefs.push({
+                    market,
+                    synthesis: `${signals.length} signals detected for ${market} market.`,
+                    sources: signals.map(s => ({
+                        title: s.article.title,
+                        url: s.article.url,
+                        source: s.article.source || s.article.sourceName
+                    })),
+                    copyText: generateATLCopyText(market, signals)
+                });
+            }
+        } catch (error) {
+            console.error(`ATL synthesis error for ${market}:`, error);
+            briefs.push({
+                market,
+                synthesis: `${signals.length} signals detected for ${market} market. Review sources below.`,
+                sources: signals.map(s => ({
+                    title: s.article.title,
+                    url: s.article.url,
+                    source: s.article.source || s.article.sourceName
+                })),
+                copyText: generateATLCopyText(market, signals)
+            });
+        }
+    }
+    
+    listEl.innerHTML = briefs.map(renderATLBriefCard).join('');
+    cacheATLEnablement(briefs);
+}
+
+function generateATLCopyText(market, signals, synthesis = null, keyMessage = null) {
+    const date = new Date().toLocaleDateString('en-SG', { weekday: 'short', month: 'short', day: 'numeric' });
+    let text = `📡 The Signal Today | ${market} | ${date}\n\n`;
+    
+    if (synthesis) {
+        text += `${synthesis}\n\n`;
+    }
+    if (keyMessage) {
+        text += `💡 Key Message: ${keyMessage}\n\n`;
+    }
+    
+    text += `Sources:\n`;
+    signals.forEach(s => {
+        const sourceName = s.article.source || s.article.sourceName || 'Source';
+        text += `• ${s.article.title} (${sourceName})\n  ${s.article.url || ''}\n`;
+    });
+    
+    return text;
+}
+
+function renderATLBriefCard(brief) {
+    const sourcesHtml = (brief.sources || []).map(s => 
+        `<a href="${s.url || '#'}" target="_blank" class="atl-source-link">${escapeHtml(s.title)}</a> <span class="atl-source-name">(${escapeHtml(s.source || 'Source')})</span>`
+    ).join('<br>');
+    
+    return `
+        <div class="atl-brief" data-copy-text="${escapeHtml(brief.copyText || '')}">
             <div class="atl-brief-header">
-                <span class="atl-brief-market">${market}</span>
-                <span class="atl-brief-count">${signalCount} signals</span>
-                <button class="atl-brief-copy" onclick="copyATLBrief(this, '${market}')" title="Copy to clipboard">📋</button>
+                <span class="atl-brief-market">${brief.market}</span>
+                <span class="atl-brief-count">${brief.sources?.length || 0} signals</span>
+                <button class="atl-brief-copy" onclick="copyATLBrief(this, '${brief.market}')" title="Copy to clipboard">📋</button>
             </div>
-            <div class="atl-brief-content">${contentHtml}</div>
+            <div class="atl-brief-synthesis">${escapeHtml(brief.synthesis || '')}</div>
+            ${brief.keyMessage ? `<div class="atl-brief-key-message">💡 <strong>Key Message:</strong> ${escapeHtml(brief.keyMessage)}</div>` : ''}
+            <div class="atl-brief-sources">
+                <span class="atl-sources-label">Sources:</span>
+                ${sourcesHtml}
+            </div>
         </div>
-    `).join('');
+    `;
+}
+
+function cacheATLEnablement(briefs) {
+    try {
+        localStorage.setItem('signal-today-atl-enablement-cache', JSON.stringify({
+            briefs,
+            timestamp: Date.now()
+        }));
+    } catch (e) {
+        console.log('ATL enablement cache write error:', e);
+    }
+}
+
+// Classify signal type based on article content
+function classifySignalType(article) {
+    const text = `${article.title} ${article.summary || ''}`.toLowerCase();
+    
+    // Risk signals
+    const riskKeywords = ['breach', 'hack', 'outage', 'lawsuit', 'fine', 'penalty', 'scandal', 'layoff', 'downturn', 'decline', 'warning', 'risk', 'threat', 'vulnerability', 'failure'];
+    if (riskKeywords.some(k => text.includes(k))) return 'risk';
+    
+    // Regulatory signals
+    const regulatoryKeywords = ['regulation', 'compliance', 'mandate', 'law', 'legislation', 'policy', 'apra', 'mas', 'pdpc', 'sebi', 'rbi', 'fsc', 'pipc', 'dora', 'ai act', 'gdpr'];
+    if (regulatoryKeywords.some(k => text.includes(k))) return 'regulatory';
+    
+    // Competitive signals
+    const competitiveKeywords = ['aws', 'azure', 'google cloud', 'microsoft', 'salesforce', 'oracle', 'sap', 'accenture', 'deloitte', 'servicenow', 'snowflake', 'databricks', 'openai', 'partnership', 'deal', 'contract'];
+    if (competitiveKeywords.some(k => text.includes(k))) return 'competitive';
+    
+    // Relationship signals (executive changes, appointments)
+    const relationshipKeywords = ['appoints', 'names', 'ceo', 'cto', 'cio', 'ciso', 'executive', 'leadership', 'joins', 'departs', 'steps down', 'promoted'];
+    if (relationshipKeywords.some(k => text.includes(k))) return 'relationship';
+    
+    // Opportunity signals
+    const opportunityKeywords = ['investment', 'funding', 'expansion', 'growth', 'launch', 'transform', 'modernize', 'upgrade', 'initiative', 'strategy', 'innovation', 'ai', 'cloud', 'digital'];
+    if (opportunityKeywords.some(k => text.includes(k))) return 'opportunity';
+    
+    // IBM-specific
+    const ibmKeywords = ['ibm', 'watsonx', 'red hat', 'openshift', 'instana', 'qradar'];
+    if (ibmKeywords.some(k => text.includes(k))) return 'ibm';
+    
+    return 'general';
 }
 
 function copyATLBrief(btn, market) {
@@ -5176,6 +5290,312 @@ function copyATLBrief(btn, market) {
             btn.classList.remove('copied');
         }, 2000);
     });
+}
+
+// ==========================================
+// EXECUTIVE SUMMARY RENDERING (AI-powered)
+// Purpose: "3 things to know today" - synthesized insights
+// ==========================================
+
+const STORAGE_KEY_EXEC_SUMMARY = 'signal-today-exec-summary-cache';
+
+async function renderExecutiveSummary(forceRefresh = false) {
+    const content = document.getElementById('executive-summary-content');
+    const list = document.getElementById('executive-summary-list');
+    if (!content || !list) return;
+    
+    // Check cache first
+    if (!forceRefresh) {
+        try {
+            const cached = localStorage.getItem(STORAGE_KEY_EXEC_SUMMARY);
+            if (cached) {
+                const { insights, timestamp } = JSON.parse(cached);
+                const age = Date.now() - timestamp;
+                if (age < 8 * 60 * 60 * 1000 && insights && insights.length > 0) {
+                    list.innerHTML = insights.map(renderExecutiveInsight).join('');
+                    content.querySelector('.executive-summary-intro')?.classList.add('hidden');
+                    return;
+                }
+            }
+        } catch (e) {
+            console.log('Exec summary cache error:', e);
+        }
+    }
+    
+    const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+    const todayArticles = app.dailyArticles.length > 0 ? app.dailyArticles : app.articles.slice(0, 30);
+    
+    if (todayArticles.length === 0) {
+        list.innerHTML = '<p class="card-description">No articles yet. Click Refresh to fetch.</p>';
+        return;
+    }
+    
+    // Prepare article data for synthesis
+    const topArticles = todayArticles
+        .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
+        .slice(0, 15);
+    
+    // Calculate weekly trends
+    const weeklyTrends = calculateWeeklyTrends(topArticles);
+    
+    if (!apiKey) {
+        // Without API: Generate keyword-based insights
+        const insights = generateKeywordBasedInsights(topArticles, weeklyTrends);
+        list.innerHTML = insights.map(renderExecutiveInsight).join('');
+        content.querySelector('.executive-summary-intro')?.classList.add('hidden');
+        cacheExecutiveSummary(insights);
+        return;
+    }
+    
+    // With API: Generate AI-synthesized insights
+    content.querySelector('.executive-summary-intro')?.classList.remove('hidden');
+    content.querySelector('.executive-summary-intro').textContent = 'Synthesizing executive insights...';
+    
+    const articleSummaries = topArticles.slice(0, 12).map((a, i) => 
+        `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nSignal: ${a.signalType || 'general'}, Clients: ${(a.matchedClients || []).join(', ') || 'none'}\nSummary: ${(a.summary || '').substring(0, 150)}`
+    ).join('\n\n');
+    
+    const trendContext = weeklyTrends.length > 0 
+        ? `\nWEEKLY TRENDS:\n${weeklyTrends.map(t => `- ${t.theme}: ${t.direction} (${t.change})`).join('\n')}`
+        : '';
+    
+    const prompt = `You are the intelligence analyst for the IBM APAC Field CTO who leads 115 ATLs across 343 accounts in 5 markets (ANZ, ASEAN, GCG, ISA, Korea).
+
+TODAY'S TOP ARTICLES:
+${articleSummaries}
+${trendContext}
+
+Generate EXACTLY 3 executive insights. Each insight must:
+1. Synthesize multiple articles into ONE actionable insight
+2. Answer "So what does this mean for IBM APAC?"
+3. Include specific action or positioning recommendation
+
+Return JSON array:
+[
+  {
+    "headline": "Sharp, memorable headline (8 words max)",
+    "synthesis": "2-3 sentences synthesizing the insight. What's happening, why it matters for IBM APAC, and what to do about it.",
+    "signalType": "risk" | "opportunity" | "competitive" | "regulatory",
+    "sourceIndices": [1, 3, 5]
+  }
+]
+
+Rules:
+- Each insight must reference at least 2 articles (use their [index] numbers)
+- One insight should be about competitive positioning
+- One insight should be actionable this week
+- Be specific about APAC markets when relevant
+
+Return ONLY valid JSON array.`;
+
+    try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 800,
+                messages: [{ role: 'user', content: prompt }]
+            })
+        });
+        
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
+        
+        const data = await response.json();
+        const text = data.content?.[0]?.text || '';
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        
+        if (jsonMatch) {
+            const synthesized = JSON.parse(jsonMatch[0]);
+            
+            // Map sourceIndices to actual article data
+            const insights = synthesized.map(insight => ({
+                ...insight,
+                sources: (insight.sourceIndices || []).map(idx => {
+                    const article = topArticles[idx - 1];
+                    if (!article) return null;
+                    return {
+                        title: article.title,
+                        url: article.url,
+                        source: article.source || article.sourceName
+                    };
+                }).filter(Boolean)
+            }));
+            
+            cacheExecutiveSummary(insights);
+            list.innerHTML = insights.map(renderExecutiveInsight).join('');
+            content.querySelector('.executive-summary-intro')?.classList.add('hidden');
+        } else {
+            throw new Error('Could not parse AI response');
+        }
+    } catch (error) {
+        console.error('Executive summary error:', error);
+        // Fallback to keyword-based
+        const insights = generateKeywordBasedInsights(topArticles, weeklyTrends);
+        list.innerHTML = insights.map(renderExecutiveInsight).join('');
+        content.querySelector('.executive-summary-intro')?.classList.add('hidden');
+        cacheExecutiveSummary(insights);
+    }
+}
+
+function calculateWeeklyTrends(articles) {
+    // Compare themes in current articles vs stored weekly data
+    const trends = [];
+    const themeCounts = {};
+    
+    // Count current themes
+    const themeKeywords = {
+        'AI/Agentic': ['ai', 'artificial intelligence', 'agentic', 'llm', 'generative'],
+        'Sovereignty': ['sovereignty', 'data localization', 'regulation', 'compliance'],
+        'Competitive': ['aws', 'azure', 'google cloud', 'microsoft', 'salesforce'],
+        'Executive': ['ceo', 'cto', 'cio', 'appoints', 'announces']
+    };
+    
+    articles.forEach(a => {
+        const text = `${a.title} ${a.summary || ''}`.toLowerCase();
+        Object.entries(themeKeywords).forEach(([theme, keywords]) => {
+            if (keywords.some(k => text.includes(k))) {
+                themeCounts[theme] = (themeCounts[theme] || 0) + 1;
+            }
+        });
+    });
+    
+    // Compare to last week (simplified - could be enhanced with actual historical data)
+    Object.entries(themeCounts).forEach(([theme, count]) => {
+        if (count >= 3) {
+            trends.push({
+                theme,
+                direction: 'elevated',
+                change: `${count} signals today`
+            });
+        }
+    });
+    
+    return trends.slice(0, 3);
+}
+
+function generateKeywordBasedInsights(articles, trends) {
+    const insights = [];
+    
+    // Group articles by signal type
+    const byType = { risk: [], opportunity: [], competitive: [], regulatory: [] };
+    articles.forEach(a => {
+        const type = a.signalType || classifySignalType(a);
+        if (byType[type]) byType[type].push(a);
+    });
+    
+    // Insight 1: Top risk or regulatory signal
+    const riskArticles = [...byType.risk, ...byType.regulatory].slice(0, 3);
+    if (riskArticles.length > 0) {
+        insights.push({
+            headline: 'Regulatory & Risk Signals',
+            synthesis: `${riskArticles.length} articles signal regulatory or risk themes today. Review for client exposure and IBM positioning opportunities.`,
+            signalType: 'risk',
+            sources: riskArticles.map(a => ({
+                title: a.title,
+                url: a.url,
+                source: a.source || a.sourceName
+            }))
+        });
+    }
+    
+    // Insight 2: Competitive landscape
+    const compArticles = byType.competitive.slice(0, 3);
+    if (compArticles.length > 0) {
+        insights.push({
+            headline: 'Competitive Movement',
+            synthesis: `${compArticles.length} competitive signals detected. Monitor for IBM counter-positioning opportunities in affected accounts.`,
+            signalType: 'competitive',
+            sources: compArticles.map(a => ({
+                title: a.title,
+                url: a.url,
+                source: a.source || a.sourceName
+            }))
+        });
+    }
+    
+    // Insight 3: Opportunity signals
+    const oppArticles = byType.opportunity.slice(0, 3);
+    if (oppArticles.length > 0) {
+        insights.push({
+            headline: 'Growth Opportunities',
+            synthesis: `${oppArticles.length} opportunity signals identified. Brief relevant ATLs for proactive outreach this week.`,
+            signalType: 'opportunity',
+            sources: oppArticles.map(a => ({
+                title: a.title,
+                url: a.url,
+                source: a.source || a.sourceName
+            }))
+        });
+    }
+    
+    // Ensure we have at least 3 insights
+    if (insights.length < 3 && articles.length > 0) {
+        const remaining = articles.filter(a => 
+            !insights.some(i => i.sources?.some(s => s.title === a.title))
+        ).slice(0, 3);
+        
+        if (remaining.length > 0) {
+            insights.push({
+                headline: 'Additional Signals',
+                synthesis: `${remaining.length} additional signals worth monitoring for emerging trends.`,
+                signalType: 'general',
+                sources: remaining.map(a => ({
+                    title: a.title,
+                    url: a.url,
+                    source: a.source || a.sourceName
+                }))
+            });
+        }
+    }
+    
+    return insights.slice(0, 3);
+}
+
+function renderExecutiveInsight(insight) {
+    const typeEmoji = {
+        'risk': '🔴',
+        'opportunity': '🟢',
+        'competitive': '⚔️',
+        'regulatory': '🛡️',
+        'general': '📌'
+    }[insight.signalType] || '📌';
+    
+    const typeClass = insight.signalType || 'general';
+    
+    const sourcesHtml = (insight.sources || []).map(s => 
+        `<a href="${s.url || '#'}" target="_blank" class="exec-source-link">${escapeHtml(s.title)}</a> <span class="exec-source-name">(${escapeHtml(s.source || 'Source')})</span>`
+    ).join('<br>');
+    
+    return `
+        <div class="executive-insight ${typeClass}">
+            <div class="executive-insight-header">
+                <span class="executive-insight-type">${typeEmoji}</span>
+                <span class="executive-insight-headline">${escapeHtml(insight.headline)}</span>
+            </div>
+            <div class="executive-insight-synthesis">${escapeHtml(insight.synthesis)}</div>
+            <div class="executive-insight-sources">
+                <span class="executive-sources-label">Sources:</span>
+                ${sourcesHtml}
+            </div>
+        </div>
+    `;
+}
+
+function cacheExecutiveSummary(insights) {
+    try {
+        localStorage.setItem(STORAGE_KEY_EXEC_SUMMARY, JSON.stringify({
+            insights,
+            timestamp: Date.now()
+        }));
+    } catch (e) {
+        console.log('Exec summary cache write error:', e);
+    }
 }
 
 // ==========================================
@@ -5650,19 +6070,16 @@ For each article, provide a JSON array with this structure:
   {
     "title": "Original article title",
     "strategicThesis": "The big idea in one powerful sentence — what market shift does this signal? (Think: 'The mainframe moment for AI governance' or 'Sovereignty becomes the new security')",
-    "boardQuestion": "A provocative question for board/CxO discussion that positions IBM favorably (e.g., 'What happens to your AI strategy when your cloud provider becomes your competitor?')",
-    "atlEnablement": "How should ATLs use this insight? Which client conversations does it unlock?",
-    "ibmNarrative": "How this connects to IBM's strategic positioning (watsonx, hybrid cloud, consulting-led transformation)",
-    "clientTypes": "Which client profiles should prioritize this (e.g., 'Tier 1 FSI with cloud concentration risk', 'Telcos evaluating GenAI monetization')",
+    "leadershipImplication": "What this means for technology leaders — the 'so what' for a CTO or CIO making investment decisions",
+    "cxoQuestion": "A provocative question for CxO discussion (e.g., 'What happens to your AI strategy when your cloud provider becomes your competitor?')",
     "timeHorizon": "6 months" or "12 months" or "2-3 years"
   }
 ]
 
 QUALITY RULES:
 - Strategic thesis must be memorable and quotable — something worth repeating in a keynote
-- Board questions must be genuinely thought-provoking, not leading/sales-y
-- ATL enablement must be actionable — name specific conversation types or client situations
-- IBM narrative must connect to real IBM strategy, not generic capabilities
+- Leadership implication must be concrete and actionable — not generic advice
+- CxO questions must be genuinely thought-provoking, not leading or sales-y
 
 Return ONLY valid JSON array, no markdown. Max 5 articles.`;
 
@@ -5730,7 +6147,7 @@ function cacheDeepReads(insights, articles) {
 
 function renderSynthesizedDeepRead(insight, article) {
     return `
-        <div class="deep-read-item">
+        <div class="deep-read-item" onclick="openArticle('${article.id || ''}')">
             <div class="deep-read-item-header">
                 <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source)}</a>
                 <span class="deep-read-item-time">${escapeHtml(insight.timeHorizon)} horizon</span>
@@ -5738,10 +6155,11 @@ function renderSynthesizedDeepRead(insight, article) {
             <div class="deep-read-item-title">${escapeHtml(insight.title)}</div>
             <div class="deep-read-strategic">
                 <div class="deep-read-thesis"><strong>💡 Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
-                <div class="deep-read-board"><strong>🎯 Board Question:</strong> "${escapeHtml(insight.boardQuestion || insight.conversationTopic || '')}"</div>
-                <div class="deep-read-atl"><strong>📢 ATL Enablement:</strong> ${escapeHtml(insight.atlEnablement || insight.leadershipImplication || '')}</div>
-                <div class="deep-read-ibm"><strong>🔵 IBM Narrative:</strong> ${escapeHtml(insight.ibmNarrative || '')}</div>
-                ${insight.clientTypes ? `<div class="deep-read-clients"><strong>🏢 Target Clients:</strong> ${escapeHtml(insight.clientTypes)}</div>` : ''}
+                <div class="deep-read-implication"><strong>📊 Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication || '')}</div>
+                <div class="deep-read-question"><strong>🎯 CxO Question:</strong> "${escapeHtml(insight.cxoQuestion || '')}"</div>
+            </div>
+            <div class="deep-read-item-action">
+                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${article.id || ''}')">🤖 Generate Deep Analysis</button>
             </div>
         </div>
     `;
@@ -5749,8 +6167,9 @@ function renderSynthesizedDeepRead(insight, article) {
 
 function renderCachedDeepRead(insight, articleData) {
     const article = articleData || {};
+    const articleId = article.id || '';
     return `
-        <div class="deep-read-item">
+        <div class="deep-read-item" onclick="openArticle('${articleId}')">
             <div class="deep-read-item-header">
                 <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source || insight.source || '')}</a>
                 <span class="deep-read-item-time">${escapeHtml(insight.timeHorizon || 'TBD')} horizon</span>
@@ -5759,25 +6178,29 @@ function renderCachedDeepRead(insight, articleData) {
             ${insight.strategicThesis ? `
             <div class="deep-read-strategic">
                 <div class="deep-read-thesis"><strong>💡 Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
-                <div class="deep-read-board"><strong>🎯 Board Question:</strong> "${escapeHtml(insight.boardQuestion || insight.conversationTopic || '')}"</div>
-                <div class="deep-read-atl"><strong>📢 ATL Enablement:</strong> ${escapeHtml(insight.atlEnablement || insight.leadershipImplication || '')}</div>
-                ${insight.ibmNarrative ? `<div class="deep-read-ibm"><strong>🔵 IBM Narrative:</strong> ${escapeHtml(insight.ibmNarrative)}</div>` : ''}
-                ${insight.clientTypes ? `<div class="deep-read-clients"><strong>🏢 Target Clients:</strong> ${escapeHtml(insight.clientTypes)}</div>` : ''}
+                <div class="deep-read-implication"><strong>📊 Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication || '')}</div>
+                <div class="deep-read-question"><strong>🎯 CxO Question:</strong> "${escapeHtml(insight.cxoQuestion || '')}"</div>
             </div>
             ` : `<div class="deep-read-item-summary">${escapeHtml(insight.summary || article.summary || '')}</div>`}
+            <div class="deep-read-item-action">
+                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${articleId}')">🤖 Generate Deep Analysis</button>
+            </div>
         </div>
     `;
 }
 
 function renderBasicDeepRead(article) {
     return `
-        <div class="deep-read-item">
+        <div class="deep-read-item" onclick="openArticle('${article.id || ''}')">
             <div class="deep-read-item-header">
                 <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source)}</a>
                 <span class="deep-read-item-time">${article.readingTime || '5'} min</span>
             </div>
             <div class="deep-read-item-title">${escapeHtml(article.title)}</div>
             <div class="deep-read-item-summary">${escapeHtml(article.summary || '')}</div>
+            <div class="deep-read-item-action">
+                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${article.id || ''}')">🤖 Generate Deep Analysis</button>
+            </div>
         </div>
     `;
 }

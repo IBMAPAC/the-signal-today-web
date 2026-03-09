@@ -629,14 +629,49 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .client-radar-industry { font-size: 0.75rem; color: var(--cds-text-secondary); }
 
 .client-radar-articles { margin-bottom: var(--cds-spacing-04); }
-.client-radar-article { display: block; padding: var(--cds-spacing-02) 0; font-size: var(--cds-body-01); line-height: 1.5; }
+.client-radar-article { display: flex; align-items: flex-start; gap: var(--cds-spacing-02); padding: var(--cds-spacing-02) 0; font-size: var(--cds-body-01); line-height: 1.5; }
+.client-radar-article-signal { flex-shrink: 0; font-size: 0.875rem; }
 .client-radar-article-link { color: var(--cds-link-primary); text-decoration: none; }
 .client-radar-article-link:hover { text-decoration: underline; color: var(--cds-link-primary-hover); }
-.client-radar-article-source { color: var(--cds-text-secondary); font-size: 0.875rem; margin-left: var(--cds-spacing-02); }
+.client-radar-article-source { color: var(--cds-text-secondary); font-size: 0.875rem; margin-left: var(--cds-spacing-02); flex-shrink: 0; }
+
+/* Client Radar signal type indicators */
+.client-radar-signal-type { font-size: 1rem; margin-right: var(--cds-spacing-02); }
+.client-radar-item.signal-risk { border-left: 3px solid var(--cds-support-error); }
+.client-radar-item.signal-opportunity { border-left: 3px solid var(--cds-support-success); }
+.client-radar-item.signal-competitive { border-left: 3px solid var(--cds-support-warning); }
+.client-radar-item.signal-regulatory { border-left: 3px solid #be95ff; }
+.client-radar-item.signal-relationship { border-left: 3px solid var(--cds-interactive); }
+.client-radar-item.signal-general { border-left: 3px solid var(--cds-border-subtle-01); }
 
 .client-radar-actions { display: flex; gap: var(--cds-spacing-03); }
 .btn-brief-atl { background: var(--cds-button-primary); color: var(--cds-text-on-color); font-size: 0.75rem; padding: var(--cds-spacing-02) var(--cds-spacing-04); min-height: 32px; }
 .btn-brief-atl:hover { background: var(--cds-button-primary-hover); }
+
+/* =============================================
+   EXECUTIVE SUMMARY
+   ============================================= */
+.executive-summary-card .card-header { border-left-color: var(--cds-support-error); background: linear-gradient(90deg, rgba(218, 30, 40, 0.1), transparent); }
+.executive-summary-intro { color: var(--cds-text-secondary); font-style: italic; margin-bottom: var(--cds-spacing-05); }
+
+.executive-insight { padding: var(--cds-spacing-05); background: var(--cds-layer-02); margin-bottom: var(--cds-spacing-04); border-left: 4px solid var(--cds-interactive); }
+.executive-insight:last-child { margin-bottom: 0; }
+.executive-insight.risk { border-left-color: var(--cds-support-error); }
+.executive-insight.opportunity { border-left-color: var(--cds-support-success); }
+.executive-insight.competitive { border-left-color: var(--cds-support-warning); }
+.executive-insight.regulatory { border-left-color: #be95ff; }
+
+.executive-insight-header { display: flex; align-items: center; gap: var(--cds-spacing-03); margin-bottom: var(--cds-spacing-03); }
+.executive-insight-type { font-size: 1.25rem; }
+.executive-insight-headline { font-weight: 600; font-size: var(--cds-heading-03); color: var(--cds-text-primary); }
+
+.executive-insight-synthesis { font-size: var(--cds-body-02); color: var(--cds-text-primary); line-height: 1.6; margin-bottom: var(--cds-spacing-04); }
+
+.executive-insight-sources { font-size: var(--cds-body-01); color: var(--cds-text-secondary); padding-top: var(--cds-spacing-03); border-top: 1px solid var(--cds-border-subtle-01); }
+.executive-sources-label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--cds-text-secondary); text-transform: uppercase; letter-spacing: 0.32px; margin-bottom: var(--cds-spacing-02); }
+.exec-source-link { color: var(--cds-link-primary); text-decoration: underline; text-underline-offset: 2px; }
+.exec-source-link:hover { color: var(--cds-link-primary-hover); }
+.exec-source-name { color: var(--cds-text-secondary); font-size: 0.875rem; }
 
 /* =============================================
    SIGNALS CARD
@@ -717,6 +752,16 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .atl-brief-link:hover { text-decoration: underline; }
 .atl-brief-source { color: var(--cds-text-secondary); font-size: 0.875rem; margin-left: var(--cds-spacing-02); }
 
+/* ATL Brief Synthesis (new) */
+.atl-brief-synthesis { font-size: var(--cds-body-02); color: var(--cds-text-primary); line-height: 1.6; margin-bottom: var(--cds-spacing-04); }
+.atl-brief-key-message { font-size: var(--cds-body-01); color: var(--cds-text-primary); background: var(--cds-tag-background-green); padding: var(--cds-spacing-03); margin-bottom: var(--cds-spacing-04); border-radius: 2px; }
+.atl-brief-key-message strong { color: var(--cds-tag-color-green); }
+.atl-brief-sources { font-size: var(--cds-body-01); color: var(--cds-text-secondary); padding-top: var(--cds-spacing-03); border-top: 1px solid var(--cds-border-subtle-01); }
+.atl-sources-label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--cds-text-secondary); text-transform: uppercase; letter-spacing: 0.32px; margin-bottom: var(--cds-spacing-02); }
+.atl-source-link { color: var(--cds-link-primary); text-decoration: underline; text-underline-offset: 2px; }
+.atl-source-link:hover { color: var(--cds-link-primary-hover); }
+.atl-source-name { color: var(--cds-text-secondary); font-size: 0.875rem; }
+
 /* =============================================
    DEEP READS
    ============================================= */
@@ -732,29 +777,25 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .deep-read-item-title { font-weight: 500; color: var(--cds-text-primary); line-height: 1.4; margin-bottom: var(--cds-spacing-02); }
 .deep-read-item-summary { font-size: var(--cds-body-01); color: var(--cds-text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
+/* Deep Read Action Button */
+.deep-read-item-action { margin-top: var(--cds-spacing-04); padding-top: var(--cds-spacing-03); border-top: 1px solid var(--cds-border-subtle-01); }
+.deep-read-item-action .btn { font-size: 0.75rem; }
+
 /* Deep Read Strategic Synthesis */
 .deep-read-strategic { margin-top: var(--cds-spacing-03); padding-top: var(--cds-spacing-03); border-top: 1px solid var(--cds-border-subtle-01); }
-.deep-read-thesis, .deep-read-board, .deep-read-atl, .deep-read-ibm, .deep-read-clients { font-size: var(--cds-body-01); color: var(--cds-text-secondary); margin-bottom: var(--cds-spacing-03); line-height: 1.5; }
-.deep-read-thesis strong, .deep-read-board strong, .deep-read-atl strong, .deep-read-ibm strong, .deep-read-clients strong { color: var(--cds-text-primary); }
+.deep-read-thesis, .deep-read-implication, .deep-read-question { font-size: var(--cds-body-01); color: var(--cds-text-secondary); margin-bottom: var(--cds-spacing-03); line-height: 1.5; }
+.deep-read-thesis strong, .deep-read-implication strong, .deep-read-question strong { color: var(--cds-text-primary); }
 
 /* Strategic thesis highlight */
 .deep-read-thesis { color: var(--cds-tag-color-teal); font-weight: 500; padding: var(--cds-spacing-03); background: var(--cds-layer-01); border-left: 3px solid var(--cds-tag-color-teal); }
 
-/* Board question styling - make it quotable */
-.deep-read-board { font-style: italic; padding: var(--cds-spacing-03); background: var(--cds-tag-background-purple); border-radius: 2px; }
-.deep-read-board strong { font-style: normal; color: var(--cds-tag-color-purple); }
+/* Leadership implication styling */
+.deep-read-implication { padding: var(--cds-spacing-03); background: var(--cds-tag-background-blue); border-radius: 2px; }
+.deep-read-implication strong { color: var(--cds-interactive); }
 
-/* ATL Enablement */
-.deep-read-atl { padding: var(--cds-spacing-03); background: var(--cds-tag-background-green); border-radius: 2px; }
-.deep-read-atl strong { color: var(--cds-tag-color-green); }
-
-/* IBM Narrative */
-.deep-read-ibm { border-left: 2px solid var(--cds-interactive); padding-left: var(--cds-spacing-04); }
-.deep-read-ibm strong { color: var(--cds-interactive); }
-
-/* Client Types */
-.deep-read-clients { font-size: 0.875rem; color: var(--cds-text-secondary); }
-.deep-read-clients strong { color: var(--cds-text-primary); }
+/* CxO question styling - make it quotable */
+.deep-read-question { font-style: italic; padding: var(--cds-spacing-03); background: var(--cds-tag-background-purple); border-radius: 2px; }
+.deep-read-question strong { font-style: normal; color: var(--cds-tag-color-purple); }
 
 /* =============================================
    CLIENT MANAGER
