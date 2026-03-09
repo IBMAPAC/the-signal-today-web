@@ -6113,18 +6113,6 @@ function renderSignalFeed() {
         );
     }
     
-    if (signalFeedFilters.signalType !== 'ALL') {
-        filtered = filtered.filter(a => a.signalType === signalFeedFilters.signalType);
-    }
-    
-    // Sort: action items first, then by relevance score
-    filtered.sort((a, b) => {
-        const aUrgent = a.actionType === 'ESCALATE' ? 2 : a.actionType === 'BRIEF_ATL' ? 1 : 0;
-        const bUrgent = b.actionType === 'ESCALATE' ? 2 : b.actionType === 'BRIEF_ATL' ? 1 : 0;
-        if (aUrgent !== bUrgent) return bUrgent - aUrgent;
-        return (b.relevanceScore || 0) - (a.relevanceScore || 0);
-    });
-    
     // Step 4: Update count
     if (countEl) countEl.textContent = filtered.length;
     
@@ -6137,7 +6125,82 @@ function renderSignalFeed() {
     
     emptyEl?.classList.add('hidden');
     
-    list.innerHTML = filtered.map(article => renderSignalFeedItem(article)).join('');
+    // Step 6: Group by category
+    const categories = [
+        { key: 'risk', label: 'Risk', emoji: '🔴', description: 'Threats requiring attention' },
+        { key: 'opportunity', label: 'Opportunity', emoji: '🟢', description: 'Growth and positioning opportunities' },
+        { key: 'competitive', label: 'Competitive', emoji: '⚔️', description: 'Competitor moves and market dynamics' },
+        { key: 'regulatory', label: 'Regulatory', emoji: '🛡️', description: 'Policy, compliance, and governance' },
+        { key: 'general', label: 'Information', emoji: '📰', description: 'Industry news and updates' }
+    ];
+    
+    // Map other types to general
+    const typeMapping = {
+        'risk': 'risk',
+        'opportunity': 'opportunity',
+        'competitive': 'competitive',
+        'regulatory': 'regulatory',
+        'relationship': 'general',
+        'ibm': 'general',
+        'general': 'general'
+    };
+    
+    // Group articles
+    const grouped = {};
+    categories.forEach(cat => grouped[cat.key] = []);
+    
+    filtered.forEach(article => {
+        const mappedType = typeMapping[article.signalType] || 'general';
+        grouped[mappedType].push(article);
+    });
+    
+    // Sort within each group: action items first, then by relevance
+    Object.keys(grouped).forEach(key => {
+        grouped[key].sort((a, b) => {
+            const aUrgent = a.actionType === 'ESCALATE' ? 2 : a.actionType === 'BRIEF_ATL' ? 1 : 0;
+            const bUrgent = b.actionType === 'ESCALATE' ? 2 : b.actionType === 'BRIEF_ATL' ? 1 : 0;
+            if (aUrgent !== bUrgent) return bUrgent - aUrgent;
+            return (b.relevanceScore || 0) - (a.relevanceScore || 0);
+        });
+    });
+    
+    // Render grouped view
+    // If a specific signal type is filtered, expand only that category
+    const expandedCategory = signalFeedFilters.signalType !== 'ALL' 
+        ? typeMapping[signalFeedFilters.signalType] || 'general'
+        : null;
+    
+    list.innerHTML = categories.map(cat => {
+        const articles = grouped[cat.key];
+        if (articles.length === 0) return '';
+        
+        const isExpanded = expandedCategory === cat.key || (expandedCategory === null && cat.key === 'risk');
+        const topArticles = articles.slice(0, 5); // Show max 5 per category initially
+        const hasMore = articles.length > 5;
+        
+        return `
+            <div class="signal-category ${isExpanded ? 'expanded' : ''}" data-category="${cat.key}">
+                <div class="signal-category-header" onclick="toggleSignalCategory('${cat.key}')">
+                    <span class="signal-category-emoji">${cat.emoji}</span>
+                    <span class="signal-category-label">${cat.label}</span>
+                    <span class="signal-category-count">${articles.length}</span>
+                    <span class="signal-category-chevron">${isExpanded ? '▲' : '▼'}</span>
+                </div>
+                <div class="signal-category-body">
+                    <div class="signal-category-items">
+                        ${topArticles.map(article => renderSignalFeedItem(article)).join('')}
+                    </div>
+                    ${hasMore ? `
+                        <div class="signal-category-more">
+                            <button class="signal-category-show-more" onclick="showMoreInCategory('${cat.key}')">
+                                Show ${articles.length - 5} more ${cat.label.toLowerCase()} signals
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 function renderSignalFeedItem(article) {
@@ -6238,6 +6301,75 @@ function toggleSignalFeedItem(btn) {
     
     const isExpanded = item.classList.toggle('expanded');
     btn.textContent = isExpanded ? 'Hide details' : 'Show IBM angle & talking points';
+}
+
+function toggleSignalCategory(categoryKey) {
+    const category = document.querySelector(`.signal-category[data-category="${categoryKey}"]`);
+    if (!category) return;
+    
+    const isExpanded = category.classList.toggle('expanded');
+    const chevron = category.querySelector('.signal-category-chevron');
+    if (chevron) {
+        chevron.textContent = isExpanded ? '▲' : '▼';
+    }
+}
+
+function showMoreInCategory(categoryKey) {
+    // Get all articles for this category from signalFeedArticles
+    const typeMapping = {
+        'risk': 'risk',
+        'opportunity': 'opportunity',
+        'competitive': 'competitive',
+        'regulatory': 'regulatory',
+        'relationship': 'general',
+        'ibm': 'general',
+        'general': 'general'
+    };
+    
+    // Apply current filters
+    let filtered = signalFeedArticles;
+    
+    if (signalFeedFilters.market !== 'ALL') {
+        filtered = filtered.filter(a => 
+            a.markets.includes(signalFeedFilters.market) ||
+            a.matchedClients.some(c => c.market === signalFeedFilters.market)
+        );
+    }
+    
+    if (signalFeedFilters.client !== 'ALL') {
+        filtered = filtered.filter(a => 
+            a.matchedClients.some(c => c.name === signalFeedFilters.client)
+        );
+    }
+    
+    // Get articles for this category
+    const categoryArticles = filtered.filter(a => {
+        const mappedType = typeMapping[a.signalType] || 'general';
+        return mappedType === categoryKey;
+    });
+    
+    // Sort
+    categoryArticles.sort((a, b) => {
+        const aUrgent = a.actionType === 'ESCALATE' ? 2 : a.actionType === 'BRIEF_ATL' ? 1 : 0;
+        const bUrgent = b.actionType === 'ESCALATE' ? 2 : b.actionType === 'BRIEF_ATL' ? 1 : 0;
+        if (aUrgent !== bUrgent) return bUrgent - aUrgent;
+        return (b.relevanceScore || 0) - (a.relevanceScore || 0);
+    });
+    
+    // Find the category container and replace items
+    const category = document.querySelector(`.signal-category[data-category="${categoryKey}"]`);
+    if (!category) return;
+    
+    const itemsContainer = category.querySelector('.signal-category-items');
+    const moreContainer = category.querySelector('.signal-category-more');
+    
+    if (itemsContainer) {
+        itemsContainer.innerHTML = categoryArticles.map(article => renderSignalFeedItem(article)).join('');
+    }
+    
+    if (moreContainer) {
+        moreContainer.remove();
+    }
 }
 
 function filterByClient(clientName) {
@@ -6692,4 +6824,6 @@ window.filterByClient = filterByClient;
 window.filterBySignalType = filterBySignalType;
 window.switchMarket = switchMarket;
 window.toggleSignalFeedItem = toggleSignalFeedItem;
+window.toggleSignalCategory = toggleSignalCategory;
+window.showMoreInCategory = showMoreInCategory;
 window.openBriefATL = openBriefATL;
