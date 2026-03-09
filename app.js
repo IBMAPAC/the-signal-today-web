@@ -6320,7 +6320,7 @@ function renderSignalFeed() {
     });
     
     // Render grouped view
-    // If a specific signal type is filtered, expand only that category
+    // All categories collapsed by default, expand only when specific signal type is filtered
     const expandedCategory = signalFeedFilters.signalType !== 'ALL' 
         ? typeMapping[signalFeedFilters.signalType] || 'general'
         : null;
@@ -6329,7 +6329,8 @@ function renderSignalFeed() {
         const articles = grouped[cat.key];
         if (articles.length === 0) return '';
         
-        const isExpanded = expandedCategory === cat.key || (expandedCategory === null && cat.key === 'risk');
+        // Only expand if this specific category is filtered
+        const isExpanded = expandedCategory === cat.key;
         const topArticles = articles.slice(0, 5); // Show max 5 per category initially
         const hasMore = articles.length > 5;
         

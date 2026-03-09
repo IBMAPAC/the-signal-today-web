@@ -52,7 +52,7 @@
 
             <div id="digest-content" class="digest-content hidden">
                 
-                <!-- PRIORITY 0: ACTION REQUIRED - Urgent items surfaced at top -->
+                <!-- PRIORITY 0: ACTION REQUIRED - Urgent items surfaced at top (NOT collapsible) -->
                 <section id="action-required-section" class="card action-required-card hidden">
                     <div class="card-header">
                         <h2>🚨 Action Required</h2>
@@ -63,25 +63,27 @@
                     </div>
                 </section>
 
-                <!-- PRIORITY 1: TODAY'S BRIEF - 3 things to know today -->
+                <!-- PRIORITY 1: TODAY'S BRIEF - 3 things to know today (collapsible, collapsed) -->
                 <section id="executive-summary-section" class="card executive-summary-card">
-                    <div class="card-header">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('executive-summary')">
                         <h2>📊 Today's Brief</h2>
-                        <span class="badge badge-blue">Top 3</span>
+                        <span class="badge badge-muted">Top 3</span>
+                        <span class="chevron collapsed">▼</span>
                     </div>
-                    <div id="executive-summary-content" class="card-body">
+                    <div id="executive-summary-content" class="card-body collapsed">
                         <p class="executive-summary-intro">Synthesizing key insights...</p>
                         <div id="executive-summary-list"></div>
                     </div>
                 </section>
 
-                <!-- PRIORITY 2: UNIFIED SIGNAL FEED - Replaces Client Radar + All Signals -->
+                <!-- PRIORITY 2: UNIFIED SIGNAL FEED (collapsible, collapsed) -->
                 <section id="signal-feed-section" class="card signal-feed-card">
-                    <div class="card-header">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('signal-feed')">
                         <h2>📡 Signal Feed</h2>
-                        <span id="signal-feed-count" class="badge badge-purple">0</span>
+                        <span id="signal-feed-count" class="badge badge-muted">0</span>
+                        <span class="chevron collapsed">▼</span>
                     </div>
-                    <div class="card-body">
+                    <div id="signal-feed-content" class="card-body collapsed">
                         <!-- Market filter tabs -->
                         <div class="market-tabs">
                             <button class="market-tab active" data-market="ALL" onclick="switchMarket('ALL')">All</button>
@@ -106,7 +108,7 @@
                     </div>
                 </section>
 
-                <!-- PRIORITY 3: ATL ENABLEMENT - Market briefs (collapsible) -->
+                <!-- PRIORITY 3: ATL ENABLEMENT - Market briefs (collapsible, collapsed) -->
                 <section id="atl-enablement-section" class="card atl-enablement-card">
                     <div class="card-header card-header--collapsible" onclick="toggleSection('atl-enablement')">
                         <h2>📢 ATL Enablement</h2>
@@ -119,11 +121,11 @@
                     </div>
                 </section>
 
-                <!-- PRIORITY 4: DEEP READS - Weekend reading (collapsible) -->
+                <!-- PRIORITY 4: DEEP READS - Weekend reading (collapsible, collapsed) -->
                 <section id="deep-reads-section" class="card deep-reads-card">
                     <div class="card-header card-header--collapsible" onclick="toggleSection('deep-reads')">
                         <h2>📚 Deep Reads</h2>
-                        <span id="deep-reads-count" class="badge badge-teal">0</span>
+                        <span id="deep-reads-count" class="badge badge-muted">0</span>
                         <span class="chevron collapsed">▼</span>
                     </div>
                     <div id="deep-reads-content" class="card-body collapsed">

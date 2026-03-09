@@ -1,65 +1,71 @@
 /* =============================================
    The Signal Today - IBM Carbon Design System
-   Theme: g100 (Dark)
+   Theme: g100 (Dark) - Refined & Understated
    Responsive: Mac, iPad, iPhone
    ============================================= */
 
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap');
 
 :root {
-    /* Carbon g100 Colors */
-    --cds-background: #161616;
-    --cds-layer-01: #262626;
-    --cds-layer-02: #393939;
-    --cds-layer-hover-01: #353535;
-    --cds-layer-hover-02: #474747;
-    --cds-layer-selected-01: #393939;
-    --cds-field-01: #262626;
-    --cds-border-subtle-01: #393939;
-    --cds-border-subtle-02: #525252;
-    --cds-border-strong-01: #6f6f6f;
-    --cds-border-interactive: #4589ff;
-    --cds-text-primary: #f4f4f4;
-    --cds-text-secondary: #c6c6c6;
-    --cds-text-placeholder: #6f6f6f;
-    --cds-text-helper: #8d8d8d;
-    --cds-text-inverse: #161616;
+    /* Refined Dark Theme - Calm & Sophisticated */
+    --cds-background: #141618;
+    --cds-layer-01: #1c1f22;
+    --cds-layer-02: #262a2e;
+    --cds-layer-hover-01: #2a2e32;
+    --cds-layer-hover-02: #34393e;
+    --cds-layer-selected-01: #2a2e32;
+    --cds-field-01: #1c1f22;
+    --cds-border-subtle-01: #2a2e32;
+    --cds-border-subtle-02: #3d4348;
+    --cds-border-strong-01: #525960;
+    --cds-border-interactive: #6b8aae;
+    --cds-text-primary: #e8eaed;
+    --cds-text-secondary: #a8b0b8;
+    --cds-text-placeholder: #5c646c;
+    --cds-text-helper: #7a838c;
+    --cds-text-inverse: #141618;
     --cds-text-on-color: #ffffff;
-    --cds-text-on-color-disabled: #8d8d8d;
-    --cds-link-primary: #78a9ff;
-    --cds-link-primary-hover: #a6c8ff;
-    --cds-link-visited: #be95ff;
-    --cds-icon-primary: #f4f4f4;
-    --cds-icon-secondary: #c6c6c6;
-    --cds-interactive: #4589ff;
-    --cds-button-primary: #0f62fe;
-    --cds-button-primary-hover: #0353e9;
-    --cds-button-secondary: #6f6f6f;
-    --cds-button-secondary-hover: #5e5e5e;
-    --cds-button-danger: #da1e28;
-    --cds-button-danger-hover: #b81921;
-    --cds-button-disabled: #525252;
-    --cds-support-success: #42be65;
-    --cds-support-warning: #f1c21b;
-    --cds-support-error: #fa4d56;
-    --cds-support-info: #4589ff;
-    --cds-tag-background-blue: #0043ce;
-    --cds-tag-color-blue: #a6c8ff;
-    --cds-tag-background-green: #0e6027;
-    --cds-tag-color-green: #6fdc8c;
-    --cds-tag-background-purple: #6929c4;
-    --cds-tag-color-purple: #d4bbff;
-    --cds-tag-background-teal: #005d5d;
-    --cds-tag-color-teal: #3ddbd9;
-    --cds-tag-background-cyan: #00539a;
-    --cds-tag-color-cyan: #82cfff;
-    --cds-tag-background-red: #a2191f;
-    --cds-tag-color-red: #ffb3b8;
-    --cds-tag-background-orange: #8a3800;
-    --cds-tag-color-orange: #ff832b;
-    --cds-tag-background-gray: #393939;
-    --cds-tag-color-gray: #c6c6c6;
-    --cds-focus: #ffffff;
+    --cds-text-on-color-disabled: #7a838c;
+    --cds-link-primary: #8fb3d9;
+    --cds-link-primary-hover: #b8cfe8;
+    --cds-link-visited: #b8a4d9;
+    --cds-icon-primary: #e8eaed;
+    --cds-icon-secondary: #a8b0b8;
+    --cds-interactive: #6b8aae;
+    --cds-button-primary: #4a6d8c;
+    --cds-button-primary-hover: #5a7d9c;
+    --cds-button-secondary: #4a5058;
+    --cds-button-secondary-hover: #5a6068;
+    --cds-button-danger: #a85c5c;
+    --cds-button-danger-hover: #8b4a4a;
+    --cds-button-disabled: #3d4348;
+    
+    /* Muted Support Colors - Sophisticated & Calm */
+    --cds-support-success: #6a9b7a;
+    --cds-support-warning: #c9a855;
+    --cds-support-error: #b86b6b;
+    --cds-support-info: #6b8aae;
+    
+    /* Refined Tag Colors - Understated Palette */
+    --cds-tag-background-blue: #2d4a66;
+    --cds-tag-color-blue: #a8c4e0;
+    --cds-tag-background-green: #2d4a3a;
+    --cds-tag-color-green: #8fbeA0;
+    --cds-tag-background-purple: #3d3a52;
+    --cds-tag-color-purple: #b8b0d4;
+    --cds-tag-background-teal: #2a4a4a;
+    --cds-tag-color-teal: #8cc4c4;
+    --cds-tag-background-cyan: #2a4050;
+    --cds-tag-color-cyan: #8eb8d0;
+    --cds-tag-background-red: #4a2a2a;
+    --cds-tag-color-red: #d4a0a0;
+    --cds-tag-background-orange: #4a3828;
+    --cds-tag-color-orange: #d4a878;
+    --cds-tag-background-gray: #2a2e32;
+    --cds-tag-color-gray: #a8b0b8;
+    --cds-tag-background-magenta: #3d2a3a;
+    --cds-tag-color-magenta: #c8a0b8;
+    --cds-focus: #e8eaed;
     
     /* Spacing */
     --cds-spacing-02: 0.25rem;
@@ -171,12 +177,13 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .weekly-overview-card .card-header { border-left-color: var(--cds-support-info); }
 
 /* Badges */
-.badge { display: inline-flex; align-items: center; padding: var(--cds-spacing-02) var(--cds-spacing-03); background: var(--cds-tag-background-blue); color: var(--cds-tag-color-blue); font-size: 0.75rem; height: 1.5rem; }
+.badge { display: inline-flex; align-items: center; padding: var(--cds-spacing-02) var(--cds-spacing-03); background: var(--cds-tag-background-gray); color: var(--cds-tag-color-gray); font-size: 0.75rem; height: 1.5rem; border-radius: 2px; }
 .badge-green { background: var(--cds-tag-background-green); color: var(--cds-tag-color-green); }
 .badge-purple { background: var(--cds-tag-background-purple); color: var(--cds-tag-color-purple); }
 .badge-orange { background: var(--cds-tag-background-orange); color: var(--cds-tag-color-orange); }
 .badge-teal { background: var(--cds-tag-background-teal); color: var(--cds-tag-color-teal); }
 .badge-red { background: var(--cds-tag-background-red); color: var(--cds-tag-color-red); }
+.badge-muted { background: var(--cds-layer-02); color: var(--cds-text-secondary); }
 
 /* Digest Tabs */
 .digest-tabs { display: flex; margin-bottom: var(--cds-spacing-05); background: var(--cds-layer-01); border: 1px solid var(--cds-border-subtle-01); overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
@@ -653,7 +660,7 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 /* =============================================
    EXECUTIVE SUMMARY
    ============================================= */
-.executive-summary-card .card-header { border-left-color: var(--cds-support-error); background: linear-gradient(90deg, rgba(218, 30, 40, 0.1), transparent); }
+.executive-summary-card .card-header { border-left-color: var(--cds-tag-color-blue); }
 .executive-summary-intro { color: var(--cds-text-secondary); font-style: italic; margin-bottom: var(--cds-spacing-05); }
 
 .executive-insight { padding: var(--cds-spacing-05); background: var(--cds-layer-02); margin-bottom: var(--cds-spacing-04); border-left: 4px solid var(--cds-interactive); }
@@ -684,10 +691,10 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 /* =============================================
    ACTION REQUIRED SECTION - Urgent items at top
    ============================================= */
-.action-required-card { border: 2px solid var(--cds-support-error); }
-.action-required-card .card-header { background: var(--cds-support-error); border-left: none; }
-.action-required-card .card-header h2 { color: #fff; }
-.action-required-card .badge-red { background: #fff; color: var(--cds-support-error); }
+.action-required-card { border: 1px solid var(--cds-support-error); border-left: 3px solid var(--cds-support-error); }
+.action-required-card .card-header { background: var(--cds-tag-background-red); border-left: none; }
+.action-required-card .card-header h2 { color: var(--cds-tag-color-red); }
+.action-required-card .badge-red { background: var(--cds-support-error); color: #fff; }
 
 .action-required-item { padding: var(--cds-spacing-05); background: var(--cds-layer-02); margin-bottom: var(--cds-spacing-04); border-left: 4px solid var(--cds-support-error); }
 .action-required-item:last-child { margin-bottom: 0; }
@@ -769,7 +776,7 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 /* =============================================
    UNIFIED SIGNAL FEED
    ============================================= */
-.signal-feed-card .card-header { border-left-color: var(--cds-tag-color-purple); }
+.signal-feed-card .card-header { border-left-color: var(--cds-tag-color-cyan); }
 
 /* Client chip filters - horizontal scroll */
 .client-chip-filters { display: flex; gap: var(--cds-spacing-02); overflow-x: auto; padding: var(--cds-spacing-03) 0; margin-bottom: var(--cds-spacing-03); -webkit-overflow-scrolling: touch; scrollbar-width: none; }
