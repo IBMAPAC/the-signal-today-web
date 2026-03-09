@@ -829,7 +829,7 @@ const DEFAULT_SOURCES = [
     // ============================================
     {
         name: "Stratechery",
-        url: "https://stratechery.com/feed/",
+        url: "https://stratechery.passport.online/feed/rss/CYADVimkqGQfzQjwiVBPV",
         category: "Strategic Perspectives",
         priority: 1,
         credibilityScore: 0.95,
