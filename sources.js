@@ -1,11 +1,11 @@
 // =============================================
 // The Signal Today - Optimized Sources Configuration
-// Version 3.0 - Field CTO Intelligence Upgrade
+// Version 3.1 - 48 Working Feeds Only
 // =============================================
 
 const DEFAULT_SOURCES = [
     // ============================================
-    // 🤖 AI & AGENTIC (9 sources)
+    // 🤖 AI & AGENTIC (7 sources)
     // ============================================
     {
         name: "Import AI",
@@ -19,24 +19,6 @@ const DEFAULT_SOURCES = [
     {
         name: "MIT Tech Review",
         url: "https://www.technologyreview.com/feed/",
-        category: "AI & Agentic",
-        priority: 1,
-        credibilityScore: 0.95,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "The Batch",
-        url: "https://www.deeplearning.ai/the-batch/feed/",
-        category: "AI & Agentic",
-        priority: 2,
-        credibilityScore: 0.85,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "Anthropic",
-        url: "https://www.anthropic.com/news/rss",
         category: "AI & Agentic",
         priority: 1,
         credibilityScore: 0.95,
@@ -84,99 +66,18 @@ const DEFAULT_SOURCES = [
         url: "https://www.aisnakeoil.com/feed",
         category: "AI & Agentic",
         priority: 2,
-        credibilityScore: 0.90,
+        credibilityScore: 0.88,
         digestType: "weekly",
         enabled: true
     },
 
     // ============================================
-    // 🛡️ SOVEREIGNTY & REGULATION (19 sources)
+    // 🛡️ CYBERSECURITY & SOVEREIGNTY (4 sources)
     // ============================================
-    {
-        name: "IAPP Privacy",
-        url: "https://iapp.org/feed/",
-        category: "Sovereignty & Regulation",
-        priority: 1,
-        credibilityScore: 0.90,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "Lawfare",
-        url: "https://www.lawfaremedia.org/feed",
-        category: "Sovereignty & Regulation",
-        priority: 1,
-        credibilityScore: 0.95,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "The Record",
-        url: "https://therecord.media/feed",
-        category: "Sovereignty & Regulation",
-        priority: 1,
-        credibilityScore: 0.85,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "Euractiv Digital",
-        url: "https://www.euractiv.com/sections/digital/feed/",
-        category: "Sovereignty & Regulation",
-        priority: 2,
-        credibilityScore: 0.80,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "BIS",
-        url: "https://www.bis.org/doclist/all_rss.rss",
-        category: "Sovereignty & Regulation",
-        priority: 1,
-        credibilityScore: 0.95,
-        digestType: "weekly",
-        enabled: true
-    },
     {
         name: "NIST Cybersecurity",
         url: "https://www.nist.gov/blogs/cybersecurity-insights/rss.xml",
-        category: "Sovereignty & Regulation",
-        priority: 2,
-        credibilityScore: 0.95,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "MAS Media Releases",
-        url: "https://www.mas.gov.sg/rss/news-and-publications.xml",
-        category: "Sovereignty & Regulation",
-        priority: 1,
-        credibilityScore: 0.95,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "PDPC Singapore",
-        url: "https://www.pdpc.gov.sg/rss/news",
-        category: "Sovereignty & Regulation",
-        priority: 1,
-        credibilityScore: 0.95,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "RBI India",
-        url: "https://rbi.org.in/pressreleases_rss.aspx",
-        category: "Sovereignty & Regulation",
-        priority: 2,
-        credibilityScore: 0.95,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "APRA",
-        url: "https://www.apra.gov.au/rss.xml",
-        category: "Sovereignty & Regulation",
+        category: "Cybersecurity & Sovereignty",
         priority: 1,
         credibilityScore: 0.95,
         digestType: "both",
@@ -185,247 +86,101 @@ const DEFAULT_SOURCES = [
     {
         name: "CSO Online",
         url: "https://www.csoonline.com/feed/",
-        category: "Sovereignty & Regulation",
-        priority: 3,
-        credibilityScore: 0.75,
+        category: "Cybersecurity & Sovereignty",
+        priority: 1,
+        credibilityScore: 0.85,
         digestType: "daily",
         enabled: true
     },
     {
         name: "Dark Reading",
         url: "https://www.darkreading.com/rss.xml",
-        category: "Sovereignty & Regulation",
-        priority: 2,
-        credibilityScore: 0.80,
+        category: "Cybersecurity & Sovereignty",
+        priority: 1,
+        credibilityScore: 0.85,
         digestType: "daily",
         enabled: true
     },
-    // NEW: APAC Regulators
     {
-        name: "HKMA",
-        url: "https://www.hkma.gov.hk/eng/rss/press-releases.xml",
-        category: "Sovereignty & Regulation",
-        priority: 1,
-        credibilityScore: 0.95,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "ComputerWeekly IT Security",
+        name: "Computer Weekly Security",
         url: "https://www.computerweekly.com/rss/IT-security.xml",
-        category: "Sovereignty & Regulation",
-        priority: 1,
+        category: "Cybersecurity & Sovereignty",
+        priority: 2,
         credibilityScore: 0.85,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "SEBI India",
-        url: "https://www.sebi.gov.in/rss/pressreleases.xml",
-        category: "Sovereignty & Regulation",
-        priority: 2,
-        credibilityScore: 0.95,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "OJK Indonesia",
-        url: "https://www.ojk.go.id/en/rss/siaran-pers.xml",
-        category: "Sovereignty & Regulation",
-        priority: 2,
-        credibilityScore: 0.90,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "BSP Philippines",
-        url: "https://www.bsp.gov.ph/SitePages/RSS/PressReleases.aspx",
-        category: "Sovereignty & Regulation",
-        priority: 2,
-        credibilityScore: 0.90,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "MeitY India",
-        url: "https://www.meity.gov.in/rss.xml",
-        category: "Sovereignty & Regulation",
-        priority: 2,
-        credibilityScore: 0.90,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "ASD Cyber Australia",
-        url: "https://www.cyber.gov.au/about-us/news/rss",
-        category: "Sovereignty & Regulation",
-        priority: 1,
-        credibilityScore: 0.95,
         digestType: "both",
         enabled: true
     },
 
     // ============================================
-    // 🌏 APAC ENTERPRISE (14 sources)
+    // 🌏 APAC REGIONAL (23 sources)
     // ============================================
-    {
-        name: "Computer Weekly APAC",
-        url: "https://www.computerweekly.com/rss/Asia-Pacific-IT.xml",
-        category: "APAC Enterprise",
-        priority: 1,
-        credibilityScore: 0.85,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "iTNews Asia",
-        url: "https://www.itnews.asia/rss/feed.xml",
-        category: "APAC Enterprise",
-        priority: 1,
-        credibilityScore: 0.85,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "GovInsider",
-        url: "https://govinsider.asia/feed/",
-        category: "APAC Enterprise",
-        priority: 1,
-        credibilityScore: 0.85,
-        digestType: "both",
-        enabled: true
-    },
     {
         name: "Rest of World",
         url: "https://restofworld.org/feed/latest/",
-        category: "APAC Enterprise",
+        category: "APAC Regional",
         priority: 1,
         credibilityScore: 0.90,
         digestType: "both",
         enabled: true
     },
     {
-        name: "Tech Wire Asia",
-        url: "https://techwireasia.com/feed/",
-        category: "APAC Enterprise",
-        priority: 2,
-        credibilityScore: 0.75,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "Channel Asia",
-        url: "https://www.channelasia.tech/rss/feed.xml",
-        category: "APAC Enterprise",
-        priority: 3,
-        credibilityScore: 0.70,
-        digestType: "daily",
-        enabled: true
-    },
-    {
         name: "Economic Times Tech",
         url: "https://tech.economictimes.indiatimes.com/rss/latest",
-        category: "APAC Enterprise",
+        category: "APAC Regional",
         priority: 1,
         credibilityScore: 0.80,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "iTnews Australia",
-        url: "https://www.itnews.com.au/rss/",
-        category: "APAC Enterprise",
-        priority: 2,
-        credibilityScore: 0.85,
         digestType: "daily",
         enabled: true
     },
     {
         name: "Korea Herald Tech",
         url: "https://www.koreaherald.com/rss/tech.xml",
-        category: "APAC Enterprise",
+        category: "APAC Regional",
         priority: 1,
-        credibilityScore: 0.80,
+        credibilityScore: 0.85,
         digestType: "daily",
         enabled: true
     },
     {
         name: "The Ken",
         url: "https://the-ken.com/feed/",
-        category: "APAC Enterprise",
+        category: "APAC Regional",
         priority: 1,
-        credibilityScore: 0.90,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "e27",
-        url: "https://e27.co/feed/",
-        category: "APAC Enterprise",
-        priority: 2,
-        credibilityScore: 0.75,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "DealStreetAsia",
-        url: "https://www.dealstreetasia.com/feed/",
-        category: "APAC Enterprise",
-        priority: 2,
-        credibilityScore: 0.85,
+        credibilityScore: 0.88,
         digestType: "both",
         enabled: true
     },
     {
         name: "Tech in Asia",
         url: "https://www.techinasia.com/feed",
-        category: "APAC Enterprise",
-        priority: 3,
-        credibilityScore: 0.75,
+        category: "APAC Regional",
+        priority: 1,
+        credibilityScore: 0.85,
         digestType: "daily",
         enabled: true
     },
     {
-        name: "Nikkei Asia Tech",
-        url: "https://asia.nikkei.com/rss/feed/Technology",
-        category: "APAC Enterprise",
-        priority: 1,
-        credibilityScore: 0.90,
-        digestType: "both",
-        enabled: true
-    },
-    // NEW: ASEAN coverage — Indonesia, Vietnam, Malaysia, Thailand, Philippines
-    {
-        name: "Katadata Indonesia",
+        name: "Katadata",
         url: "https://katadata.co.id/rss",
-        category: "APAC Enterprise",
-        priority: 1,
+        category: "APAC Regional",
+        priority: 2,
         credibilityScore: 0.80,
         digestType: "daily",
         enabled: true
     },
     {
-        name: "DailySocial Indonesia",
+        name: "DailySocial",
         url: "https://dailysocial.id/feed",
-        category: "APAC Enterprise",
+        category: "APAC Regional",
         priority: 2,
-        credibilityScore: 0.75,
+        credibilityScore: 0.80,
         digestType: "daily",
         enabled: true
     },
     {
         name: "VnExpress Tech",
         url: "https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss",
-        category: "APAC Enterprise",
-        priority: 1,
-        credibilityScore: 0.80,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "Vietnam Investment Review Tech",
-        url: "https://vir.com.vn/rss/technology.rss",
-        category: "APAC Enterprise",
+        category: "APAC Regional",
         priority: 2,
         credibilityScore: 0.80,
         digestType: "daily",
@@ -434,210 +189,233 @@ const DEFAULT_SOURCES = [
     {
         name: "Digital News Asia",
         url: "https://www.digitalnewsasia.com/rss.xml",
-        category: "APAC Enterprise",
+        category: "APAC Regional",
         priority: 1,
-        credibilityScore: 0.80,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "The Edge Malaysia",
-        url: "https://theedgemalaysia.com/rss/technology",
-        category: "APAC Enterprise",
-        priority: 1,
-        credibilityScore: 0.85,
+        credibilityScore: 0.82,
         digestType: "daily",
         enabled: true
     },
     {
         name: "Bangkok Post Tech",
         url: "https://www.bangkokpost.com/rss/data/tech.xml",
-        category: "APAC Enterprise",
-        priority: 1,
-        credibilityScore: 0.80,
+        category: "APAC Regional",
+        priority: 2,
+        credibilityScore: 0.82,
         digestType: "daily",
         enabled: true
     },
     {
         name: "BusinessWorld Philippines",
         url: "https://www.bworldonline.com/feed/",
-        category: "APAC Enterprise",
+        category: "APAC Regional",
         priority: 2,
-        credibilityScore: 0.75,
+        credibilityScore: 0.80,
         digestType: "daily",
         enabled: true
     },
-
-    // ============================================
-    // 🇨🇳 CHINA & TECH GEOPOLITICS (6 sources)
-    // ============================================
     {
-        name: "SCMP Tech",
+        name: "SCMP",
         url: "https://www.scmp.com/rss/5/feed",
-        category: "China & Geopolitics",
+        category: "APAC Regional",
         priority: 1,
-        credibilityScore: 0.75,
+        credibilityScore: 0.88,
         digestType: "daily",
         enabled: true
     },
     {
         name: "ChinaTalk",
         url: "https://chinatalk.substack.com/feed",
-        category: "China & Geopolitics",
+        category: "APAC Regional",
         priority: 1,
-        credibilityScore: 0.90,
+        credibilityScore: 0.88,
         digestType: "weekly",
         enabled: true
     },
     {
-        name: "DigiChina",
+        name: "DigiChina Stanford",
         url: "https://digichina.stanford.edu/feed/",
-        category: "China & Geopolitics",
+        category: "APAC Regional",
         priority: 1,
-        credibilityScore: 0.95,
+        credibilityScore: 0.92,
         digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "Semafor",
-        url: "https://www.semafor.com/feed",
-        category: "China & Geopolitics",
-        priority: 2,
-        credibilityScore: 0.85,
-        digestType: "daily",
         enabled: true
     },
     {
         name: "Trivium China",
         url: "https://triviumchina.com/feed/",
-        category: "China & Geopolitics",
+        category: "APAC Regional",
         priority: 2,
-        credibilityScore: 0.90,
-        digestType: "both",
+        credibilityScore: 0.85,
+        digestType: "weekly",
         enabled: true
     },
     {
         name: "Asia Times",
         url: "https://asiatimes.com/feed/",
-        category: "China & Geopolitics",
-        priority: 2,
-        credibilityScore: 0.75,
+        category: "APAC Regional",
+        priority: 1,
+        credibilityScore: 0.82,
         digestType: "daily",
         enabled: true
     },
-
-    // ============================================
-    // ⚔️ COMPETITIVE LANDSCAPE (24 sources)
-    // Analyst commentary sources moved here from Strategic Perspectives —
-    // they provide competitive intelligence, not just strategic reading.
-    // Vendor blogs (Azure/AWS/GCP) retained for signal detection but
-    // credibility-scored low (0.60) to reflect marketing bias.
-    // ============================================
-    // --- Analyst Commentary (highest value competitive intel) ---
+    // --- ANZ ---
     {
-        name: "Gartner Blog",
-        url: "https://blogs.gartner.com/feed/",
-        category: "Competitive Landscape",
+        name: "iTnews Australia",
+        url: "https://www.itnews.com.au/RSS/rss.ashx",
+        category: "APAC Regional",
         priority: 1,
-        credibilityScore: 0.95,
-        digestType: "both",
+        credibilityScore: 0.88,
+        digestType: "daily",
         enabled: true
     },
     {
-        name: "Forrester Blog",
-        url: "https://www.forrester.com/blogs/feed/",
-        category: "Competitive Landscape",
-        priority: 1,
-        credibilityScore: 0.95,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "IDC Insights",
-        url: "https://www.idc.com/rss/press-releases.xml",
-        category: "Competitive Landscape",
-        priority: 1,
-        credibilityScore: 0.95,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "Omdia",
-        url: "https://omdia.tech.informa.com/rss",
-        category: "Competitive Landscape",
-        priority: 1,
-        credibilityScore: 0.90,
-        digestType: "both",
-        enabled: true
-    },
-    // --- Trade press (independent competitive coverage) ---
-    {
-        name: "CIO Dive",
-        url: "https://www.ciodive.com/feeds/news/",
-        category: "Competitive Landscape",
+        name: "iTnews Asia",
+        url: "https://www.itnews.asia/RSS/rss.ashx",
+        category: "APAC Regional",
         priority: 1,
         credibilityScore: 0.85,
         digestType: "daily",
         enabled: true
     },
     {
-        name: "Cloud Wars",
-        url: "https://cloudwars.com/feed/",
-        category: "Competitive Landscape",
+        name: "ABC News Tech",
+        url: "https://www.abc.net.au/news/feed/2942460/rss.xml",
+        category: "APAC Regional",
+        priority: 2,
+        credibilityScore: 0.90,
+        digestType: "daily",
+        enabled: true
+    },
+    // --- Korea ---
+    {
+        name: "Yonhap News",
+        url: "https://en.yna.co.kr/RSS/news.xml",
+        category: "APAC Regional",
         priority: 1,
+        credibilityScore: 0.88,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "Korea Tech Desk",
+        url: "https://koreatechdesk.com/feed",
+        category: "APAC Regional",
+        priority: 2,
         credibilityScore: 0.80,
+        digestType: "daily",
+        enabled: true
+    },
+    // --- ISA / India ---
+    {
+        name: "LiveMint Tech",
+        url: "https://livemint.com/rss/technology",
+        category: "APAC Regional",
+        priority: 1,
+        credibilityScore: 0.85,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "LiveMint AI",
+        url: "https://livemint.com/rss/AI",
+        category: "APAC Regional",
+        priority: 1,
+        credibilityScore: 0.85,
+        digestType: "daily",
+        enabled: true
+    },
+
+    // ============================================
+    // 🏢 ENTERPRISE TECH (8 sources)
+    // ============================================
+    {
+        name: "Forrester",
+        url: "https://www.forrester.com/blogs/feed/",
+        category: "Enterprise Tech",
+        priority: 1,
+        credibilityScore: 0.92,
+        digestType: "both",
+        enabled: true
+    },
+    {
+        name: "CIO Dive",
+        url: "https://www.ciodive.com/feeds/news/",
+        category: "Enterprise Tech",
+        priority: 1,
+        credibilityScore: 0.85,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "CloudWars",
+        url: "https://cloudwars.com/feed/",
+        category: "Enterprise Tech",
+        priority: 1,
+        credibilityScore: 0.82,
         digestType: "daily",
         enabled: true
     },
     {
         name: "The Register",
         url: "https://www.theregister.com/headlines.atom",
-        category: "Competitive Landscape",
+        category: "Enterprise Tech",
         priority: 1,
         credibilityScore: 0.85,
-        digestType: "daily",
-        enabled: true
-    },
-    // --- Competitor vendor blogs (marketing content — low credibility score) ---
-    {
-        name: "Microsoft Azure Blog",
-        url: "https://azure.microsoft.com/en-us/blog/feed/",
-        category: "Competitive Landscape",
-        priority: 1,
-        credibilityScore: 0.60,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "AWS News Blog",
-        url: "https://aws.amazon.com/blogs/aws/feed/",
-        category: "Competitive Landscape",
-        priority: 1,
-        credibilityScore: 0.60,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "Google Cloud Blog",
-        url: "https://cloud.google.com/blog/feed",
-        category: "Competitive Landscape",
-        priority: 1,
-        credibilityScore: 0.60,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "Salesforce Blog",
-        url: "https://www.salesforce.com/blog/feed/",
-        category: "Competitive Landscape",
-        priority: 1,
-        credibilityScore: 0.60,
         digestType: "daily",
         enabled: true
     },
     {
         name: "ZDNet Enterprise",
         url: "https://www.zdnet.com/topic/enterprise-software/rss.xml",
+        category: "Enterprise Tech",
+        priority: 1,
+        credibilityScore: 0.85,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "MIT Sloan Review",
+        url: "https://sloanreview.mit.edu/feed/",
+        category: "Enterprise Tech",
+        priority: 1,
+        credibilityScore: 0.95,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "Wired Business",
+        url: "https://www.wired.com/feed/category/business/latest/rss",
+        category: "Enterprise Tech",
+        priority: 2,
+        credibilityScore: 0.88,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "SiliconANGLE",
+        url: "https://siliconangle.com/feed/",
+        category: "Enterprise Tech",
+        priority: 1,
+        credibilityScore: 0.82,
+        digestType: "daily",
+        enabled: true
+    },
+
+    // ============================================
+    // ⚔️ COMPETITIVE LANDSCAPE (6 sources)
+    // ============================================
+    {
+        name: "AWS Blog",
+        url: "https://aws.amazon.com/blogs/aws/feed/",
+        category: "Competitive Landscape",
+        priority: 1,
+        credibilityScore: 0.85,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "Salesforce Blog",
+        url: "https://www.salesforce.com/blog/feed/",
         category: "Competitive Landscape",
         priority: 2,
         credibilityScore: 0.80,
@@ -648,106 +426,42 @@ const DEFAULT_SOURCES = [
         name: "SAP News",
         url: "https://news.sap.com/feed/",
         category: "Competitive Landscape",
+        priority: 2,
+        credibilityScore: 0.80,
+        digestType: "daily",
+        enabled: true
+    },
+    // --- Microsoft / Azure ---
+    {
+        name: "Azure Blog",
+        url: "https://azure.microsoft.com/en-us/blog/feed/",
+        category: "Competitive Landscape",
         priority: 1,
-        credibilityScore: 0.60,
+        credibilityScore: 0.85,
         digestType: "daily",
         enabled: true
     },
     {
-        name: "Oracle Blog",
-        url: "https://blogs.oracle.com/feed",
+        name: "Microsoft Security",
+        url: "https://www.microsoft.com/en-us/security/blog/feed/",
         category: "Competitive Landscape",
-        priority: 2,
-        credibilityScore: 0.60,
+        priority: 1,
+        credibilityScore: 0.88,
         digestType: "daily",
         enabled: true
     },
-    // --- Consulting competitors ---
     {
-        name: "Accenture Newsroom",
-        url: "https://newsroom.accenture.com/rss/news.xml",
-        category: "Competitive Landscape",
-        priority: 2,
-        credibilityScore: 0.75,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "Deloitte Insights",
-        url: "https://www2.deloitte.com/us/en/insights/rss-feeds/deloitte-insights.rss",
+        name: "Azure Feeds",
+        url: "https://azurefeeds.com/feed",
         category: "Competitive Landscape",
         priority: 2,
         credibilityScore: 0.80,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "BCG Publications",
-        url: "https://www.bcg.com/publications.rss",
-        category: "Competitive Landscape",
-        priority: 2,
-        credibilityScore: 0.85,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "TCS Perspectives",
-        url: "https://www.tcs.com/rss/insights",
-        category: "Competitive Landscape",
-        priority: 3,
-        credibilityScore: 0.70,
-        digestType: "weekly",
-        enabled: true
-    },
-    // --- APAC Competitors ---
-    {
-        name: "Alibaba Cloud Blog",
-        url: "https://www.alibabacloud.com/blog/feed",
-        category: "Competitive Landscape",
-        priority: 1,
-        credibilityScore: 0.60,
         digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "NTT Data Insights",
-        url: "https://www.nttdata.com/global/en/insights/rss",
-        category: "Competitive Landscape",
-        priority: 2,
-        credibilityScore: 0.75,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "Fujitsu Blog",
-        url: "https://blog.global.fujitsu.com/feed/",
-        category: "Competitive Landscape",
-        priority: 2,
-        credibilityScore: 0.75,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "Infosys Insights",
-        url: "https://www.infosys.com/insights/rss-feeds/insights.xml",
-        category: "Competitive Landscape",
-        priority: 2,
-        credibilityScore: 0.70,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "Wipro Insights",
-        url: "https://www.wipro.com/rss/insights.xml",
-        category: "Competitive Landscape",
-        priority: 3,
-        credibilityScore: 0.70,
-        digestType: "weekly",
         enabled: true
     },
 
     // ============================================
-    // 🏗️ ARCHITECTURE & PLATFORM (9 sources)
+    // 🏗️ ARCHITECTURE & PLATFORM (5 sources)
     // ============================================
     {
         name: "InfoQ",
@@ -794,43 +508,14 @@ const DEFAULT_SOURCES = [
         digestType: "both",
         enabled: true
     },
-    {
-        name: "Databricks Blog",
-        url: "https://www.databricks.com/blog/feed",
-        category: "Architecture & Platform",
-        priority: 1,
-        credibilityScore: 0.80,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "Snowflake Blog",
-        url: "https://www.snowflake.com/blog/feed/",
-        category: "Architecture & Platform",
-        priority: 2,
-        credibilityScore: 0.75,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "Thoughtworks Insights",
-        url: "https://www.thoughtworks.com/insights/rss",
-        category: "Architecture & Platform",
-        priority: 2,
-        credibilityScore: 0.90,
-        digestType: "weekly",
-        enabled: true
-    },
 
     // ============================================
-    // 💭 STRATEGIC PERSPECTIVES (7 sources)
-    // Note: Gartner, IDC, Forrester moved to Competitive Landscape —
-    // they provide competitive intelligence, not just strategic reading.
+    // 📊 STRATEGIC ANALYSIS (2 sources)
     // ============================================
     {
         name: "Stratechery",
         url: "https://stratechery.com/feed/",
-        category: "Strategic Perspectives",
+        category: "Strategic Analysis",
         priority: 1,
         credibilityScore: 0.95,
         digestType: "both",
@@ -839,63 +524,18 @@ const DEFAULT_SOURCES = [
     {
         name: "Ben Evans",
         url: "https://www.ben-evans.com/benedictevans?format=rss",
-        category: "Strategic Perspectives",
+        category: "Strategic Analysis",
         priority: 1,
         credibilityScore: 0.95,
         digestType: "weekly",
         enabled: true
     },
-    {
-        name: "a16z",
-        url: "https://a16z.com/feed/",
-        category: "Strategic Perspectives",
-        priority: 2,
-        credibilityScore: 0.85,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "McKinsey Digital",
-        url: "https://www.mckinsey.com/rss/insights.xml",
-        category: "Strategic Perspectives",
-        priority: 2,
-        credibilityScore: 0.90,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "HBR Technology",
-        url: "https://hbr.org/topic/technology/feed",
-        category: "Strategic Perspectives",
-        priority: 2,
-        credibilityScore: 0.90,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "MIT Sloan Review",
-        url: "https://sloanreview.mit.edu/feed/",
-        category: "Strategic Perspectives",
-        priority: 2,
-        credibilityScore: 0.90,
-        digestType: "weekly",
-        enabled: true
-    },
-    {
-        name: "Wired Business",
-        url: "https://www.wired.com/feed/category/business/latest/rss",
-        category: "Strategic Perspectives",
-        priority: 3,
-        credibilityScore: 0.80,
-        digestType: "weekly",
-        enabled: true
-    },
 
     // ============================================
-    // 🔵 IBM & PARTNERS (5 sources) — NEW
+    // 🔵 IBM & PARTNERS (3 sources)
     // ============================================
     {
-        name: "IBM Research Blog",
+        name: "IBM Research",
         url: "https://research.ibm.com/rss",
         category: "IBM & Partners",
         priority: 1,
@@ -909,24 +549,6 @@ const DEFAULT_SOURCES = [
         category: "IBM & Partners",
         priority: 1,
         credibilityScore: 0.85,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "IBM Security Intelligence",
-        url: "https://securityintelligence.com/feed/",
-        category: "IBM & Partners",
-        priority: 1,
-        credibilityScore: 0.85,
-        digestType: "both",
-        enabled: true
-    },
-    {
-        name: "SiliconANGLE",
-        url: "https://siliconangle.com/feed/",
-        category: "IBM & Partners",
-        priority: 1,
-        credibilityScore: 0.82,
         digestType: "both",
         enabled: true
     },
