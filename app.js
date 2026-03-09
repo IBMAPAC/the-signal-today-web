@@ -2280,20 +2280,22 @@ ${articleList}`;
     }
 
     renderDailyTab(forceRefresh = false) {
-        // NEW 5-SECTION LAYOUT:
-        // 0. Executive Summary — 3 things to know today with synthesis
+        // PHASE 2 LAYOUT:
+        // 0. Action Required — Urgent ESCALATE/BRIEF_ATL items at top
+        // 1. Today's Brief — 3 key insights (AI-synthesized)
+        // 2. Signal Feed — Unified view (replaces Client Radar + All Signals)
+        // 3. ATL Enablement — Market briefs (collapsed)
+        // 4. Deep Reads — Weekend reading (collapsed)
+        
+        // Generate signals first (async), then extract Action Required and build Signal Feed
+        renderTodaysSignals(forceRefresh).then(() => {
+            renderActionRequired();
+            renderSignalFeed();
+        });
+        
+        // These can render in parallel
         renderExecutiveSummary(forceRefresh);
-        
-        // 1. Today's Signals — synthesized intelligence with IBM angles
-        renderTodaysSignals(forceRefresh);
-        
-        // 2. Client Radar — market-based view with Brief ATL action
-        renderClientRadar();
-        
-        // 3. ATL Enablement — what to tell your 115 ATLs
         renderATLEnablement(forceRefresh);
-        
-        // 4. Deep Reads — collapsed by default
         renderDeepReads(forceRefresh);
         
         // Update portfolio stats
@@ -2929,22 +2931,46 @@ ${articleList}`;
         document.getElementById('article-modal').dataset.articleId = id;
     }
 
-    async deepReadArticle(id) {
+    async deepReadArticle(id, buttonEl) {
         const article = this.articles.find(a => a.id === id)
             || this.weeklyArticles.find(a => a.id === id)
             || this.dailyArticles.find(a => a.id === id);
-        if (!article) return;
+        
+        if (!article) {
+            console.error('Article not found:', id);
+            alert('Article not found. Please refresh and try again.');
+            return;
+        }
         
         const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
-        if (!apiKey) return;
+        if (!apiKey) {
+            alert('Please add your API key in Settings to use this feature.');
+            return;
+        }
         
-        const deepReadContent = document.getElementById('deep-read-content');
-        const deepReadBtn = document.getElementById('deep-read-btn');
-        if (!deepReadContent) return;
+        // Find the parent deep-read-item and create/find the analysis container
+        let container;
+        if (buttonEl) {
+            const deepReadItem = buttonEl.closest('.deep-read-item');
+            if (deepReadItem) {
+                container = deepReadItem.querySelector('.deep-read-analysis');
+                if (!container) {
+                    container = document.createElement('div');
+                    container.className = 'deep-read-analysis';
+                    deepReadItem.appendChild(container);
+                }
+                // Disable button while loading
+                buttonEl.disabled = true;
+                buttonEl.textContent = '⏳ Generating...';
+            }
+        }
         
-        deepReadContent.classList.remove('hidden');
-        deepReadContent.innerHTML = '<div class="deep-read-loading">🤖 Generating deep read analysis...</div>';
-        if (deepReadBtn) deepReadBtn.disabled = true;
+        if (!container) {
+            console.error('Could not find container for analysis');
+            return;
+        }
+        
+        container.innerHTML = '<div class="deep-read-loading">🤖 Generating deep analysis...</div>';
         
         // Inject all available article metadata so Claude has full context
         const clientContext = (article.allMatchedClients?.length)
@@ -2961,7 +2987,7 @@ Turn this article into a 60-second strategic brief that answers: "What does this
 
 ARTICLE
 Title: ${article.title}
-Source: ${article.sourceName} (Category: ${article.category || 'General'})
+Source: ${article.sourceName || article.source} (Category: ${article.category || 'General'})
 Summary: ${article.summary || 'No summary available'}
 ${clientContext}
 ${industryContext}
@@ -3009,7 +3035,7 @@ Return ONLY valid JSON, no markdown fences:
             
             if (jsonMatch) {
                 const result = JSON.parse(jsonMatch[0]);
-                deepReadContent.innerHTML = `
+                container.innerHTML = `
                     <div class="deep-read-section">
                         <div class="deep-read-label">📌 Key Facts</div>
                         <ul class="deep-read-facts">
@@ -3018,33 +3044,42 @@ Return ONLY valid JSON, no markdown fences:
                     </div>
                     <div class="deep-read-section">
                         <div class="deep-read-label">⚡ So What</div>
-                        <div class="deep-read-text deep-read-so-what">${this.escapeHtml(result.soWhat || '')}</div>
+                        <div class="deep-read-text">${this.escapeHtml(result.soWhat || '')}</div>
                     </div>
                     <div class="deep-read-section">
                         <div class="deep-read-label">🔵 IBM Angle</div>
                         <div class="deep-read-text">${this.escapeHtml(result.ibmAngle || '')}</div>
                     </div>
-                    ${result.clientImplication ? `
                     <div class="deep-read-section">
                         <div class="deep-read-label">👤 Client Implication</div>
-                        <div class="deep-read-text deep-read-client">${this.escapeHtml(result.clientImplication)}</div>
-                    </div>` : ''}
+                        <div class="deep-read-text">${this.escapeHtml(result.clientImplication || '')}</div>
+                    </div>
                     ${result.competitiveWatch ? `
                     <div class="deep-read-section">
                         <div class="deep-read-label">⚔️ Competitive Watch</div>
-                        <div class="deep-read-text deep-read-competitive">${this.escapeHtml(result.competitiveWatch)}</div>
+                        <div class="deep-read-text">${this.escapeHtml(result.competitiveWatch)}</div>
                     </div>` : ''}
                     <div class="deep-read-section">
                         <div class="deep-read-label">💬 Conversation Opener</div>
-                        <div class="deep-read-text deep-read-opener">${this.escapeHtml(result.conversationOpener || '')}</div>
-                    </div>`;
+                        <div class="deep-read-text conversation-opener">"${this.escapeHtml(result.conversationOpener || '')}"</div>
+                    </div>
+                `;
+                
+                // Update button to show success
+                if (buttonEl) {
+                    buttonEl.textContent = '✓ Analysis Generated';
+                    buttonEl.disabled = true;
+                }
             } else {
-                deepReadContent.innerHTML = '<div class="deep-read-error">Could not parse AI response.</div>';
+                throw new Error('Could not parse response');
             }
-        } catch (error) {
-            deepReadContent.innerHTML = `<div class="deep-read-error">Deep read failed: ${this.escapeHtml(error.message)}</div>`;
-        } finally {
-            if (deepReadBtn) deepReadBtn.disabled = false;
+        } catch (err) {
+            console.error('Deep read error:', err);
+            container.innerHTML = `<div class="deep-read-error">❌ Error generating analysis: ${this.escapeHtml(err.message)}</div>`;
+            if (buttonEl) {
+                buttonEl.textContent = '🤖 Generate Deep Analysis';
+                buttonEl.disabled = false;
+            }
         }
     }
 
@@ -4693,16 +4728,11 @@ function exportClientsCSV() {
 // MARKET FILTERING (Client Radar)
 // ==========================================
 
-function switchMarket(market) {
-    app.currentMarket = market;
-    document.querySelectorAll('.market-tab').forEach(tab => {
-        tab.classList.toggle('active', tab.dataset.market === market);
-    });
-    renderClientRadar();
-}
+// Old switchMarket removed - now handled by Signal Feed switchMarket function
 
 function filterClientRadar() {
-    renderClientRadar();
+    // Deprecated - Signal Feed now handles filtering
+    renderSignalFeed();
 }
 
 function renderClientRadar() {
@@ -5869,6 +5899,382 @@ function cacheSignals(signals, rawSignals) {
     }
 }
 
+// ==========================================
+// ACTION REQUIRED - Urgent items at top
+// ==========================================
+
+function renderActionRequired() {
+    const section = document.getElementById('action-required-section');
+    const list = document.getElementById('action-required-list');
+    const countEl = document.getElementById('action-required-count');
+    if (!section || !list) return;
+    
+    // Read from cached signals
+    let signals = [];
+    let articlesData = [];
+    try {
+        const cached = localStorage.getItem(STORAGE_KEYS.TODAYS_SIGNALS);
+        if (cached) {
+            const data = JSON.parse(cached);
+            signals = data.signals || [];
+            articlesData = data.articlesData || [];
+        }
+    } catch (e) {
+        console.log('Action required cache read error:', e);
+    }
+    
+    // Filter for urgent action types: ESCALATE and BRIEF_ATL
+    const urgentSignals = signals
+        .map((signal, idx) => ({ signal, articleData: articlesData[idx] }))
+        .filter(({ signal }) => signal.actionType === 'ESCALATE' || signal.actionType === 'BRIEF_ATL');
+    
+    if (urgentSignals.length === 0) {
+        section.classList.add('hidden');
+        return;
+    }
+    
+    section.classList.remove('hidden');
+    countEl.textContent = urgentSignals.length;
+    
+    list.innerHTML = urgentSignals.map(({ signal, articleData }) => {
+        const articles = articleData?.articles || [];
+        const sourcesHtml = articles.length > 0
+            ? articles.map(a => `<a class="action-source-link" href="${a.url || '#'}" target="_blank">${escapeHtml(a.title)}</a> <span class="action-source-name">(${escapeHtml(a.source || 'Source')})</span>`).join('<br>')
+            : '';
+        
+        const isEscalate = signal.actionType === 'ESCALATE';
+        const icon = isEscalate ? '🚨' : '📢';
+        const label = isEscalate ? 'ESCALATE' : 'BRIEF ATL';
+        const cssClass = isEscalate ? 'action-escalate' : 'action-brief';
+        
+        // Markets affected
+        const marketsHtml = (signal.affectedMarkets || []).length > 0
+            ? signal.affectedMarkets.map(m => `<span class="action-market-tag">${m}</span>`).join(' ')
+            : '';
+        
+        return `
+            <div class="action-required-item ${cssClass}">
+                <div class="action-required-header">
+                    <span class="action-required-badge ${cssClass}">${icon} ${label}</span>
+                    ${marketsHtml}
+                </div>
+                <div class="action-required-headline">${escapeHtml(signal.headline)}</div>
+                <div class="action-required-context">${escapeHtml(signal.context || '')}</div>
+                <div class="action-required-action">
+                    <strong>→ Action:</strong> ${escapeHtml(signal.action || '')}
+                </div>
+                ${signal.talkingPoint ? `<div class="action-required-talking-point"><strong>💬</strong> "${escapeHtml(signal.talkingPoint)}"</div>` : ''}
+                <div class="action-required-ibm"><strong>IBM:</strong> ${escapeHtml(signal.ibmAngle || '')}</div>
+                ${sourcesHtml ? `<div class="action-required-sources">${sourcesHtml}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+// ==========================================
+// UNIFIED SIGNAL FEED - Phase 2
+// ==========================================
+
+// Global filter state for Signal Feed
+let signalFeedFilters = {
+    market: 'ALL',
+    client: 'ALL',
+    signalType: 'ALL'
+};
+
+// Store enriched articles for filtering
+let signalFeedArticles = [];
+
+function renderSignalFeed() {
+    const list = document.getElementById('signal-feed-list');
+    const countEl = document.getElementById('signal-feed-count');
+    const emptyEl = document.getElementById('signal-feed-empty');
+    const chipContainer = document.getElementById('client-chip-filters');
+    
+    if (!list) return;
+    
+    // Step 1: Build deduplicated article index with all enrichment
+    const articleIndex = new Map();
+    
+    // Get all articles from daily and general feeds
+    const allArticles = [
+        ...app.dailyArticles,
+        ...app.articles.filter(a => {
+            const articleDate = a.date || a.publishedDate;
+            if (!articleDate) return true;
+            const age = Date.now() - new Date(articleDate).getTime();
+            return age < 48 * 60 * 60 * 1000; // 48 hours
+        })
+    ];
+    
+    // Get cached signals for IBM angles and talking points
+    let cachedSignals = [];
+    let cachedArticlesData = [];
+    try {
+        const cached = localStorage.getItem(STORAGE_KEYS.TODAYS_SIGNALS);
+        if (cached) {
+            const data = JSON.parse(cached);
+            cachedSignals = data.signals || [];
+            cachedArticlesData = data.articlesData || [];
+        }
+    } catch (e) {
+        console.log('Signal feed cache read error:', e);
+    }
+    
+    // Build article-to-signal mapping for IBM angles
+    const articleToSignal = new Map();
+    cachedSignals.forEach((signal, idx) => {
+        const articles = cachedArticlesData[idx]?.articles || [];
+        articles.forEach(a => {
+            if (a.id) {
+                articleToSignal.set(a.id, signal);
+            }
+        });
+    });
+    
+    // Enrich each article
+    allArticles.forEach(article => {
+        if (!article.id || articleIndex.has(article.id)) return;
+        
+        // Signal type
+        const signalType = article.signalType || classifySignalType(article);
+        
+        // Matched clients with tier info
+        const matchedClients = (article.matchedClients || []).map(clientName => {
+            const client = app.clients.find(c => 
+                c.name.toLowerCase() === clientName.toLowerCase() ||
+                (c.aliases || []).some(a => a.toLowerCase() === clientName.toLowerCase())
+            );
+            return client ? { name: client.name, tier: client.tier, market: client.market } : null;
+        }).filter(Boolean);
+        
+        // Markets from matched clients
+        const markets = [...new Set(matchedClients.map(c => c.market).filter(Boolean))];
+        
+        // Get IBM angle and talking point from cached signals
+        const matchedSignal = articleToSignal.get(article.id);
+        
+        articleIndex.set(article.id, {
+            ...article,
+            signalType,
+            matchedClients,
+            markets,
+            actionType: matchedSignal?.actionType || null,
+            ibmAngle: matchedSignal?.ibmAngle || null,
+            talkingPoint: matchedSignal?.talkingPoint || null,
+            action: matchedSignal?.action || null,
+            context: matchedSignal?.context || article.summary || ''
+        });
+    });
+    
+    signalFeedArticles = Array.from(articleIndex.values());
+    
+    // Step 2: Build client chips
+    const clientCounts = {};
+    signalFeedArticles.forEach(article => {
+        article.matchedClients.forEach(c => {
+            clientCounts[c.name] = (clientCounts[c.name] || 0) + 1;
+        });
+    });
+    
+    // Sort by count, then name
+    const sortedClients = Object.entries(clientCounts)
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, 15); // Top 15 clients
+    
+    if (chipContainer) {
+        chipContainer.innerHTML = `
+            <button class="client-chip ${signalFeedFilters.client === 'ALL' ? 'active' : ''}" 
+                    data-client="ALL" onclick="filterByClient('ALL')">
+                All Clients <span class="chip-count">${signalFeedArticles.length}</span>
+            </button>
+            ${sortedClients.map(([name, count]) => `
+                <button class="client-chip ${signalFeedFilters.client === name ? 'active' : ''}" 
+                        data-client="${escapeHtml(name)}" onclick="filterByClient('${escapeHtml(name)}')">
+                    ${escapeHtml(name)} <span class="chip-count">${count}</span>
+                </button>
+            `).join('')}
+        `;
+    }
+    
+    // Step 3: Apply filters
+    let filtered = signalFeedArticles;
+    
+    if (signalFeedFilters.market !== 'ALL') {
+        filtered = filtered.filter(a => 
+            a.markets.includes(signalFeedFilters.market) ||
+            a.matchedClients.some(c => c.market === signalFeedFilters.market)
+        );
+    }
+    
+    if (signalFeedFilters.client !== 'ALL') {
+        filtered = filtered.filter(a => 
+            a.matchedClients.some(c => c.name === signalFeedFilters.client)
+        );
+    }
+    
+    if (signalFeedFilters.signalType !== 'ALL') {
+        filtered = filtered.filter(a => a.signalType === signalFeedFilters.signalType);
+    }
+    
+    // Sort: action items first, then by relevance score
+    filtered.sort((a, b) => {
+        const aUrgent = a.actionType === 'ESCALATE' ? 2 : a.actionType === 'BRIEF_ATL' ? 1 : 0;
+        const bUrgent = b.actionType === 'ESCALATE' ? 2 : b.actionType === 'BRIEF_ATL' ? 1 : 0;
+        if (aUrgent !== bUrgent) return bUrgent - aUrgent;
+        return (b.relevanceScore || 0) - (a.relevanceScore || 0);
+    });
+    
+    // Step 4: Update count
+    if (countEl) countEl.textContent = filtered.length;
+    
+    // Step 5: Render
+    if (filtered.length === 0) {
+        list.innerHTML = '';
+        emptyEl?.classList.remove('hidden');
+        return;
+    }
+    
+    emptyEl?.classList.add('hidden');
+    
+    list.innerHTML = filtered.map(article => renderSignalFeedItem(article)).join('');
+}
+
+function renderSignalFeedItem(article) {
+    const signalEmoji = {
+        'risk': '🔴',
+        'opportunity': '🟢',
+        'competitive': '⚔️',
+        'regulatory': '🛡️',
+        'relationship': '🤝',
+        'ibm': '🔵',
+        'general': '📰'
+    }[article.signalType] || '📰';
+    
+    // Client tags
+    const clientTags = article.matchedClients.slice(0, 4).map(c => 
+        `<span class="signal-feed-tag client" title="Tier ${c.tier}">${escapeHtml(c.name)}</span>`
+    ).join('');
+    
+    // Market tags
+    const marketTags = article.markets.slice(0, 3).map(m => 
+        `<span class="signal-feed-tag market">${m}</span>`
+    ).join('');
+    
+    // Action tag if applicable
+    const actionTag = article.actionType 
+        ? `<span class="signal-feed-tag action action-${article.actionType === 'ESCALATE' ? 'escalate' : 'brief'}">${article.actionType === 'ESCALATE' ? '🚨 ESCALATE' : '📢 BRIEF ATL'}</span>`
+        : '';
+    
+    // Summary text (prefer context from signal synthesis)
+    const summaryText = article.context || article.summary || '';
+    
+    // Build details section (initially hidden)
+    const hasDetails = article.ibmAngle || article.talkingPoint || article.action;
+    const detailsHtml = hasDetails ? `
+        <div class="signal-feed-details">
+            ${article.action ? `
+                <div class="signal-feed-detail-row">
+                    <span class="signal-feed-detail-label">Action</span>
+                    <div class="signal-feed-detail-text">${escapeHtml(article.action)}</div>
+                </div>
+            ` : ''}
+            ${article.ibmAngle ? `
+                <div class="signal-feed-detail-row">
+                    <span class="signal-feed-detail-label">IBM Position</span>
+                    <div class="signal-feed-detail-text ibm">${escapeHtml(article.ibmAngle)}</div>
+                </div>
+            ` : ''}
+            ${article.talkingPoint ? `
+                <div class="signal-feed-detail-row">
+                    <span class="signal-feed-detail-label">ATL Talking Point</span>
+                    <div class="signal-feed-detail-text talking-point">"${escapeHtml(article.talkingPoint)}"</div>
+                </div>
+            ` : ''}
+        </div>
+    ` : '';
+    
+    return `
+        <div class="signal-feed-item signal-${article.signalType}" data-article-id="${article.id}">
+            <div class="signal-feed-header">
+                <span class="signal-feed-type" title="${article.signalType}">${signalEmoji}</span>
+                <div class="signal-feed-headline">
+                    <a href="${article.url || '#'}" target="_blank" rel="noopener">${escapeHtml(article.title)}</a>
+                </div>
+            </div>
+            
+            <div class="signal-feed-tags">
+                ${actionTag}
+                ${clientTags}
+                ${marketTags}
+            </div>
+            
+            ${summaryText ? `<div class="signal-feed-summary">${escapeHtml(summaryText.substring(0, 200))}${summaryText.length > 200 ? '...' : ''}</div>` : ''}
+            
+            <div class="signal-feed-source">
+                <a class="signal-feed-source-link" href="${article.url || '#'}" target="_blank">${escapeHtml(article.sourceName || article.source || 'Source')}</a>
+                ${article.date ? `<span class="signal-feed-source-name">• ${formatRelativeDate(new Date(article.date))}</span>` : ''}
+            </div>
+            
+            ${detailsHtml}
+            
+            ${hasDetails ? `
+                <div class="signal-feed-actions">
+                    <button class="signal-feed-expand" onclick="toggleSignalFeedItem(this)">Show IBM angle & talking points</button>
+                    ${article.matchedClients.length > 0 ? `<button class="btn btn-sm btn-brief-atl" onclick="openBriefATL('${escapeHtml(article.matchedClients[0].name)}')">📤 Brief ATL</button>` : ''}
+                </div>
+            ` : article.matchedClients.length > 0 ? `
+                <div class="signal-feed-actions">
+                    <button class="btn btn-sm btn-brief-atl" onclick="openBriefATL('${escapeHtml(article.matchedClients[0].name)}')">📤 Brief ATL</button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+function toggleSignalFeedItem(btn) {
+    const item = btn.closest('.signal-feed-item');
+    if (!item) return;
+    
+    const isExpanded = item.classList.toggle('expanded');
+    btn.textContent = isExpanded ? 'Hide details' : 'Show IBM angle & talking points';
+}
+
+function filterByClient(clientName) {
+    signalFeedFilters.client = clientName;
+    
+    // Update chip active states
+    document.querySelectorAll('.client-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.dataset.client === clientName);
+    });
+    
+    renderSignalFeed();
+}
+
+function filterBySignalType(type) {
+    signalFeedFilters.signalType = type;
+    
+    // Update button active states
+    document.querySelectorAll('.signal-type-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.type === type);
+    });
+    
+    renderSignalFeed();
+}
+
+// Update switchMarket to work with Signal Feed
+function switchMarket(market) {
+    app.currentMarket = market;
+    signalFeedFilters.market = market;
+    
+    // Update tab active states
+    document.querySelectorAll('.market-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.market === market);
+    });
+    
+    renderSignalFeed();
+}
+
 function renderSynthesizedSignal(signal, rawSignal) {
     const articles = rawSignal.articles || [];
     const sourcesHtml = articles.length > 0 
@@ -6182,7 +6588,7 @@ function renderSynthesizedDeepRead(insight, article) {
                 <div class="deep-read-question"><strong>🎯 CxO Question:</strong> "${escapeHtml(insight.cxoQuestion || '')}"</div>
             </div>
             <div class="deep-read-item-action">
-                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${article.id || ''}')">🤖 Generate Deep Analysis</button>
+                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${article.id || ''}', this)">🤖 Generate Deep Analysis</button>
             </div>
         </div>
     `;
@@ -6206,7 +6612,7 @@ function renderCachedDeepRead(insight, articleData) {
             </div>
             ` : `<div class="deep-read-item-summary">${escapeHtml(insight.summary || article.summary || '')}</div>`}
             <div class="deep-read-item-action">
-                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${articleId}')">🤖 Generate Deep Analysis</button>
+                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${articleId}', this)">🤖 Generate Deep Analysis</button>
             </div>
         </div>
     `;
@@ -6222,7 +6628,7 @@ function renderBasicDeepRead(article) {
             <div class="deep-read-item-title">${escapeHtml(article.title)}</div>
             <div class="deep-read-item-summary">${escapeHtml(article.summary || '')}</div>
             <div class="deep-read-item-action">
-                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${article.id || ''}')">🤖 Generate Deep Analysis</button>
+                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${article.id || ''}', this)">🤖 Generate Deep Analysis</button>
             </div>
         </div>
     `;
@@ -6271,7 +6677,7 @@ window.openAppSettings = function() { app.openSettings(); };
 window.copyAllATLBriefs = function() { app.copyAllATLBriefs(); };
 window.exportBrief = function() { app.exportBrief(); };
 window.openGTMDigest = function() { app.openGTMDigest(); };
-window.deepReadArticle = function(id) { app.deepReadArticle(id); };
+window.deepReadArticle = function(id, btn) { app.deepReadArticle(id, btn); };
 window.openArticle = function(id) { app.openArticle(id); };
 window.rateArticle = function(id, rating, event) { app.rateArticle(id, rating, event); };
 window.openMeetingBrief = function(name) { app.openMeetingBrief(name); };
@@ -6280,3 +6686,10 @@ window.enableSource = function(url) { app.enableSource(url); };
 window.removeDisabledSource = function(url) { app.removeDisabledSource(url); };
 window.enableAllSources = function() { app.enableAllSources(); };
 window.copyStarter = function(i) { app.copyStarter(i); };
+
+// Signal Feed filters (Phase 2)
+window.filterByClient = filterByClient;
+window.filterBySignalType = filterBySignalType;
+window.switchMarket = switchMarket;
+window.toggleSignalFeedItem = toggleSignalFeedItem;
+window.openBriefATL = openBriefATL;

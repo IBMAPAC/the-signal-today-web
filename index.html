@@ -52,11 +52,22 @@
 
             <div id="digest-content" class="digest-content hidden">
                 
-                <!-- EXECUTIVE SUMMARY - 3 things to know today -->
+                <!-- PRIORITY 0: ACTION REQUIRED - Urgent items surfaced at top -->
+                <section id="action-required-section" class="card action-required-card hidden">
+                    <div class="card-header">
+                        <h2>🚨 Action Required</h2>
+                        <span id="action-required-count" class="badge badge-red">0</span>
+                    </div>
+                    <div id="action-required-content" class="card-body">
+                        <div id="action-required-list"></div>
+                    </div>
+                </section>
+
+                <!-- PRIORITY 1: TODAY'S BRIEF - 3 things to know today -->
                 <section id="executive-summary-section" class="card executive-summary-card">
                     <div class="card-header">
-                        <h2>🎯 Executive Summary</h2>
-                        <span class="badge badge-red">Top 3</span>
+                        <h2>📊 Today's Brief</h2>
+                        <span class="badge badge-blue">Top 3</span>
                     </div>
                     <div id="executive-summary-content" class="card-body">
                         <p class="executive-summary-intro">Synthesizing key insights...</p>
@@ -64,25 +75,14 @@
                     </div>
                 </section>
 
-                <!-- SECTION 1: TODAY'S SIGNALS -->
-                <section id="signals-section" class="card signals-card">
+                <!-- PRIORITY 2: UNIFIED SIGNAL FEED - Replaces Client Radar + All Signals -->
+                <section id="signal-feed-section" class="card signal-feed-card">
                     <div class="card-header">
-                        <h2>⚡ Today's Signals</h2>
-                        <span id="signals-count" class="badge">0</span>
-                    </div>
-                    <div id="signals-content" class="card-body">
-                        <p id="signals-intro" class="signals-intro">Generating intelligence brief...</p>
-                        <div id="signals-list"></div>
-                    </div>
-                </section>
-
-                <!-- SECTION 2: CLIENT RADAR -->
-                <section id="client-radar-section" class="card client-radar-card">
-                    <div class="card-header">
-                        <h2>📍 Client Radar</h2>
-                        <span id="client-signals-count" class="badge badge-purple">0</span>
+                        <h2>📡 Signal Feed</h2>
+                        <span id="signal-feed-count" class="badge badge-purple">0</span>
                     </div>
                     <div class="card-body">
+                        <!-- Market filter tabs -->
                         <div class="market-tabs">
                             <button class="market-tab active" data-market="ALL" onclick="switchMarket('ALL')">All</button>
                             <button class="market-tab" data-market="ANZ" onclick="switchMarket('ANZ')">ANZ</button>
@@ -91,31 +91,44 @@
                             <button class="market-tab" data-market="ISA" onclick="switchMarket('ISA')">ISA</button>
                             <button class="market-tab" data-market="KOREA" onclick="switchMarket('KOREA')">Korea</button>
                         </div>
-                        <div class="tier-filter">
-                            <label class="tier-filter-option"><input type="checkbox" id="filter-tier-1" checked onchange="filterClientRadar()"> Tier 1</label>
-                            <label class="tier-filter-option"><input type="checkbox" id="filter-tier-2" checked onchange="filterClientRadar()"> Tier 2</label>
-                            <label class="tier-filter-option"><input type="checkbox" id="filter-tier-3" onchange="filterClientRadar()"> Tier 3</label>
+                        
+                        <!-- Client chip filters - horizontal scroll -->
+                        <div id="client-chip-filters" class="client-chip-filters">
+                            <button class="client-chip active" data-client="ALL" onclick="filterByClient('ALL')">All Clients</button>
+                            <!-- Dynamic client chips inserted here -->
                         </div>
-                        <div id="client-radar-list"></div>
-                        <div id="client-radar-empty" class="client-radar-empty hidden">
-                            <p>No client signals in this market today.</p>
+                        
+                        <!-- Signal type quick filters -->
+                        <div class="signal-type-filters">
+                            <button class="signal-type-btn active" data-type="ALL" onclick="filterBySignalType('ALL')">All</button>
+                            <button class="signal-type-btn" data-type="risk" onclick="filterBySignalType('risk')">🔴 Risk</button>
+                            <button class="signal-type-btn" data-type="opportunity" onclick="filterBySignalType('opportunity')">🟢 Opportunity</button>
+                            <button class="signal-type-btn" data-type="competitive" onclick="filterBySignalType('competitive')">⚔️ Competitive</button>
+                            <button class="signal-type-btn" data-type="regulatory" onclick="filterBySignalType('regulatory')">🛡️ Regulatory</button>
+                        </div>
+                        
+                        <!-- Unified article feed -->
+                        <div id="signal-feed-list"></div>
+                        <div id="signal-feed-empty" class="signal-feed-empty hidden">
+                            <p>No signals match current filters.</p>
                         </div>
                     </div>
                 </section>
 
-                <!-- SECTION 3: ATL ENABLEMENT -->
+                <!-- PRIORITY 3: ATL ENABLEMENT - Market briefs (collapsible) -->
                 <section id="atl-enablement-section" class="card atl-enablement-card">
-                    <div class="card-header">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('atl-enablement')">
                         <h2>📢 ATL Enablement</h2>
-                        <button class="btn btn-sm btn-secondary" onclick="copyAllATLBriefs()" title="Copy all">📋 Copy All</button>
+                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyAllATLBriefs()" title="Copy all">📋 Copy All</button>
+                        <span class="chevron collapsed">▼</span>
                     </div>
-                    <div class="card-body">
-                        <p class="card-description">Key talking points for your 115 ATLs — copy to Slack</p>
+                    <div id="atl-enablement-content" class="card-body collapsed">
+                        <p class="card-description">Market-by-market talking points for your 115 ATLs</p>
                         <div id="atl-enablement-list"></div>
                     </div>
                 </section>
 
-                <!-- SECTION 4: DEEP READS -->
+                <!-- PRIORITY 4: DEEP READS - Weekend reading (collapsible) -->
                 <section id="deep-reads-section" class="card deep-reads-card">
                     <div class="card-header card-header--collapsible" onclick="toggleSection('deep-reads')">
                         <h2>📚 Deep Reads</h2>
@@ -123,7 +136,7 @@
                         <span class="chevron collapsed">▼</span>
                     </div>
                     <div id="deep-reads-content" class="card-body collapsed">
-                        <p class="card-description">Strategic perspectives for CxO conversations — weekend reading</p>
+                        <p class="card-description">Strategic perspectives for CxO conversations</p>
                         <div id="deep-reads-list"></div>
                     </div>
                 </section>
