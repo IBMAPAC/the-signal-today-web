@@ -490,6 +490,8 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 
 /* Source Management */
 .sources-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--cds-spacing-05); gap: var(--cds-spacing-04); flex-wrap: wrap; }
+.sources-actions { display: flex; gap: var(--cds-spacing-03); }
+.sources-actions .btn { min-height: var(--touch-min); min-width: var(--touch-min); padding: var(--cds-spacing-03) var(--cds-spacing-04); touch-action: manipulation; -webkit-tap-highlight-color: rgba(0,0,0,0.1); }
 .sources-search { flex: 1; min-width: 200px; max-width: 300px; }
 .sources-search input { width: 100%; padding: 0 var(--cds-spacing-05); height: var(--touch-min); border: none; border-bottom: 1px solid var(--cds-border-strong-01); background: var(--cds-field-01); color: var(--cds-text-primary); font-size: 16px; font-family: inherit; }
 .sources-search input:focus { outline: 2px solid var(--cds-focus); outline-offset: -2px; }

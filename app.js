@@ -4083,8 +4083,31 @@ function saveSettings() {
 }
 
 function resetSources() {
-    if (confirm('Reset all sources to defaults? This will remove any custom sources you added.')) {
-        app.sources = [...DEFAULT_SOURCES];
+    // iOS Safari can have issues with confirm() - wrap in try-catch
+    try {
+        const shouldReset = confirm('Reset all sources to defaults? This will remove any custom sources you added.');
+        if (shouldReset) {
+            // Ensure DEFAULT_SOURCES is available
+            if (typeof DEFAULT_SOURCES === 'undefined' || !Array.isArray(DEFAULT_SOURCES)) {
+                console.error('DEFAULT_SOURCES not available');
+                alert('Error: Could not load default sources. Please refresh the page.');
+                return;
+            }
+            
+            app.sources = JSON.parse(JSON.stringify(DEFAULT_SOURCES)); // Deep copy for iOS
+            app.saveToStorage();
+            renderSourcesList();
+            updateSourcesCount();
+            
+            // Use setTimeout for iOS alert reliability
+            setTimeout(() => {
+                alert(`Sources reset! Now showing ${app.sources.length} sources.`);
+            }, 100);
+        }
+    } catch (e) {
+        console.error('Reset sources error:', e);
+        // Fallback: just do the reset without confirm
+        app.sources = JSON.parse(JSON.stringify(DEFAULT_SOURCES));
         app.saveToStorage();
         renderSourcesList();
         updateSourcesCount();
