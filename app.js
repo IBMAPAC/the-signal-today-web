@@ -5303,31 +5303,106 @@ function cacheATLEnablement(briefs) {
 
 // Classify signal type based on article content
 function classifySignalType(article) {
-    const text = `${article.title} ${article.summary || ''}`.toLowerCase();
+    const text = ` ${(article.title || '')} ${article.summary || ''} `.toLowerCase();
     
-    // Risk signals
-    const riskKeywords = ['breach', 'hack', 'outage', 'lawsuit', 'fine', 'penalty', 'scandal', 'layoff', 'downturn', 'decline', 'warning', 'risk', 'threat', 'vulnerability', 'failure'];
-    if (riskKeywords.some(k => text.includes(k))) return 'risk';
+    // Helper: check if keyword matches as whole word or phrase
+    const hasKeyword = (keywords) => keywords.some(k => {
+        // For multi-word phrases, simple includes is fine
+        if (k.includes(' ')) return text.includes(k);
+        // For single words, check word boundaries
+        const pattern = new RegExp(`\\b${k}\\b`, 'i');
+        return pattern.test(text);
+    });
     
-    // Regulatory signals
-    const regulatoryKeywords = ['regulation', 'compliance', 'mandate', 'law', 'legislation', 'policy', 'apra', 'mas', 'pdpc', 'sebi', 'rbi', 'fsc', 'pipc', 'dora', 'ai act', 'gdpr'];
-    if (regulatoryKeywords.some(k => text.includes(k))) return 'regulatory';
+    // Risk signals - threats, breaches, failures (check first - highest priority)
+    const riskKeywords = [
+        'breach', 'breached', 'hack', 'hacked', 'hacking', 'cyberattack', 'cyber attack', 
+        'ransomware', 'malware', 'phishing', 'ddos',
+        'outage', 'downtime', 'failure', 'crash', 'crashed', 'disruption',
+        'lawsuit', 'sued', 'suing', 'litigation', 'legal action', 'class action',
+        'fine', 'fined', 'penalty', 'penalized', 'sanction', 'sanctioned',
+        'scandal', 'fraud', 'misconduct', 'investigation', 'probe', 'scrutiny',
+        'layoff', 'layoffs', 'job cuts', 'workforce reduction', 'restructuring', 'downsizing',
+        'downturn', 'decline', 'slump', 'losses', 'plunge', 'plunges',
+        'warning', 'warns', 'warned', 'caution', 'alert',
+        'risk', 'threat', 'vulnerable', 'vulnerability', 'exploit', 'security flaw',
+        'data leak', 'exposed', 'compromised', 'stolen'
+    ];
+    if (hasKeyword(riskKeywords)) return 'risk';
     
-    // Competitive signals
-    const competitiveKeywords = ['aws', 'azure', 'google cloud', 'microsoft', 'salesforce', 'oracle', 'sap', 'accenture', 'deloitte', 'servicenow', 'snowflake', 'databricks', 'openai', 'partnership', 'deal', 'contract'];
-    if (competitiveKeywords.some(k => text.includes(k))) return 'competitive';
+    // Regulatory signals - policy, compliance, government
+    const regulatoryKeywords = [
+        'regulation', 'regulations', 'regulatory', 'regulator', 'regulators',
+        'compliance', 'compliant', 'non-compliance', 'comply',
+        'mandate', 'mandates', 'mandated', 'mandatory', 'requirement',
+        'legislation', 'legislative', 'bill passes', 'new law', 'enacted',
+        'policy', 'policies', 'government', 'ministry', 'minister',
+        'guideline', 'guidelines', 'framework', 'standard', 'standards',
+        // APAC regulators (full names to avoid false positives)
+        'apra', 'asic', 'accc', 'oaic', 'australian regulator',
+        'monetary authority of singapore', 'imda', 'pdpc', 'singapore regulator',
+        'sebi', 'reserve bank of india', 'irdai', 'meity', 'indian regulator',
+        'korea fsc', 'korean regulator', 'kisa', 'pipc',
+        'hkma', 'hong kong regulator', 'sfc',
+        'bank indonesia', 'ojk', 'kominfo',
+        'bank negara malaysia',
+        // Global regulations
+        'dora regulation', 'ai act', 'eu ai act', 'gdpr', 'ccpa', 'sox compliance', 'basel',
+        'data protection', 'privacy law', 'data sovereignty', 'data localization', 'data residency'
+    ];
+    if (hasKeyword(regulatoryKeywords)) return 'regulatory';
     
-    // Relationship signals (executive changes, appointments)
-    const relationshipKeywords = ['appoints', 'names', 'ceo', 'cto', 'cio', 'ciso', 'executive', 'leadership', 'joins', 'departs', 'steps down', 'promoted'];
-    if (relationshipKeywords.some(k => text.includes(k))) return 'relationship';
+    // Competitive signals - competitor moves, market dynamics
+    const competitiveKeywords = [
+        // Major cloud/tech competitors (use full names where possible)
+        'amazon web services', 'azure', 'microsoft cloud', 'microsoft azure',
+        'google cloud', 'alibaba cloud', 'huawei cloud', 'tencent cloud',
+        // Enterprise software
+        'salesforce', 'oracle cloud', 'sap', 'workday', 'servicenow', 'snowflake', 'databricks',
+        // AI competitors
+        'openai', 'anthropic', 'google gemini', 'meta ai', 'nvidia',
+        // Consulting/SI competitors
+        'accenture', 'deloitte', 'pwc', 'kpmg', 'capgemini', 'infosys', 'tcs', 'wipro', 'cognizant',
+        // Deal signals
+        'partnership', 'partners with', 'partnering', 'strategic alliance',
+        'wins contract', 'awarded contract', 'wins deal', 'secures deal',
+        'acquisition', 'acquires', 'acquired', 'merger', 'merges', 'takeover',
+        'market share', 'competitive', 'competitor', 'rivals', 'versus', ' vs ',
+        'beats', 'overtakes', 'surpasses', 'outperforms'
+    ];
+    if (hasKeyword(competitiveKeywords)) return 'competitive';
     
-    // Opportunity signals
-    const opportunityKeywords = ['investment', 'funding', 'expansion', 'growth', 'launch', 'transform', 'modernize', 'upgrade', 'initiative', 'strategy', 'innovation', 'ai', 'cloud', 'digital'];
-    if (opportunityKeywords.some(k => text.includes(k))) return 'opportunity';
+    // Opportunity signals - growth, investment, transformation
+    const opportunityKeywords = [
+        'investment', 'investing', 'invests', 'invested', 'funding', 'funded', 'raises', 'raise capital',
+        'expansion', 'expands', 'expanding', 'growth', 'growing', 'grows',
+        'launch', 'launches', 'launched', 'unveils', 'announces', 'introduces', 'rolls out',
+        'transform', 'transformation', 'transforming', 'digital transformation',
+        'modernize', 'modernization', 'modernizing', 'upgrade', 'upgrades', 'revamp',
+        'initiative', 'strategy', 'strategic', 'roadmap', 'vision',
+        'innovation', 'innovative', 'innovates', 'breakthrough',
+        'pilot', 'pilots', 'proof of concept', 'trial',
+        'adoption', 'adopts', 'adopting', 'implements', 'deploys', 'rollout',
+        // Technology trends (more specific)
+        'artificial intelligence', 'machine learning', 'generative ai', 'genai', 'large language model',
+        'cloud migration', 'hybrid cloud', 'multi-cloud', 'cloud-native', 'cloud adoption',
+        'automation', 'automates', 'rpa', 'intelligent automation', 'hyperautomation',
+        'data platform', 'data fabric', 'data mesh', 'analytics platform', 'data strategy'
+    ];
     
-    // IBM-specific
-    const ibmKeywords = ['ibm', 'watsonx', 'red hat', 'openshift', 'instana', 'qradar'];
-    if (ibmKeywords.some(k => text.includes(k))) return 'ibm';
+    // IBM-specific - check BEFORE opportunity to correctly tag IBM news
+    const ibmKeywords = ['ibm', 'watsonx', 'watson', 'red hat', 'openshift', 'ansible', 'instana', 'qradar', 'turbonomic', 'apptio'];
+    if (hasKeyword(ibmKeywords)) return 'ibm';
+    
+    if (hasKeyword(opportunityKeywords)) return 'opportunity';
+    
+    // Relationship signals - executive changes
+    const relationshipKeywords = [
+        'appoints', 'appointed', 'names', 'named', 'new ceo', 'new cto', 'new cio', 'new cfo', 'new ciso',
+        'executive', 'leadership change', 'joins', 'joining', 'departs', 'departing', 
+        'steps down', 'promoted', 'promotion', 'hire', 'hires', 'hired'
+    ];
+    if (hasKeyword(relationshipKeywords)) return 'relationship';
     
     return 'general';
 }
@@ -5985,6 +6060,75 @@ let signalFeedFilters = {
 // Store enriched articles for filtering
 let signalFeedArticles = [];
 
+// Detect APAC markets from article content
+function detectMarketsFromContent(text) {
+    const markets = [];
+    const lowerText = ` ${text.toLowerCase()} `; // Add spaces for word boundary matching
+    
+    // Helper: check if any keyword matches
+    const hasAny = (keywords) => keywords.some(k => lowerText.includes(k.toLowerCase()));
+    
+    // ANZ - Australia, New Zealand
+    const anzKeywords = [
+        'australia', 'australian', 'sydney', 'melbourne', 'brisbane', 'perth', 'canberra', 'adelaide',
+        'apra', 'asic', 'accc', 'oaic', 'asx',
+        'new zealand', 'auckland', 'wellington', 'rbnz',
+        'commonwealth bank', 'westpac', 'anz bank', 'nab bank', 'macquarie',
+        'telstra', 'optus', 'woolworths', 'coles', 'qantas'
+    ];
+    if (hasAny(anzKeywords)) markets.push('ANZ');
+    
+    // ASEAN - Southeast Asia
+    const aseanKeywords = [
+        'singapore', 'singaporean', 'monetary authority of singapore', 'imda', 'pdpc', 'govtech singapore',
+        'malaysia', 'malaysian', 'kuala lumpur', 'bank negara', 'cyberjaya',
+        'indonesia', 'indonesian', 'jakarta', 'ojk', 'kominfo', 'bank indonesia',
+        'thailand', 'thai', 'bangkok', 'bank of thailand',
+        'vietnam', 'vietnamese', 'hanoi', 'ho chi minh', 'saigon',
+        'philippines', 'filipino', 'manila', 'bangko sentral',
+        'brunei', 'asean',
+        'dbs bank', 'ocbc', 'uob bank', 'grab', 'sea limited', 'gojek', 'shopee',
+        'singtel', 'starhub', 'maybank', 'cimb', 'public bank'
+    ];
+    if (hasAny(aseanKeywords)) markets.push('ASEAN');
+    
+    // GCG - Greater China (includes Hong Kong, Taiwan)
+    const gcgKeywords = [
+        'china', 'chinese', 'beijing', 'shanghai', 'shenzhen', 'guangzhou', 'hangzhou', 'chengdu',
+        'hong kong', 'hkma', 'hong kong regulator',
+        'taiwan', 'taiwanese', 'taipei',
+        'macau', 'greater china',
+        'alibaba', 'tencent', 'baidu', 'huawei', 'bytedance', 'xiaomi', 'jd.com',
+        'hsbc hong kong', 'bank of china', 'icbc', 'china construction bank',
+        'cathay pacific', 'china mobile', 'china telecom'
+    ];
+    if (hasAny(gcgKeywords)) markets.push('GCG');
+    
+    // ISA - India, South Asia
+    const isaKeywords = [
+        'india', 'indian', 'mumbai', 'delhi', 'new delhi', 'bangalore', 'bengaluru', 
+        'hyderabad', 'chennai', 'pune', 'kolkata', 'ahmedabad',
+        'reserve bank of india', 'sebi', 'irdai', 'npci', 'meity', 'upi',
+        'pakistan', 'sri lanka', 'bangladesh', 'nepal',
+        'tata', 'reliance', 'infosys', 'wipro', 'tcs', 'hcl tech', 'hdfc', 'icici', 
+        'axis bank', 'sbi', 'bharti airtel', 'jio', 'mahindra', 'bajaj'
+    ];
+    if (hasAny(isaKeywords)) markets.push('ISA');
+    
+    // KOREA
+    const koreaKeywords = [
+        'korea', 'korean', 'seoul', 'busan', 'south korea',
+        'korea fsc', 'korea fss', 'kisa', 'pipc',
+        'samsung', 'sk hynix', 'sk telecom', 'lg electronics', 'lg display',
+        'hyundai', 'kia', 'posco', 'naver', 'kakao',
+        'kdb', 'kb financial', 'shinhan', 'hana bank', 'woori',
+        'korean air', 'asiana', 'kt corporation', 'lotte'
+    ];
+    if (hasAny(koreaKeywords)) markets.push('KOREA');
+    
+    return markets;
+}
+
 function renderSignalFeed() {
     const list = document.getElementById('signal-feed-list');
     const countEl = document.getElementById('signal-feed-count');
@@ -6036,8 +6180,11 @@ function renderSignalFeed() {
     allArticles.forEach(article => {
         if (!article.id || articleIndex.has(article.id)) return;
         
-        // Signal type
-        const signalType = article.signalType || classifySignalType(article);
+        // Signal type - re-classify if 'background' or not set
+        let signalType = article.signalType;
+        if (!signalType || signalType === 'background' || signalType === 'general') {
+            signalType = classifySignalType(article);
+        }
         
         // Matched clients with tier info
         const matchedClients = (article.matchedClients || []).map(clientName => {
@@ -6049,7 +6196,14 @@ function renderSignalFeed() {
         }).filter(Boolean);
         
         // Markets from matched clients
-        const markets = [...new Set(matchedClients.map(c => c.market).filter(Boolean))];
+        const marketsFromClients = matchedClients.map(c => c.market).filter(Boolean);
+        
+        // Detect markets from article content (countries, cities, regulators)
+        const articleText = `${article.title} ${article.summary || ''}`.toLowerCase();
+        const marketsFromContent = detectMarketsFromContent(articleText);
+        
+        // Combine and deduplicate markets
+        const markets = [...new Set([...marketsFromClients, ...marketsFromContent])];
         
         // Get IBM angle and talking point from cached signals
         const matchedSignal = articleToSignal.get(article.id);
@@ -6134,15 +6288,16 @@ function renderSignalFeed() {
         { key: 'general', label: 'Information', emoji: '📰', description: 'Industry news and updates' }
     ];
     
-    // Map other types to general
+    // Map other types to appropriate categories
     const typeMapping = {
         'risk': 'risk',
         'opportunity': 'opportunity',
         'competitive': 'competitive',
         'regulatory': 'regulatory',
-        'relationship': 'general',
-        'ibm': 'general',
-        'general': 'general'
+        'relationship': 'general',  // Executive changes go to Information
+        'ibm': 'general',           // IBM news goes to Information
+        'general': 'general',
+        'background': 'general'     // Fallback to Information
     };
     
     // Group articles
@@ -6323,7 +6478,8 @@ function showMoreInCategory(categoryKey) {
         'regulatory': 'regulatory',
         'relationship': 'general',
         'ibm': 'general',
-        'general': 'general'
+        'general': 'general',
+        'background': 'general'
     };
     
     // Apply current filters
