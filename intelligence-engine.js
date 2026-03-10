@@ -642,22 +642,7 @@ class HybridIntelligenceEngine {
         // User content (not cached): Article details and clients (~50 tokens)
         // Savings: 90% discount on cached tokens after first call
         
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': this.apiKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-beta': 'prompt-caching-2024-07-31',
-                'anthropic-dangerous-direct-browser-access': 'true'
-            },
-            body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
-                max_tokens: 300,
-                system: [
-                    {
-                        type: "text",
-                        text: `You are analyzing articles for IBM APAC Field CTO (343 accounts).
+        const prompt = `You are analyzing articles for IBM APAC Field CTO (343 accounts).
 
 ANALYZE each article for:
 - Threat (0-100): Competitor at our client? Regulatory risk?
@@ -680,22 +665,28 @@ OUTPUT FORMAT (JSON only):
   "affectedClients": [],
   "affectedMarkets": [],
   "competitorActivity": "brief"
-}`,
-                        cache_control: { type: "ephemeral" }
-                    }
-                ],
-                messages: [
-                    {
-                        role: "user",
-                        content: `ARTICLE:
+}
+
+ARTICLE:
 ${article.title}
 ${truncatedSummary}${contextBlock}
 
 TOP CLIENTS: ${clientList || 'None'}
 
-Analyze this article using the rules above.`
-                    }
-                ]
+Analyze this article using the rules above.`;
+
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': this.apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 300,
+                messages: [{ role: 'user', content: prompt }]
             })
         });
 
