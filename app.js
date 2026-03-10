@@ -272,7 +272,7 @@ class SignalApp {
         this.articleRatings = {};
         this.sourceScoreDrift = {};
         this.failedSources = [];
-        this.debugMode = (typeof window !== 'undefined' && window.location) ? 
+        this.debugMode = (typeof window !== 'undefined' && window.location) ?
             new URLSearchParams(window.location.search).get('debug') === '1' : false;
         this.db = new SignalDB();
         
@@ -281,6 +281,10 @@ class SignalApp {
         this.clientManagerMarket = 'ALL';
         this.selectedClients = new Set();
         this.lastBriefATLText = '';
+        
+        // Intelligence Engine
+        this.intelligenceEngine = null;
+        this.intelligenceStats = null;
         
         this.init();
     }
@@ -292,6 +296,15 @@ class SignalApp {
 
             // Load settings, sources, clients, industries, ratings, drift from localStorage
             this.loadFromStorage();
+
+            // Initialize intelligence engine if API key available
+            const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+            if (apiKey && typeof HybridIntelligenceEngine !== 'undefined') {
+                this.intelligenceEngine = new HybridIntelligenceEngine(apiKey);
+                console.log('🧠 Hybrid Intelligence Engine initialized');
+            } else if (!apiKey) {
+                console.log('⚠️ Intelligence Engine disabled: No API key configured');
+            }
 
             // Migrate any articles still in localStorage → IDB (one-time)
             await this.db.migrateFromLocalStorage();
@@ -332,10 +345,11 @@ class SignalApp {
                 // (articles from older IDB versions may not have these properties)
                 if (this.articles.length > 0) {
                     console.log(`Re-scoring ${this.articles.length} cached articles for client matching...`);
-                    this.articles = this.scoreArticles(this.articles);
+                    this.articles = await this.scoreArticles(this.articles);
                 }
                 this.categorizeArticles();
                 this.renderDigest();
+                updateIntelligenceStats();
             }
             
             console.log(`📡 The Signal Today initialized with ${this.sources.length} sources`);
@@ -728,7 +742,7 @@ class SignalApp {
             this.showLoading(`Scoring ${dedupedArticles.length} articles...`);
             
             // Score articles
-            const scoredArticles = this.scoreArticles(dedupedArticles);
+            const scoredArticles = await this.scoreArticles(dedupedArticles);
             this.articles = scoredArticles
                 .filter(a => a.relevanceScore >= 0.1)
                 .sort((a, b) => b.relevanceScore - a.relevanceScore)
@@ -1528,11 +1542,41 @@ class SignalApp {
     // Scoring
     // ==========================================
 
-    scoreArticles(articles) {
+    async scoreArticles(articles) {
         // Compute and cache cross-references once; reused in rendering to avoid double computation
         this.crossRefs = this.detectCrossReferences(articles);
         
-        return articles.map(article => {
+        // Run intelligence analysis if engine available
+        console.log(`🧠 Analyzing ${articles.length} articles with Hybrid Intelligence...`);
+        const analyzedArticles = [];
+        
+        for (const article of articles) {
+            let enhancedArticle = article;
+            
+            // Run intelligence analysis
+            if (this.intelligenceEngine) {
+                try {
+                    enhancedArticle = await this.intelligenceEngine.analyzeArticle(
+                        article,
+                        this.clients,
+                        this.articles // Pass existing articles for context
+                    );
+                } catch (error) {
+                    console.warn(`Intelligence analysis failed for article ${article.id}:`, error);
+                    enhancedArticle = article; // Fallback to original
+                }
+            }
+            
+            analyzedArticles.push(enhancedArticle);
+        }
+        
+        // Get intelligence stats
+        if (this.intelligenceEngine) {
+            this.intelligenceStats = this.intelligenceEngine.getStats();
+            console.log('📊 Intelligence Stats:', this.intelligenceStats);
+        }
+        
+        return analyzedArticles.map(article => {
             const text = `${article.title} ${article.summary}`.toLowerCase();
             
             // Calculate scores
@@ -1606,6 +1650,35 @@ class SignalApp {
             const drift = this.sourceScoreDrift[article.sourceName] || 0;
             bd.drift = parseFloat(Math.max(-0.15, Math.min(0.15, drift)).toFixed(3));
             score += bd.drift;
+            
+            // Intelligence boost (from Hybrid Intelligence Engine)
+            bd.intelligence = 0;
+            if (article.intelligence && article.intelligence.isRelevant) {
+                const intel = article.intelligence;
+                
+                // High threat = high priority
+                if (intel.threatLevel >= 80) {
+                    bd.intelligence += 0.50; // Critical threat
+                } else if (intel.threatLevel >= 60) {
+                    bd.intelligence += 0.30; // Medium threat
+                }
+                
+                // High opportunity = high priority
+                if (intel.opportunityScore >= 70) {
+                    bd.intelligence += 0.40; // Strong opportunity
+                } else if (intel.opportunityScore >= 50) {
+                    bd.intelligence += 0.20; // Medium opportunity
+                }
+                
+                // Tier 3 semantic analysis = highest confidence boost
+                if (intel.tier === 3) {
+                    bd.intelligence *= 1.2; // 20% boost for semantic analysis
+                }
+                
+                bd.intelligenceTier = intel.tier;
+                bd.intelligenceConfidence = intel.confidence;
+                score += bd.intelligence;
+            }
             
             bd.total = parseFloat(Math.min(1, score).toFixed(3));
             article.scoreBreakdown = bd;
@@ -3979,6 +4052,36 @@ TOP READS
         const autoRefreshEl = document.getElementById('auto-refresh-time');
         if (autoRefreshEl) autoRefreshEl.value = this.settings.autoRefreshTime || '';
         
+        // Populate intelligence settings
+        const intelligenceEnabledEl = document.getElementById('intelligence-enabled');
+        if (intelligenceEnabledEl) {
+            intelligenceEnabledEl.checked = this.settings.intelligenceEnabled !== false;
+        }
+        
+        const costLimitEl = document.getElementById('intelligence-cost-limit');
+        if (costLimitEl) {
+            costLimitEl.value = this.settings.intelligenceCostLimit || 5.00;
+        }
+        
+        const minConfidenceEl = document.getElementById('intelligence-min-confidence');
+        const confidenceDisplayEl = document.getElementById('confidence-display');
+        if (minConfidenceEl) {
+            const confidence = this.settings.intelligenceMinConfidence || 0.7;
+            minConfidenceEl.value = confidence;
+            if (confidenceDisplayEl) {
+                confidenceDisplayEl.textContent = Math.round(confidence * 100) + '%';
+            }
+            // Update display on slider change
+            minConfidenceEl.oninput = function() {
+                if (confidenceDisplayEl) {
+                    confidenceDisplayEl.textContent = Math.round(this.value * 100) + '%';
+                }
+            };
+        }
+        
+        // Display intelligence stats in settings
+        this.renderIntelligenceStatsInSettings();
+        
         // Render industry settings
         this.renderIndustrySettings();
         
@@ -3989,6 +4092,54 @@ TOP READS
         currentSourceFilter = 'all';
         document.getElementById('sources-category-filter').value = 'all';
         renderSourcesList();
+
+    renderIntelligenceStatsInSettings() {
+        const container = document.getElementById('settings-intelligence-stats');
+        if (!container) return;
+        
+        const stats = this.intelligenceEngine?.getStats();
+        if (!stats) {
+            container.innerHTML = '<p class="form-hint">Intelligence engine not initialized</p>';
+            return;
+        }
+        
+        const costFormatted = stats.totalCost < 0.01 ? '<$0.01' : `$${stats.totalCost.toFixed(2)}`;
+        const avgCostPerArticle = stats.tier3Count > 0 
+            ? `$${(stats.totalCost / stats.tier3Count).toFixed(4)}`
+            : '$0.00';
+        
+        container.innerHTML = `
+            <div class="intelligence-stats-grid">
+                <div class="stat-item">
+                    <div class="stat-label">Total Articles Analyzed</div>
+                    <div class="stat-value">${stats.totalArticles}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Tier 1 (Keywords)</div>
+                    <div class="stat-value">${stats.tier1Count}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Tier 2 (Context)</div>
+                    <div class="stat-value">${stats.tier2Count}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Tier 3 (Semantic)</div>
+                    <div class="stat-value">${stats.tier3Count}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Total API Cost</div>
+                    <div class="stat-value">${costFormatted}</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">Avg Cost/Article</div>
+                    <div class="stat-value">${avgCostPerArticle}</div>
+                </div>
+            </div>
+            <p class="form-hint" style="margin-top: 12px;">
+                Stats reset monthly. Tier 3 uses Claude API (~$0.0002 per article).
+            </p>
+        `;
+    }
         updateSourcesCount();
         
         document.getElementById('settings-modal').classList.remove('hidden');
@@ -4103,6 +4254,22 @@ function saveSettings() {
         }
     }
     
+    // Save intelligence settings
+    const intelligenceEnabledEl = document.getElementById('intelligence-enabled');
+    if (intelligenceEnabledEl) {
+        app.settings.intelligenceEnabled = intelligenceEnabledEl.checked;
+    }
+    
+    const costLimitEl = document.getElementById('intelligence-cost-limit');
+    if (costLimitEl) {
+        app.settings.intelligenceCostLimit = parseFloat(costLimitEl.value) || 5.00;
+    }
+    
+    const minConfidenceEl = document.getElementById('intelligence-min-confidence');
+    if (minConfidenceEl) {
+        app.settings.intelligenceMinConfidence = parseFloat(minConfidenceEl.value) || 0.7;
+    }
+    
     // Save to storage
     app.saveToStorage();
     
@@ -4112,6 +4279,7 @@ function saveSettings() {
     // Re-render to apply any context changes
     if (app.articles.length > 0) {
         app.renderDigest();
+        updateIntelligenceStats();
     }
     
     console.log('✅ Settings saved');
@@ -6279,50 +6447,81 @@ function renderSignalFeed() {
     
     emptyEl?.classList.add('hidden');
     
-    // Step 6: Group by category
+    // Step 6: Group by category using Intelligence Engine
     const categories = [
-        { key: 'risk', label: 'Risk', emoji: '🔴', description: 'Threats requiring attention' },
-        { key: 'opportunity', label: 'Opportunity', emoji: '🟢', description: 'Growth and positioning opportunities' },
+        { key: 'risk', label: 'Risk', emoji: '🚨', description: 'Threats requiring immediate attention' },
         { key: 'competitive', label: 'Competitive', emoji: '⚔️', description: 'Competitor moves and market dynamics' },
         { key: 'regulatory', label: 'Regulatory', emoji: '🛡️', description: 'Policy, compliance, and governance' },
-        { key: 'general', label: 'Information', emoji: '📰', description: 'Industry news and updates' }
+        { key: 'opportunity', label: 'Opportunity', emoji: '💰', description: 'Growth and positioning opportunities' },
+        { key: 'information', label: 'Information', emoji: '📰', description: 'Industry news and updates' }
     ];
     
-    // Map other types to appropriate categories
-    const typeMapping = {
-        'risk': 'risk',
-        'opportunity': 'opportunity',
-        'competitive': 'competitive',
-        'regulatory': 'regulatory',
-        'relationship': 'general',  // Executive changes go to Information
-        'ibm': 'general',           // IBM news goes to Information
-        'general': 'general',
-        'background': 'general'     // Fallback to Information
-    };
-    
-    // Group articles
+    // Group articles using intelligence-based categorization
     const grouped = {};
     categories.forEach(cat => grouped[cat.key] = []);
     
     filtered.forEach(article => {
-        const mappedType = typeMapping[article.signalType] || 'general';
-        grouped[mappedType].push(article);
+        // Use SignalFeedIntegration for intelligent categorization
+        let category;
+        if (typeof SignalFeedIntegration !== 'undefined' && article.intelligence) {
+            const catInfo = SignalFeedIntegration.categorizeFromIntelligence(article);
+            category = catInfo.category;
+            // Store category info on article for rendering
+            article.intelligenceCategory = catInfo;
+        } else {
+            // Fallback to existing signal type mapping
+            const typeMapping = {
+                'risk': 'risk',
+                'opportunity': 'opportunity',
+                'competitive': 'competitive',
+                'regulatory': 'regulatory',
+                'relationship': 'information',
+                'ibm': 'information',
+                'general': 'information',
+                'background': 'information'
+            };
+            category = typeMapping[article.signalType] || 'information';
+        }
+        
+        if (grouped[category]) {
+            grouped[category].push(article);
+        } else {
+            // Fallback to information if category not found
+            grouped['information'].push(article);
+        }
     });
     
-    // Sort within each group: action items first, then by relevance
+    // Sort within each group: intelligence threat/opportunity first, then action items, then relevance
     Object.keys(grouped).forEach(key => {
         grouped[key].sort((a, b) => {
+            // Priority 1: Intelligence threat level (high threats first)
+            const aThreat = a.intelligence?.threatLevel || 0;
+            const bThreat = b.intelligence?.threatLevel || 0;
+            if (aThreat >= 80 || bThreat >= 80) {
+                if (aThreat !== bThreat) return bThreat - aThreat;
+            }
+            
+            // Priority 2: Intelligence opportunity score
+            const aOpp = a.intelligence?.opportunityScore || 0;
+            const bOpp = b.intelligence?.opportunityScore || 0;
+            if (aOpp >= 70 || bOpp >= 70) {
+                if (aOpp !== bOpp) return bOpp - aOpp;
+            }
+            
+            // Priority 3: Action items
             const aUrgent = a.actionType === 'ESCALATE' ? 2 : a.actionType === 'BRIEF_ATL' ? 1 : 0;
             const bUrgent = b.actionType === 'ESCALATE' ? 2 : b.actionType === 'BRIEF_ATL' ? 1 : 0;
             if (aUrgent !== bUrgent) return bUrgent - aUrgent;
+            
+            // Priority 4: Relevance score
             return (b.relevanceScore || 0) - (a.relevanceScore || 0);
         });
     });
     
     // Render grouped view
     // All categories collapsed by default, expand only when specific signal type is filtered
-    const expandedCategory = signalFeedFilters.signalType !== 'ALL' 
-        ? typeMapping[signalFeedFilters.signalType] || 'general'
+    const expandedCategory = signalFeedFilters.signalType !== 'ALL'
+        ? (signalFeedFilters.signalType === 'general' ? 'information' : signalFeedFilters.signalType)
         : null;
     
     list.innerHTML = categories.map(cat => {
@@ -6428,6 +6627,21 @@ function renderSignalFeedItem(article) {
                 ${marketTags}
             </div>
             
+            ${article.intelligence ? renderIntelligenceBadges(article.intelligence) : ''}
+            
+            ${article.intelligence?.reasoning ? `<div class="signal-intelligence-reasoning"><strong>Analysis:</strong> ${escapeHtml(article.intelligence.reasoning)}</div>` : ''}
+            
+            ${article.intelligence?.actionableInsights?.length > 0 ? `
+                <div class="signal-intelligence-actions">
+                    <strong>Actions:</strong>
+                    <ul>
+                        ${article.intelligence.actionableInsights.map(insight =>
+                            `<li>${escapeHtml(insight)}</li>`
+                        ).join('')}
+                    </ul>
+                </div>
+            ` : ''}
+            
             ${summaryText ? `<div class="signal-feed-summary">${escapeHtml(summaryText.substring(0, 200))}${summaryText.length > 200 ? '...' : ''}</div>` : ''}
             
             <div class="signal-feed-source">
@@ -6449,6 +6663,101 @@ function renderSignalFeedItem(article) {
             ` : ''}
         </div>
     `;
+
+/**
+ * Render intelligence badges for an article
+ * Shows tier, threat level, opportunity score, and confidence
+ */
+function renderIntelligenceBadges(intelligence) {
+    if (!intelligence || !intelligence.isRelevant) return '';
+    
+    const badges = [];
+    
+    // Tier badge
+    const tierColors = {
+        3: 'purple',  // Semantic analysis
+        2: 'blue',    // Context analysis
+        1: 'gray'     // Keyword filtering
+    };
+    const tierColor = tierColors[intelligence.tier] || 'gray';
+    badges.push(`<span class="intel-badge intel-tier intel-tier-${tierColor}" title="Analysis Tier ${intelligence.tier}">T${intelligence.tier}</span>`);
+    
+    // Threat badge
+    if (intelligence.threatLevel >= 60) {
+        const level = intelligence.threatLevel >= 80 ? 'high' : 'medium';
+        badges.push(`<span class="intel-badge intel-threat intel-threat-${level}" title="Threat Level">⚠️ ${intelligence.threatLevel}</span>`);
+    }
+    
+    // Opportunity badge
+    if (intelligence.opportunityScore >= 60) {
+        const level = intelligence.opportunityScore >= 70 ? 'high' : 'medium';
+        badges.push(`<span class="intel-badge intel-opportunity intel-opportunity-${level}" title="Opportunity Score">💰 ${intelligence.opportunityScore}</span>`);
+    }
+    
+    // Confidence badge (only for Tier 3 semantic analysis)
+    if (intelligence.tier === 3 && intelligence.confidence >= 0.8) {
+        badges.push(`<span class="intel-badge intel-confidence" title="Confidence Score">${Math.round(intelligence.confidence * 100)}%</span>`);
+    }
+    
+    return `<div class="intelligence-badges">${badges.join('')}</div>`;
+
+/**
+ * Update intelligence stats display in header
+ * Shows threat count, opportunity count, and API cost
+ */
+function updateIntelligenceStats() {
+    const statsContainer = document.getElementById('intelligence-stats');
+    if (!statsContainer) return;
+    
+    // Get intelligence engine stats
+    const stats = app.intelligenceEngine?.getStats();
+    if (!stats) {
+        statsContainer.classList.add('hidden');
+        return;
+    }
+    
+    // Count high-priority threats and opportunities from articles
+    let highThreats = 0;
+    let highOpportunities = 0;
+    
+    if (app.articles) {
+        app.articles.forEach(article => {
+            if (article.intelligence?.isRelevant) {
+                if (article.intelligence.threatLevel >= 70) highThreats++;
+                if (article.intelligence.opportunityScore >= 70) highOpportunities++;
+            }
+        });
+    }
+    
+    // Format cost
+    const costFormatted = stats.totalCost < 0.01 
+        ? '<$0.01' 
+        : `$${stats.totalCost.toFixed(2)}`;
+    
+    // Build stats HTML
+    const statsHtml = `
+        <div class="intel-stat">
+            <div class="intel-stat-label">Threats</div>
+            <div class="intel-stat-value threat">${highThreats}</div>
+        </div>
+        <div class="intel-stat">
+            <div class="intel-stat-label">Opportunities</div>
+            <div class="intel-stat-value opportunity">${highOpportunities}</div>
+        </div>
+        <div class="intel-stat">
+            <div class="intel-stat-label">Tier 3 Calls</div>
+            <div class="intel-stat-value">${stats.tier3Count}</div>
+        </div>
+        <div class="intel-stat">
+            <div class="intel-stat-label">API Cost</div>
+            <div class="intel-stat-value cost">${costFormatted}</div>
+        </div>
+    `;
+    
+    statsContainer.innerHTML = statsHtml;
+    statsContainer.classList.remove('hidden');
+}
+}
 }
 
 function toggleSignalFeedItem(btn) {

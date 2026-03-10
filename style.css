@@ -1083,3 +1083,279 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
     .card { break-inside: avoid; }
     a { color: black; text-decoration: underline; }
 }
+
+
+/* ===================================
+   Intelligence Badges & Categories
+   =================================== */
+
+/* Intelligence badges container */
+.intelligence-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+/* Base badge style */
+.intel-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+/* Tier badges */
+.intel-tier {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.intel-tier-purple {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.intel-tier-blue {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.intel-tier-gray {
+    background: linear-gradient(135deg, #868f96 0%, #596164 100%);
+}
+
+/* Threat badges */
+.intel-threat {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.intel-threat-high {
+    background: linear-gradient(135deg, #ff0844 0%, #ff6b6b 100%);
+    animation: pulse-threat 2s ease-in-out infinite;
+}
+
+.intel-threat-medium {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ffa07a 100%);
+}
+
+/* Opportunity badges */
+.intel-opportunity {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.intel-opportunity-high {
+    background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+    animation: pulse-opportunity 2s ease-in-out infinite;
+}
+
+.intel-opportunity-medium {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+/* Confidence badge */
+.intel-confidence {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Pulse animations for high priority items */
+@keyframes pulse-threat {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(255, 8, 68, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(255, 8, 68, 0);
+    }
+}
+
+@keyframes pulse-opportunity {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(0, 176, 155, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(0, 176, 155, 0);
+    }
+}
+
+/* Intelligence reasoning and actions */
+.signal-intelligence-reasoning {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(102, 126, 234, 0.1);
+    border-left: 3px solid #667eea;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #2c3e50;
+}
+
+.signal-intelligence-reasoning strong {
+    color: #667eea;
+    font-weight: 600;
+}
+
+.signal-intelligence-actions {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(17, 153, 142, 0.1);
+    border-left: 3px solid #11998e;
+    border-radius: 4px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #2c3e50;
+}
+
+.signal-intelligence-actions strong {
+    color: #11998e;
+    font-weight: 600;
+}
+
+.signal-intelligence-actions ul {
+    margin: 8px 0 0 0;
+    padding-left: 20px;
+}
+
+.signal-intelligence-actions li {
+    margin-bottom: 4px;
+}
+
+/* Intelligence stats in header */
+.intelligence-stats {
+    display: flex;
+    gap: 16px;
+    padding: 8px 16px;
+    background: rgba(102, 126, 234, 0.1);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+.intel-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.intel-stat-label {
+    font-size: 11px;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.intel-stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #2c3e50;
+}
+
+.intel-stat-value.threat {
+    color: #ff6b6b;
+}
+
+.intel-stat-value.opportunity {
+    color: #11998e;
+}
+
+.intel-stat-value.cost {
+    color: #667eea;
+}
+
+/* Hover effects */
+.intel-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .signal-intelligence-reasoning,
+    .signal-intelligence-actions {
+        background: rgba(102, 126, 234, 0.2);
+        color: #ecf0f1;
+    }
+    
+    .intelligence-stats {
+        background: rgba(102, 126, 234, 0.15);
+    }
+    
+    .intel-stat-value {
+        color: #ecf0f1;
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .intelligence-badges {
+        gap: 4px;
+    }
+    
+    .intel-badge {
+        font-size: 10px;
+        padding: 2px 6px;
+    }
+    
+    .intelligence-stats {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+}
+
+
+/* Intelligence Stats Grid in Settings */
+.intelligence-stats-display {
+    margin-top: 16px;
+    padding: 16px;
+    background: rgba(102, 126, 234, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.intelligence-stats-display h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #667eea;
+}
+
+.intelligence-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.intelligence-stats-grid .stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.intelligence-stats-grid .stat-label {
+    font-size: 11px;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.intelligence-stats-grid .stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #2c3e50;
+}
+
+@media (max-width: 768px) {
+    .intelligence-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
