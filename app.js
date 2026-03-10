@@ -2219,8 +2219,28 @@ Return ONLY valid JSON, no markdown fences:
             : 'a Tier 1 client';
         const sampleClient = tier1Clients.length > 0 ? tier1Clients[0] : 'a watchlist client';
 
-        const prompt = `You are the intelligence briefer for the Field CTO of IBM Asia Pacific.
-${contextBlock}
+        // PROMPT CACHING: Split into cached system prompt and dynamic user content
+        // System prompt (cached): All rules and instructions (~1500 tokens)
+        // User content (not cached): Articles and context (~1000 tokens)
+        // Savings: 90% discount on cached tokens after first call
+        
+        try {
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 3000,
+                    system: [
+                        {
+                            type: "text",
+                            text: `You are the intelligence briefer for the Field CTO of IBM Asia Pacific.
+
 YOUR JOB IS NOT TO SUMMARIZE NEWS. Answer these four questions:
 1. What should I BRING UP in client meetings today?
 2. What COMPETITIVE THREAT requires immediate attention?
@@ -2242,18 +2262,13 @@ CITATION RULES (strictly enforced):
 FRAMING RULES (strictly enforced):
 1. Frame EVERY insight as an ACTION, not information
 2. BAD: "Microsoft announced new Azure AI services"
-3. GOOD: "[AI WAVE] COMPETITIVE ALERT: Microsoft's Azure AI Foundry [Azure Blog](url) now offers
-   on-premises deployment — directly challenges IBM's hybrid cloud positioning. ACTION: Lead with
-   watsonx.ai's enterprise governance in your next ${sampleClients} conversation."
+3. GOOD: "[AI WAVE] COMPETITIVE ALERT: Microsoft's Azure AI Foundry [Azure Blog](url) now offers on-premises deployment — directly challenges IBM's hybrid cloud positioning. ACTION: Lead with watsonx.ai's enterprise governance in your next conversation."
 
 CLIENT INTELLIGENCE RULES:
 - Articles tagged with a Client name are watchlist client signals
-- For Tier 1 clients (${tier1ClientList}):
-  flag their signals explicitly in executiveSummary or the relevant section
-- If thisWeekContext mentions a client by name, that client's signals are MEETING PREP —
-  surface them first in executiveSummary
-- When a client article reveals a broader industry pattern, reference it in the
-  corresponding industrySignals entry as evidence (e.g. "${sampleClient}'s AI announcement signals...")
+- For Tier 1 clients: flag their signals explicitly in executiveSummary or the relevant section
+- If thisWeekContext mentions a client by name, that client's signals are MEETING PREP — surface them first in executiveSummary
+- When a client article reveals a broader industry pattern, reference it in the corresponding industrySignals entry as evidence
 
 INDUSTRY SIGNALS RULES:
 - Scan today's articles for each Tier 1 industry: Financial Services, Government, Manufacturing, Energy, Retail
@@ -2305,24 +2320,21 @@ Return ONLY valid JSON, no markdown fences:
             "salesAction": "Specific action for an ATL this week. Name a client account if relevant."
         }
     ]
-}
+}`,
+                            cache_control: { type: "ephemeral" }
+                        }
+                    ],
+                    messages: [
+                        {
+                            role: "user",
+                            content: `${contextBlock}
+Tier 1 Clients: ${tier1ClientList}
+Sample Clients for examples: ${sampleClients}
 
 Articles:
-${articleList}`;
-
-        try {
-            const response = await fetch('https://api.anthropic.com/v1/messages', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': apiKey,
-                    'anthropic-version': '2023-06-01',
-                    'anthropic-dangerous-direct-browser-access': 'true'
-                },
-                body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
-                    max_tokens: 3000,
-                    messages: [{ role: 'user', content: prompt }]
+${articleList}`
+                        }
+                    ]
                 })
             });
 
@@ -5413,33 +5425,15 @@ async function generateMarketSynthesis(activeMarkets, apiKey, listEl) {
         
         const articleSummaries = signals.map((s, i) => {
             const a = s.article;
-            return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nType: ${s.type}, Signal: ${s.signal}\nSummary: ${(a.summary || '').substring(0, 100)}`;
+            // OPTIMIZATION: Reduced from 100 to 75 chars (Package A)
+            return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nType: ${s.type}, Signal: ${s.signal}\nSummary: ${(a.summary || '').substring(0, 75)}`;
         }).join('\n\n');
         
-        const prompt = `You are briefing IBM APAC leaders on ${market} market intelligence.
-
-TODAY'S ${market} SIGNALS (market-exclusive):
-${articleSummaries}
-
-IMPORTANT: These articles are ONLY relevant to ${market} market. Do NOT reference other APAC markets.
-
-Write ONE synthesized paragraph (3-4 sentences) that:
-1. Opens with the key theme for ${market} this week
-2. Connects 2-3 of the articles into a coherent narrative
-3. Ends with a specific IBM positioning or action point for ${market}
-
-Rules:
-- Sound like a senior technical leader, not a news aggregator
-- Reference specific companies/regulators mentioned in the articles
-- Focus ONLY on ${market} market implications
-- Include ONE actionable takeaway for ${market} teams
-
-Return ONLY a JSON object:
-{
-  "synthesis": "Your 3-4 sentence synthesis here",
-  "keyMessage": "One-line key message for ${market} teams to remember"
-}`;
-
+        // PROMPT CACHING: Split into cached system prompt and dynamic user content
+        // System prompt (cached): All rules and instructions (~300 tokens)
+        // User content (not cached): Market name and articles (~200 tokens)
+        // Savings: 90% discount on cached tokens after first call
+        
         try {
             const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
@@ -5452,7 +5446,42 @@ Return ONLY a JSON object:
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-20250514',
                     max_tokens: 300,
-                    messages: [{ role: 'user', content: prompt }]
+                    system: [
+                        {
+                            type: "text",
+                            text: `You are briefing IBM APAC leaders on market intelligence.
+
+Write ONE synthesized paragraph (3-4 sentences) that:
+1. Opens with the key theme for the market this week
+2. Connects 2-3 of the articles into a coherent narrative
+3. Ends with a specific IBM positioning or action point for the market
+
+Rules:
+- Sound like a senior technical leader, not a news aggregator
+- Reference specific companies/regulators mentioned in the articles
+- Focus ONLY on the specified market implications
+- Include ONE actionable takeaway for market teams
+- Do NOT reference other APAC markets
+
+Return ONLY a JSON object:
+{
+  "synthesis": "Your 3-4 sentence synthesis here",
+  "keyMessage": "One-line key message for market teams to remember"
+}`,
+                            cache_control: { type: "ephemeral" }
+                        }
+                    ],
+                    messages: [
+                        {
+                            role: "user",
+                            content: `Market: ${market}
+
+TODAY'S ${market} SIGNALS (market-exclusive):
+${articleSummaries}
+
+IMPORTANT: These articles are ONLY relevant to ${market} market.`
+                        }
+                    ]
                 })
             });
             

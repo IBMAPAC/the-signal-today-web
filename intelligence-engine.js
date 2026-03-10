@@ -497,16 +497,18 @@ class HybridIntelligenceEngine {
 
     /**
      * Determine if article should undergo semantic analysis
-     * 
+     * OPTIMIZATION: Smart Tier 3 triggering to reduce API calls by ~50%
+     *
      * @param {Object} article - Article to check
      * @param {Object} tier2Result - Results from Tier 2
      * @param {Array} clients - List of clients
      * @returns {boolean} Whether to run semantic analysis
      */
     shouldRunSemanticAnalysis(article, tier2Result, clients) {
-        // Run semantic analysis if:
+        // OPTIMIZATION: More aggressive filtering to skip low-value articles
+        // Target: Skip ~50% of articles while keeping all high-value ones
         
-        // 1. Tier 1 client mentioned
+        // 1. ALWAYS analyze: Tier 1 client mentioned
         if (tier2Result.entities.clients.some(c => {
             const client = clients.find(cl => cl.name === c);
             return client && client.tier === 1;
@@ -514,21 +516,50 @@ class HybridIntelligenceEngine {
             return true;
         }
         
-        // 2. High threat or opportunity from Tier 2
+        // 2. ALWAYS analyze: High threat or opportunity from Tier 2
         if (tier2Result.threatLevel >= 70 || tier2Result.opportunityScore >= 70) {
             return true;
         }
         
-        // 3. Ambiguous confidence (needs deeper analysis)
-        if (tier2Result.confidence >= 0.60 && tier2Result.confidence < 0.85) {
+        // 3. ALWAYS analyze: Competitor + client co-occurrence (competitive threat)
+        const hasCompetitor = tier2Result.entities.competitors.length > 0;
+        const hasClient = tier2Result.entities.clients.length > 0;
+        if (hasCompetitor && hasClient) {
             return true;
         }
         
-        // 4. High relevance score from Tier 1
-        if (article.relevanceScore && article.relevanceScore > 80) {
+        // 4. ALWAYS analyze: Regulatory keywords detected
+        const text = `${article.title} ${article.summary}`.toLowerCase();
+        const hasRegulatory = this.keywordPatterns.regulatory.some(kw => text.includes(kw));
+        if (hasRegulatory) {
             return true;
         }
         
+        // 5. SKIP: Low confidence + low scores (not worth deep analysis)
+        if (tier2Result.confidence < 0.70 &&
+            tier2Result.threatLevel < 50 &&
+            tier2Result.opportunityScore < 50) {
+            return false;
+        }
+        
+        // 6. SKIP: No entities detected (generic article)
+        if (tier2Result.entities.clients.length === 0 &&
+            tier2Result.entities.competitors.length === 0 &&
+            tier2Result.entities.markets.length === 0) {
+            return false;
+        }
+        
+        // 7. ANALYZE: High Tier 2 entity score (strong signal)
+        if (tier2Result.confidence >= 0.80) {
+            return true;
+        }
+        
+        // 8. ANALYZE: Very high relevance score from Tier 1
+        if (article.relevanceScore && article.relevanceScore > 85) {
+            return true;
+        }
+        
+        // Default: Skip (conservative approach to save costs)
         return false;
     }
 
@@ -601,45 +632,15 @@ class HybridIntelligenceEngine {
             ? `\nContext: ${relatedArticles.map(a => a.title).join('; ')}`
             : '';
 
-        // TOKEN OPTIMIZATION: Condensed prompt (reduced from ~400 to ~250 tokens)
-        const prompt = `Analyze for IBM APAC Field CTO (343 accounts):
-
-ARTICLE:
-${article.title}
-${article.summary || 'No summary'}${contextBlock}
-
-TOP CLIENTS: ${clientList || 'None'}
-
-ANALYZE:
-- Threat (0-100): Competitor at our client? Regulatory risk?
-- Opportunity (0-100): Competitor issue? Market opening?
-- Reasoning: Which clients/markets affected?
-- Actions: What to do TODAY?
-
-RULES:
-- Competitor + our client = 90+ threat
-- Regulatory change = 80+ threat
-- Competitor problem = 70+ opportunity
-
-JSON only:
-{
-  "threatLevel": 0-100,
-  "opportunityScore": 0-100,
-  "confidence": 0.95,
-  "reasoning": "brief with names",
-  "actionableInsights": ["action1","action2"],
-  "affectedClients": [],
-  "affectedMarkets": [],
-  "competitorActivity": "brief"
-}`;
-
         // TOKEN OPTIMIZATION: Truncate long summaries to reduce input tokens
         const truncatedSummary = article.summary
             ? (article.summary.length > 300 ? article.summary.substring(0, 300) + '...' : article.summary)
             : 'No summary';
         
-        // Update prompt with truncated summary
-        const optimizedPrompt = prompt.replace(article.summary || 'No summary', truncatedSummary);
+        // PROMPT CACHING: Split into cached system prompt and dynamic user content
+        // System prompt (cached): Rules and analysis framework (~200 tokens)
+        // User content (not cached): Article details and clients (~50 tokens)
+        // Savings: 90% discount on cached tokens after first call
         
         const response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
@@ -651,8 +652,49 @@ JSON only:
             },
             body: JSON.stringify({
                 model: 'claude-sonnet-4-20250514',
-                max_tokens: 300, // Reduced from 500 to 300 (sufficient for JSON response)
-                messages: [{ role: 'user', content: optimizedPrompt }]
+                max_tokens: 300,
+                system: [
+                    {
+                        type: "text",
+                        text: `You are analyzing articles for IBM APAC Field CTO (343 accounts).
+
+ANALYZE each article for:
+- Threat (0-100): Competitor at our client? Regulatory risk?
+- Opportunity (0-100): Competitor issue? Market opening?
+- Reasoning: Which clients/markets affected?
+- Actions: What to do TODAY?
+
+SCORING RULES:
+- Competitor + our client = 90+ threat
+- Regulatory change = 80+ threat
+- Competitor problem = 70+ opportunity
+
+OUTPUT FORMAT (JSON only):
+{
+  "threatLevel": 0-100,
+  "opportunityScore": 0-100,
+  "confidence": 0.95,
+  "reasoning": "brief with names",
+  "actionableInsights": ["action1","action2"],
+  "affectedClients": [],
+  "affectedMarkets": [],
+  "competitorActivity": "brief"
+}`,
+                        cache_control: { type: "ephemeral" }
+                    }
+                ],
+                messages: [
+                    {
+                        role: "user",
+                        content: `ARTICLE:
+${article.title}
+${truncatedSummary}${contextBlock}
+
+TOP CLIENTS: ${clientList || 'None'}
+
+Analyze this article using the rules above.`
+                    }
+                ]
             })
         });
 
