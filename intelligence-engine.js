@@ -575,13 +575,13 @@ class HybridIntelligenceEngine {
             throw new Error('API key not configured');
         }
 
-        // Build context from existing articles
+        // TOKEN OPTIMIZATION: Limit context to reduce input tokens
+        // Only include 2 most relevant articles (was 3)
         const relatedArticles = existingArticles
             .filter(a => {
                 if (!a.intelligence) return false;
-                // Find articles about same competitor or client
                 const sameCompetitor = a.intelligence.entities?.competitors?.some(c =>
-                    article.title.toLowerCase().includes(c) || 
+                    article.title.toLowerCase().includes(c) ||
                     article.summary.toLowerCase().includes(c)
                 );
                 const sameClient = a.intelligence.entities?.clients?.some(c =>
@@ -590,55 +590,57 @@ class HybridIntelligenceEngine {
                 );
                 return sameCompetitor || sameClient;
             })
-            .slice(0, 3);
+            .slice(0, 2); // Reduced from 3 to 2
 
+        // TOKEN OPTIMIZATION: Limit to top 5 Tier 1 clients (was 10)
         const tier1Clients = clients.filter(c => c.tier === 1).map(c => c.name);
-        const clientList = tier1Clients.slice(0, 10).join(', ');
+        const clientList = tier1Clients.slice(0, 5).join(', ');
         
+        // TOKEN OPTIMIZATION: Shorter context block
         const contextBlock = relatedArticles.length > 0
-            ? `\n\nRELATED CONTEXT (recent articles):\n${relatedArticles.map(a => 
-                `- ${a.title} (${a.sourceName})`
-              ).join('\n')}`
+            ? `\nContext: ${relatedArticles.map(a => a.title).join('; ')}`
             : '';
 
-        const prompt = `You are an intelligence analyst for the Field CTO of IBM Asia Pacific managing 343 accounts.
+        // TOKEN OPTIMIZATION: Condensed prompt (reduced from ~400 to ~250 tokens)
+        const prompt = `Analyze for IBM APAC Field CTO (343 accounts):
 
-ARTICLE TO ANALYZE:
-Title: ${article.title}
-Source: ${article.sourceName}
-Summary: ${article.summary || 'No summary available'}
-URL: ${article.url}
-${contextBlock}
+ARTICLE:
+${article.title}
+${article.summary || 'No summary'}${contextBlock}
 
-YOUR TIER 1 CLIENTS: ${clientList || 'No Tier 1 clients configured'}
+TOP CLIENTS: ${clientList || 'None'}
 
-ANALYZE THIS ARTICLE:
-1. Threat Level (0-100): Is this a competitive threat? Are competitors targeting our clients?
-2. Opportunity Score (0-100): Is this an opportunity for IBM?
-3. Reasoning: Why? Be specific about which clients/markets are affected.
-4. Actionable Insights: What should the Field CTO do TODAY?
+ANALYZE:
+- Threat (0-100): Competitor at our client? Regulatory risk?
+- Opportunity (0-100): Competitor issue? Market opening?
+- Reasoning: Which clients/markets affected?
+- Actions: What to do TODAY?
 
-CRITICAL RULES:
-- If a competitor is mentioned with one of our Tier 1 clients → Threat Level = 90+
-- If regulatory change affects a market where we have clients → Threat Level = 80+
-- If competitor has issues/problems → Opportunity Score = 70+
-- Be specific: name clients, competitors, markets
+RULES:
+- Competitor + our client = 90+ threat
+- Regulatory change = 80+ threat
+- Competitor problem = 70+ opportunity
 
-Return ONLY valid JSON:
+JSON only:
 {
-    "threatLevel": 0-100,
-    "opportunityScore": 0-100,
-    "confidence": 0.95,
-    "reasoning": "one sentence explanation with specific client/competitor names",
-    "actionableInsights": [
-        "Specific action 1",
-        "Specific action 2"
-    ],
-    "affectedClients": ["client names if any"],
-    "affectedMarkets": ["market names if any"],
-    "competitorActivity": "brief description if competitor mentioned"
+  "threatLevel": 0-100,
+  "opportunityScore": 0-100,
+  "confidence": 0.95,
+  "reasoning": "brief with names",
+  "actionableInsights": ["action1","action2"],
+  "affectedClients": [],
+  "affectedMarkets": [],
+  "competitorActivity": "brief"
 }`;
 
+        // TOKEN OPTIMIZATION: Truncate long summaries to reduce input tokens
+        const truncatedSummary = article.summary
+            ? (article.summary.length > 300 ? article.summary.substring(0, 300) + '...' : article.summary)
+            : 'No summary';
+        
+        // Update prompt with truncated summary
+        const optimizedPrompt = prompt.replace(article.summary || 'No summary', truncatedSummary);
+        
         const response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -649,8 +651,8 @@ Return ONLY valid JSON:
             },
             body: JSON.stringify({
                 model: 'claude-sonnet-4-20250514',
-                max_tokens: 500,
-                messages: [{ role: 'user', content: prompt }]
+                max_tokens: 300, // Reduced from 500 to 300 (sufficient for JSON response)
+                messages: [{ role: 'user', content: optimizedPrompt }]
             })
         });
 
