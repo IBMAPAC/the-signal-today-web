@@ -2390,11 +2390,12 @@ ${articleList}`;
         // PHASE 2 LAYOUT:
         // 0. Action Required — Urgent ESCALATE/BRIEF_ATL items at top
         // 1. Today's Brief — 3 key insights (AI-synthesized)
-        // 2. Signal Feed — Unified view (replaces Client Radar + All Signals)
-        // 3. Market Insights — Market-specific briefs (collapsed)
+        // 2. Market Insights — Market-specific briefs (collapsed)
+        // 3. Signal Feed — Unified view (replaces Client Radar + All Signals)
         // 4. Deep Reads — Weekend reading (collapsed)
         
         // Generate signals first (async), then extract Action Required and build Signal Feed
+        // Pass forceRefresh to ensure Action Required updates on refresh
         renderTodaysSignals(forceRefresh).then(() => {
             renderActionRequired();
             renderSignalFeed();
@@ -5349,12 +5350,18 @@ function renderMarketInsights(forceRefresh = false) {
         });
     });
     
-    // Filter to markets with signals
+    // Show all 5 markets, even if some have 0 signals
     const activeMarkets = Object.entries(marketSignals)
-        .filter(([_, signals]) => signals.length > 0)
-        .map(([market, signals]) => ({ market, signals: signals.slice(0, 5) }));
+        .map(([market, signals]) => ({
+            market,
+            signals: signals.slice(0, 5),
+            hasSignals: signals.length > 0
+        }));
     
-    if (activeMarkets.length === 0) {
+    // Check if ANY market has signals
+    const hasAnySignals = activeMarkets.some(m => m.hasSignals);
+    
+    if (!hasAnySignals) {
         list.innerHTML = '<p class="card-description">No market signals today. Click Refresh to fetch latest articles.</p>';
         return;
     }
@@ -5364,15 +5371,18 @@ function renderMarketInsights(forceRefresh = false) {
     
     if (!apiKey) {
         // Without API: Show article list with sources
-        const briefs = activeMarkets.map(({ market, signals }) => ({
+        const briefs = activeMarkets.map(({ market, signals, hasSignals }) => ({
             market,
-            synthesis: `${signals.length} signals detected for ${market} market today.`,
+            synthesis: hasSignals
+                ? `${signals.length} signals detected for ${market} market today.`
+                : `No signals detected for ${market} market today.`,
             sources: signals.map(s => ({
                 title: s.article.title,
                 url: s.article.url,
                 source: s.article.source || s.article.sourceName
             })),
-            copyText: generateMarketCopyText(market, signals)
+            copyText: hasSignals ? generateMarketCopyText(market, signals) : `No signals for ${market} today.`,
+            hasSignals
         }));
         
         list.innerHTML = briefs.map(renderMarketBriefCard).join('');
@@ -5388,7 +5398,19 @@ function renderMarketInsights(forceRefresh = false) {
 async function generateMarketSynthesis(activeMarkets, apiKey, listEl) {
     const briefs = [];
     
-    for (const { market, signals } of activeMarkets) {
+    for (const { market, signals, hasSignals } of activeMarkets) {
+        // Skip AI synthesis for markets with no signals
+        if (!hasSignals) {
+            briefs.push({
+                market,
+                synthesis: `No signals detected for ${market} market today.`,
+                sources: [],
+                copyText: `No signals for ${market} today.`,
+                hasSignals: false
+            });
+            continue;
+        }
+        
         const articleSummaries = signals.map((s, i) => {
             const a = s.article;
             return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nType: ${s.type}, Signal: ${s.signal}\nSummary: ${(a.summary || '').substring(0, 100)}`;
@@ -5510,19 +5532,24 @@ function renderMarketBriefCard(brief) {
         `<a href="${s.url || '#'}" target="_blank" class="market-source-link">${escapeHtml(s.title)}</a> <span class="market-source-name">(${escapeHtml(s.source || 'Source')})</span>`
     ).join('<br>');
     
+    const hasSignals = brief.hasSignals !== false && (brief.sources?.length || 0) > 0;
+    const opacityClass = hasSignals ? '' : ' market-brief-empty';
+    
     return `
-        <div class="market-brief" data-copy-text="${escapeHtml(brief.copyText || '')}">
+        <div class="market-brief${opacityClass}" data-copy-text="${escapeHtml(brief.copyText || '')}">
             <div class="market-brief-header">
                 <span class="market-brief-market">${brief.market}</span>
                 <span class="market-brief-count">${brief.sources?.length || 0} signals</span>
-                <button class="market-brief-copy" onclick="copyMarketBrief(this, '${brief.market}')" title="Copy to clipboard">📋</button>
+                ${hasSignals ? `<button class="market-brief-copy" onclick="copyMarketBrief(this, '${brief.market}')" title="Copy to clipboard">📋</button>` : ''}
             </div>
             <div class="market-brief-synthesis">${escapeHtml(brief.synthesis || '')}</div>
             ${brief.keyMessage ? `<div class="market-brief-key-message">💡 <strong>Key Message:</strong> ${escapeHtml(brief.keyMessage)}</div>` : ''}
+            ${hasSignals ? `
             <div class="market-brief-sources">
                 <span class="market-sources-label">Sources:</span>
                 ${sourcesHtml}
             </div>
+            ` : ''}
         </div>
     `;
 }

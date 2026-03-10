@@ -77,7 +77,20 @@
                     </div>
                 </section>
 
-                <!-- PRIORITY 2: UNIFIED SIGNAL FEED (collapsible, collapsed) -->
+                <!-- PRIORITY 2: MARKET INSIGHTS - Market-specific briefs (collapsible, collapsed) -->
+                <section id="market-insights-section" class="card market-insights-card">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('market-insights')">
+                        <h2>📢 Market Insights</h2>
+                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyAllMarketBriefs()" title="Copy all">📋 Copy All</button>
+                        <span class="chevron collapsed">▼</span>
+                    </div>
+                    <div id="market-insights-content" class="card-body collapsed">
+                        <p class="card-description">Market-specific intelligence for APAC regions</p>
+                        <div id="market-insights-list"></div>
+                    </div>
+                </section>
+
+                <!-- PRIORITY 3: UNIFIED SIGNAL FEED (collapsible, collapsed) -->
                 <section id="signal-feed-section" class="card signal-feed-card">
                     <div class="card-header card-header--collapsible" onclick="toggleSection('signal-feed')">
                         <h2>📡 Signal Feed</h2>
@@ -106,19 +119,6 @@
                         <div id="signal-feed-empty" class="signal-feed-empty hidden">
                             <p>No signals match current filters.</p>
                         </div>
-                    </div>
-                </section>
-
-                <!-- PRIORITY 3: MARKET INSIGHTS - Market-specific briefs (collapsible, collapsed) -->
-                <section id="market-insights-section" class="card market-insights-card">
-                    <div class="card-header card-header--collapsible" onclick="toggleSection('market-insights')">
-                        <h2>📢 Market Insights</h2>
-                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyAllMarketBriefs()" title="Copy all">📋 Copy All</button>
-                        <span class="chevron collapsed">▼</span>
-                    </div>
-                    <div id="market-insights-content" class="card-body collapsed">
-                        <p class="card-description">Market-specific intelligence for APAC regions</p>
-                        <div id="market-insights-list"></div>
                     </div>
                 </section>
 
