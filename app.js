@@ -1655,6 +1655,20 @@ class SignalApp {
                 score += bd.client;
                 article.matchedClient = topClient;
                 article.matchedClients = allClients; // Array for rendering
+                
+                // Update "Last Signal" timestamp for all matched clients
+                for (const clientName of allClients) {
+                    const client = this.clients.find(c =>
+                        (typeof c === 'string' ? c : c.name) === clientName
+                    );
+                    if (client && typeof client === 'object') {
+                        const articleDate = new Date(article.publishedDate);
+                        // Only update if this article is newer than the last recorded signal
+                        if (!client.lastMentioned || articleDate > new Date(client.lastMentioned)) {
+                            client.lastMentioned = article.publishedDate;
+                        }
+                    }
+                }
             }
             
             // Cross-reference boost
