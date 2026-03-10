@@ -4092,6 +4092,10 @@ TOP READS
         currentSourceFilter = 'all';
         document.getElementById('sources-category-filter').value = 'all';
         renderSourcesList();
+        updateSourcesCount();
+        
+        document.getElementById('settings-modal').classList.remove('hidden');
+    }
 
     renderIntelligenceStatsInSettings() {
         const container = document.getElementById('settings-intelligence-stats');
@@ -4139,10 +4143,6 @@ TOP READS
                 Stats reset monthly. Tier 3 uses Claude API (~$0.0002 per article).
             </p>
         `;
-    }
-        updateSourcesCount();
-        
-        document.getElementById('settings-modal').classList.remove('hidden');
     }
 
     renderIndustrySettings() {

@@ -257,6 +257,16 @@ class HybridIntelligenceEngine {
                     break;
                 }
             }
+        }
+        
+        return {
+            isRelevant,
+            relevanceScore,
+            patterns,
+            tier: 1
+        };
+    }
+    
     // ══════════════════════════════════════════════════════════════════════════
     // TIER 2: CONTEXT ANALYSIS (Medium, 5ms, Free)
     // ══════════════════════════════════════════════════════════════════════════
@@ -639,11 +649,6 @@ Return ONLY valid JSON:
         };
     }
 
-        }
-
-        return { isRelevant, patterns, relevanceScore };
-    }
-
     // ══════════════════════════════════════════════════════════════════════════
     // UTILITY METHODS
     // ══════════════════════════════════════════════════════════════════════════
@@ -656,7 +661,27 @@ Return ONLY valid JSON:
         return {
             ...this.stats,
             tier1PassRate: this.stats.tier2Processed / Math.max(this.stats.tier1Processed, 1),
-            tier2PassRate: this.stats.tier3Processed / Math.max(this.stats.tier2Processed, 1),
+            tier2PassRate: this.stats.tier3Processed / Math.max(this.stats.tier2Processed, 1)
+        };
+    }
+
+    /**
+     * Reset statistics
+     */
+    resetStats() {
+        this.stats = {
+            totalArticles: 0,
+            tier1Processed: 0,
+            tier2Processed: 0,
+            tier3Processed: 0,
+            tier1Count: 0,
+            tier2Count: 0,
+            tier3Count: 0,
+            tier3Cost: 0,
+            totalCost: 0
+        };
+    }
+}
 
 // =============================================
 // SignalFeedIntegration
@@ -892,45 +917,6 @@ class SignalFeedIntegration {
      */
     static getCategoryOrder() {
         return ['risk', 'competitive', 'regulatory', 'opportunity', 'information'];
-    }
-}
-
-            avgCostPerArticle: this.stats.tier3Cost / Math.max(this.stats.tier1Processed, 1),
-            totalCost: this.stats.tier3Cost,
-            projectedMonthlyCost: this.stats.tier3Cost * 30 // Assuming daily refresh
-        };
-    }
-
-    /**
-     * Reset statistics (call at start of each day)
-     */
-    resetStats() {
-        this.stats = {
-            tier1Processed: 0,
-            tier2Processed: 0,
-            tier3Processed: 0,
-            tier3Cost: 0,
-            lastReset: new Date().toISOString()
-        };
-    }
-
-    /**
-     * Clear all caches
-     */
-    clearCache() {
-        this.embeddingCache.clear();
-        this.analysisCache.clear();
-    }
-
-    /**
-     * Get cache size
-     * @returns {Object} Cache sizes
-     */
-    getCacheSize() {
-        return {
-            embeddingCache: this.embeddingCache.size,
-            analysisCache: this.analysisCache.size
-        };
     }
 }
 
