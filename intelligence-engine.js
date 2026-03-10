@@ -96,6 +96,14 @@ class HybridIntelligenceEngine {
     async analyzeArticle(article, clients, existingArticles = []) {
         const startTime = Date.now();
         
+        // PERFORMANCE OPTIMIZATION: Check article hash cache
+        const articleHash = `${article.id}-${article.title}-${article.publishedDate}`;
+        if (this.analysisCache.has(articleHash)) {
+            const cached = this.analysisCache.get(articleHash);
+            cached.processingTime = Date.now() - startTime; // Update timing
+            return { ...article, intelligence: cached };
+        }
+        
         // Initialize analysis result
         const analysis = {
             tier: 0,
@@ -177,6 +185,16 @@ class HybridIntelligenceEngine {
         }
 
         analysis.processingTime = Date.now() - startTime;
+        
+        // PERFORMANCE OPTIMIZATION: Cache the analysis result
+        this.analysisCache.set(articleHash, analysis);
+        
+        // Limit cache size to prevent memory issues
+        if (this.analysisCache.size > 1000) {
+            const firstKey = this.analysisCache.keys().next().value;
+            this.analysisCache.delete(firstKey);
+        }
+        
         return { ...article, intelligence: analysis };
     }
 
@@ -361,12 +379,18 @@ class HybridIntelligenceEngine {
 
     /**
      * Extract entities from article text
-     * 
+     *
      * @param {string} text - Article text
      * @param {Array} clients - List of clients
      * @returns {Object} Extracted entities
      */
     extractEntities(text, clients) {
+        // PERFORMANCE OPTIMIZATION: Cache entity extraction results
+        const textHash = text.substring(0, 100); // Use first 100 chars as hash
+        if (this.embeddingCache.has(textHash)) {
+            return this.embeddingCache.get(textHash);
+        }
+        
         const textLower = text.toLowerCase();
         const entities = {
             competitors: [],
@@ -413,6 +437,15 @@ class HybridIntelligenceEngine {
             if (textLower.includes(tech)) {
                 entities.technologies.push(tech);
             }
+        }
+
+        // PERFORMANCE OPTIMIZATION: Cache entity extraction result
+        this.embeddingCache.set(textHash, entities);
+        
+        // Limit cache size
+        if (this.embeddingCache.size > 500) {
+            const firstKey = this.embeddingCache.keys().next().value;
+            this.embeddingCache.delete(firstKey);
         }
 
         return entities;

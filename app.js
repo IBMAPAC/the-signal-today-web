@@ -1551,7 +1551,7 @@ class SignalApp {
         
         // PERFORMANCE OPTIMIZATION: Process articles in parallel batches instead of sequentially
         // This provides 3-5x speedup (10s → 2-3s for 200 articles)
-        const BATCH_SIZE = 20; // Process 20 articles simultaneously
+        const BATCH_SIZE = 30; // Process 30 articles simultaneously (increased from 20)
         const startTime = performance.now();
         
         for (let i = 0; i < articles.length; i += BATCH_SIZE) {
