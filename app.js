@@ -341,15 +341,14 @@ class SignalApp {
             
             // Show cached content if available
             if (this.digest || this.articles.length > 0) {
-                // Re-score articles to ensure matchedClients/matchedIndustries are set
-                // (articles from older IDB versions may not have these properties)
-                if (this.articles.length > 0) {
-                    console.log(`Re-scoring ${this.articles.length} cached articles for client matching...`);
-                    this.articles = await this.scoreArticles(this.articles);
-                }
+                // Don't re-score cached articles on init - they're already scored
+                // Only categorize and render for instant display
                 this.categorizeArticles();
                 this.renderDigest();
-                updateIntelligenceStats();
+                // Update intelligence stats if available
+                if (typeof updateIntelligenceStats === 'function') {
+                    updateIntelligenceStats();
+                }
             }
             
             console.log(`📡 The Signal Today initialized with ${this.sources.length} sources`);
