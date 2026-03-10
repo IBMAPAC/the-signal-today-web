@@ -883,39 +883,39 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 /* =============================================
    ATL ENABLEMENT
    ============================================= */
-.atl-enablement-card .card-header { border-left-color: var(--cds-support-warning); }
+.market-insights-card .card-header { border-left-color: var(--cds-support-warning); }
 
-.atl-brief { padding: var(--cds-spacing-05); background: var(--cds-layer-02); margin-bottom: var(--cds-spacing-04); border-left: 3px solid var(--cds-support-warning); }
-.atl-brief:last-child { margin-bottom: 0; }
-.atl-brief-header { display: flex; justify-content: space-between; align-items: center; gap: var(--cds-spacing-04); margin-bottom: var(--cds-spacing-03); }
-.atl-brief-market { font-weight: 600; font-size: var(--cds-body-02); color: var(--cds-support-warning); }
-.atl-brief-count { font-size: var(--cds-body-01); color: var(--cds-text-secondary); margin-left: auto; margin-right: var(--cds-spacing-03); }
-.atl-brief-copy { background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.6; padding: var(--cds-spacing-02); min-width: var(--touch-min); min-height: var(--touch-min); }
-.atl-brief-copy:hover { opacity: 1; }
-.atl-brief-copy.copied { color: var(--cds-support-success); opacity: 1; }
-.atl-brief-content { font-size: var(--cds-body-01); color: var(--cds-text-primary); line-height: 1.6; }
-.atl-brief-signal { margin-bottom: var(--cds-spacing-04); padding-left: var(--cds-spacing-03); border-left: 2px solid var(--cds-border-subtle-01); }
-.atl-brief-signal:last-child { margin-bottom: 0; }
-.atl-brief-signal.client { border-left-color: var(--cds-tag-color-purple); }
-.atl-brief-signal.regulatory { border-left-color: var(--cds-support-error); }
-.atl-brief-signal.geographic { border-left-color: var(--cds-tag-color-blue); }
-.atl-brief-signal.priority { border-left-color: var(--cds-support-warning); }
-.atl-brief-signal.watchword { border-left-color: var(--cds-tag-color-cyan); }
-.atl-brief-signal.industry { border-left-color: var(--cds-tag-color-green); }
-.atl-brief-prefix { font-weight: 600; margin-right: var(--cds-spacing-02); display: inline-block; min-width: 120px; }
-.atl-brief-link { color: var(--cds-link-primary); text-decoration: none; }
-.atl-brief-link:hover { text-decoration: underline; }
-.atl-brief-source { color: var(--cds-text-secondary); font-size: 0.875rem; margin-left: var(--cds-spacing-02); }
+.market-brief { padding: var(--cds-spacing-05); background: var(--cds-layer-02); margin-bottom: var(--cds-spacing-04); border-left: 3px solid var(--cds-support-warning); }
+.market-brief:last-child { margin-bottom: 0; }
+.market-brief-header { display: flex; justify-content: space-between; align-items: center; gap: var(--cds-spacing-04); margin-bottom: var(--cds-spacing-03); }
+.market-brief-market { font-weight: 600; font-size: var(--cds-body-02); color: var(--cds-support-warning); }
+.market-brief-count { font-size: var(--cds-body-01); color: var(--cds-text-secondary); margin-left: auto; margin-right: var(--cds-spacing-03); }
+.market-brief-copy { background: none; border: none; cursor: pointer; font-size: 1rem; opacity: 0.6; padding: var(--cds-spacing-02); min-width: var(--touch-min); min-height: var(--touch-min); }
+.market-brief-copy:hover { opacity: 1; }
+.market-brief-copy.copied { color: var(--cds-support-success); opacity: 1; }
+.market-brief-content { font-size: var(--cds-body-01); color: var(--cds-text-primary); line-height: 1.6; }
+.market-brief-signal { margin-bottom: var(--cds-spacing-04); padding-left: var(--cds-spacing-03); border-left: 2px solid var(--cds-border-subtle-01); }
+.market-brief-signal:last-child { margin-bottom: 0; }
+.market-brief-signal.client { border-left-color: var(--cds-tag-color-purple); }
+.market-brief-signal.regulatory { border-left-color: var(--cds-support-error); }
+.market-brief-signal.geographic { border-left-color: var(--cds-tag-color-blue); }
+.market-brief-signal.priority { border-left-color: var(--cds-support-warning); }
+.market-brief-signal.watchword { border-left-color: var(--cds-tag-color-cyan); }
+.market-brief-signal.industry { border-left-color: var(--cds-tag-color-green); }
+.market-brief-prefix { font-weight: 600; margin-right: var(--cds-spacing-02); display: inline-block; min-width: 120px; }
+.market-brief-link { color: var(--cds-link-primary); text-decoration: none; }
+.market-brief-link:hover { text-decoration: underline; }
+.market-brief-source { color: var(--cds-text-secondary); font-size: 0.875rem; margin-left: var(--cds-spacing-02); }
 
-/* ATL Brief Synthesis (new) */
-.atl-brief-synthesis { font-size: var(--cds-body-02); color: var(--cds-text-primary); line-height: 1.6; margin-bottom: var(--cds-spacing-04); }
-.atl-brief-key-message { font-size: var(--cds-body-01); color: var(--cds-text-primary); background: var(--cds-tag-background-green); padding: var(--cds-spacing-03); margin-bottom: var(--cds-spacing-04); border-radius: 2px; }
-.atl-brief-key-message strong { color: var(--cds-tag-color-green); }
-.atl-brief-sources { font-size: var(--cds-body-01); color: var(--cds-text-secondary); padding-top: var(--cds-spacing-03); border-top: 1px solid var(--cds-border-subtle-01); }
-.atl-sources-label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--cds-text-secondary); text-transform: uppercase; letter-spacing: 0.32px; margin-bottom: var(--cds-spacing-02); }
-.atl-source-link { color: var(--cds-link-primary); text-decoration: underline; text-underline-offset: 2px; }
-.atl-source-link:hover { color: var(--cds-link-primary-hover); }
-.atl-source-name { color: var(--cds-text-secondary); font-size: 0.875rem; }
+/* Market Brief Synthesis */
+.market-brief-synthesis { font-size: var(--cds-body-02); color: var(--cds-text-primary); line-height: 1.6; margin-bottom: var(--cds-spacing-04); }
+.market-brief-key-message { font-size: var(--cds-body-01); color: var(--cds-text-primary); background: var(--cds-tag-background-green); padding: var(--cds-spacing-03); margin-bottom: var(--cds-spacing-04); border-radius: 2px; }
+.market-brief-key-message strong { color: var(--cds-tag-color-green); }
+.market-brief-sources { font-size: var(--cds-body-01); color: var(--cds-text-secondary); padding-top: var(--cds-spacing-03); border-top: 1px solid var(--cds-border-subtle-01); }
+.market-sources-label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--cds-text-secondary); text-transform: uppercase; letter-spacing: 0.32px; margin-bottom: var(--cds-spacing-02); }
+.market-source-link { color: var(--cds-link-primary); text-decoration: underline; text-underline-offset: 2px; }
+.market-source-link:hover { color: var(--cds-link-primary-hover); }
+.market-source-name { color: var(--cds-text-secondary); font-size: 0.875rem; }
 
 /* =============================================
    DEEP READS

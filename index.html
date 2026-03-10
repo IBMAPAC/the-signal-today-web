@@ -109,16 +109,16 @@
                     </div>
                 </section>
 
-                <!-- PRIORITY 3: ATL ENABLEMENT - Market briefs (collapsible, collapsed) -->
-                <section id="atl-enablement-section" class="card atl-enablement-card">
-                    <div class="card-header card-header--collapsible" onclick="toggleSection('atl-enablement')">
-                        <h2>📢 ATL Enablement</h2>
-                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyAllATLBriefs()" title="Copy all">📋 Copy All</button>
+                <!-- PRIORITY 3: MARKET INSIGHTS - Market-specific briefs (collapsible, collapsed) -->
+                <section id="market-insights-section" class="card market-insights-card">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('market-insights')">
+                        <h2>📢 Market Insights</h2>
+                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyAllMarketBriefs()" title="Copy all">📋 Copy All</button>
                         <span class="chevron collapsed">▼</span>
                     </div>
-                    <div id="atl-enablement-content" class="card-body collapsed">
-                        <p class="card-description">Market-by-market talking points for your 115 ATLs</p>
-                        <div id="atl-enablement-list"></div>
+                    <div id="market-insights-content" class="card-body collapsed">
+                        <p class="card-description">Market-specific intelligence for APAC regions</p>
+                        <div id="market-insights-list"></div>
                     </div>
                 </section>
 

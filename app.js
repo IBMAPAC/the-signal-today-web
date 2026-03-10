@@ -2391,7 +2391,7 @@ ${articleList}`;
         // 0. Action Required — Urgent ESCALATE/BRIEF_ATL items at top
         // 1. Today's Brief — 3 key insights (AI-synthesized)
         // 2. Signal Feed — Unified view (replaces Client Radar + All Signals)
-        // 3. ATL Enablement — Market briefs (collapsed)
+        // 3. Market Insights — Market-specific briefs (collapsed)
         // 4. Deep Reads — Weekend reading (collapsed)
         
         // Generate signals first (async), then extract Action Required and build Signal Feed
@@ -2402,7 +2402,7 @@ ${articleList}`;
         
         // These can render in parallel
         renderExecutiveSummary(forceRefresh);
-        renderATLEnablement(forceRefresh);
+        renderMarketInsights(forceRefresh);
         renderDeepReads(forceRefresh);
         
         // Update portfolio stats
@@ -3517,10 +3517,10 @@ Return ONLY valid JSON, no markdown fences:
             }
         }
         
-        // ATL Enablement by Market
-        lines.push('## 📢 ATL ENABLEMENT');
+        // Market Insights by Market
+        lines.push('## 📢 MARKET INSIGHTS');
         lines.push('');
-        lines.push('*Copy-ready briefs for Slack/Teams by market*');
+        lines.push('*Market-specific intelligence briefs*');
         lines.push('');
         
         // Generate brief for each market
@@ -3733,16 +3733,19 @@ Return ONLY valid JSON, no markdown fences:
     // ATL Briefs Copy All
     // ==========================================
 
-    copyAllATLBriefs() {
-        const briefs = document.querySelectorAll('.atl-brief-content');
+    copyAllMarketBriefs() {
+        const briefs = document.querySelectorAll('.market-brief');
         if (briefs.length === 0) {
-            showToast('No ATL briefs to copy');
+            showToast('No market briefs to copy');
             return;
         }
         
-        const allText = Array.from(briefs).map(el => el.textContent.trim()).join('\n\n---\n\n');
+        const allText = Array.from(briefs).map(brief => {
+            return brief.dataset.copyText || brief.textContent.trim();
+        }).join('\n\n---\n\n');
+        
         navigator.clipboard.writeText(allText).then(() => {
-            showToast('All ATL briefs copied to clipboard');
+            showToast('All market briefs copied to clipboard');
         }).catch(() => {
             showToast('Failed to copy');
         });
@@ -5210,25 +5213,25 @@ function copyBriefATL() {
 // Shows industry signals grouped by market for quick Slack sharing
 // ==========================================
 
-function renderATLEnablement(forceRefresh = false) {
-    const list = document.getElementById('atl-enablement-list');
+function renderMarketInsights(forceRefresh = false) {
+    const list = document.getElementById('market-insights-list');
     if (!list) return;
     
     // Check cache first
-    const STORAGE_KEY_ATL = 'signal-today-atl-enablement-cache';
+    const STORAGE_KEY_MARKET = 'signal-today-market-insights-cache';
     if (!forceRefresh) {
         try {
-            const cached = localStorage.getItem(STORAGE_KEY_ATL);
+            const cached = localStorage.getItem(STORAGE_KEY_MARKET);
             if (cached) {
                 const { briefs, timestamp } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
                 if (age < 8 * 60 * 60 * 1000 && briefs && briefs.length > 0) {
-                    list.innerHTML = briefs.map(renderATLBriefCard).join('');
+                    list.innerHTML = briefs.map(renderMarketBriefCard).join('');
                     return;
                 }
             }
         } catch (e) {
-            console.log('ATL enablement cache error:', e);
+            console.log('Market insights cache error:', e);
         }
     }
     
@@ -5244,80 +5247,86 @@ function renderATLEnablement(forceRefresh = false) {
     // Get today's articles with industry matches
     const todayArticles = app.dailyArticles.length > 0 ? app.dailyArticles : app.articles.slice(0, 30);
     
-    // Step 1: Detect market-specific signals using APAC_MARKET_CONTEXT
+    // Step 1: Exclusive market assignment - each article goes to ONE market only
     if (typeof APAC_MARKET_CONTEXT !== 'undefined') {
         todayArticles.forEach(article => {
             const text = `${article.title} ${article.summary || ''}`.toLowerCase();
             
-            Object.entries(APAC_MARKET_CONTEXT).forEach(([market, context]) => {
-                if (!marketSignals[market]) return;
+            let assignedMarket = null;
+            let bestPriority = 999;
+            let bestSignal = null;
+            let bestType = null;
+            
+            // Check all markets and find the best match
+            for (const [market, context] of Object.entries(APAC_MARKET_CONTEXT)) {
+                if (!marketSignals[market]) continue;
                 
-                // Check regulators (highest priority)
+                // Priority 1: Regulators (most specific)
                 const matchedRegulator = context.regulators?.find(r => text.includes(r.toLowerCase()));
-                if (matchedRegulator) {
-                    if (!marketSignals[market].some(s => s.article?.id === article.id)) {
-                        marketSignals[market].push({
-                            type: 'regulatory',
-                            signal: matchedRegulator.toUpperCase(),
-                            article,
-                            priority: 1
-                        });
-                    }
-                    return;
+                if (matchedRegulator && 1 < bestPriority) {
+                    assignedMarket = market;
+                    bestPriority = 1;
+                    bestSignal = matchedRegulator.toUpperCase();
+                    bestType = 'regulatory';
+                    continue;
                 }
                 
-                // Check countries/cities (geographic routing)
+                // Priority 1.5: Countries/cities (geographic routing)
                 const matchedCountry = context.countries?.find(c => text.includes(c.toLowerCase()));
-                if (matchedCountry) {
-                    if (!marketSignals[market].some(s => s.article?.id === article.id)) {
-                        marketSignals[market].push({
-                            type: 'geographic',
-                            signal: matchedCountry,
-                            article,
-                            priority: 1.5
-                        });
-                    }
-                    return;
+                if (matchedCountry && 1.5 < bestPriority) {
+                    assignedMarket = market;
+                    bestPriority = 1.5;
+                    bestSignal = matchedCountry;
+                    bestType = 'geographic';
+                    continue;
                 }
                 
-                // Check priorities
+                // Priority 2: Market priorities
                 const matchedPriority = context.priorities?.find(p => text.includes(p.toLowerCase()));
-                if (matchedPriority) {
-                    if (!marketSignals[market].some(s => s.article?.id === article.id)) {
-                        marketSignals[market].push({
-                            type: 'priority',
-                            signal: matchedPriority,
-                            article,
-                            priority: 2
-                        });
-                    }
-                    return;
+                if (matchedPriority && 2 < bestPriority) {
+                    assignedMarket = market;
+                    bestPriority = 2;
+                    bestSignal = matchedPriority;
+                    bestType = 'priority';
+                    continue;
                 }
                 
-                // Check watchwords
+                // Priority 3: Watchwords
                 const matchedWatchword = context.watchwords?.find(w => text.includes(w.toLowerCase()));
-                if (matchedWatchword) {
-                    if (!marketSignals[market].some(s => s.article?.id === article.id)) {
-                        marketSignals[market].push({
-                            type: 'watchword',
-                            signal: matchedWatchword,
-                            article,
-                            priority: 3
-                        });
-                    }
+                if (matchedWatchword && 3 < bestPriority) {
+                    assignedMarket = market;
+                    bestPriority = 3;
+                    bestSignal = matchedWatchword;
+                    bestType = 'watchword';
                 }
-            });
+            }
+            
+            // Add to the ONE assigned market only
+            if (assignedMarket && bestSignal) {
+                marketSignals[assignedMarket].push({
+                    type: bestType,
+                    signal: bestSignal,
+                    article,
+                    priority: bestPriority
+                });
+            }
         });
     }
     
-    // Step 2: Add client-specific signals
+    // Step 2: Add client-specific signals (only if not already assigned)
     todayArticles.forEach(article => {
         if (!article.matchedClients || article.matchedClients.length === 0) return;
         
-        article.matchedClients.forEach(clientName => {
-            const client = app.clients.find(c => c.name === clientName);
-            if (client && marketSignals[client.market]) {
-                if (!marketSignals[client.market].some(s => s.article?.id === article.id)) {
+        // Check if article is already assigned to a market
+        const alreadyAssigned = Object.values(marketSignals).some(signals =>
+            signals.some(s => s.article?.id === article.id)
+        );
+        
+        if (!alreadyAssigned) {
+            // Assign to first matching client's market
+            for (const clientName of article.matchedClients) {
+                const client = app.clients.find(c => c.name === clientName);
+                if (client && marketSignals[client.market]) {
                     marketSignals[client.market].push({
                         type: 'client',
                         signal: clientName,
@@ -5325,9 +5334,10 @@ function renderATLEnablement(forceRefresh = false) {
                         article,
                         priority: 0
                     });
+                    break; // Only assign to ONE market
                 }
             }
-        });
+        }
     });
     
     // Step 3: Sort by priority
@@ -5362,20 +5372,20 @@ function renderATLEnablement(forceRefresh = false) {
                 url: s.article.url,
                 source: s.article.source || s.article.sourceName
             })),
-            copyText: generateATLCopyText(market, signals)
+            copyText: generateMarketCopyText(market, signals)
         }));
         
-        list.innerHTML = briefs.map(renderATLBriefCard).join('');
-        cacheATLEnablement(briefs);
+        list.innerHTML = briefs.map(renderMarketBriefCard).join('');
+        cacheMarketInsights(briefs);
         return;
     }
     
     // With API: Generate AI synthesis per market
-    list.innerHTML = '<p class="card-description">Synthesizing ATL briefs...</p>';
-    generateATLSynthesis(activeMarkets, apiKey, list);
+    list.innerHTML = '<p class="card-description">Synthesizing market insights...</p>';
+    generateMarketSynthesis(activeMarkets, apiKey, list);
 }
 
-async function generateATLSynthesis(activeMarkets, apiKey, listEl) {
+async function generateMarketSynthesis(activeMarkets, apiKey, listEl) {
     const briefs = [];
     
     for (const { market, signals } of activeMarkets) {
@@ -5384,25 +5394,28 @@ async function generateATLSynthesis(activeMarkets, apiKey, listEl) {
             return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nType: ${s.type}, Signal: ${s.signal}\nSummary: ${(a.summary || '').substring(0, 100)}`;
         }).join('\n\n');
         
-        const prompt = `You are briefing ATLs (Account Technical Leaders) in ${market} market for IBM APAC.
+        const prompt = `You are briefing IBM APAC leaders on ${market} market intelligence.
 
-TODAY'S ${market} SIGNALS:
+TODAY'S ${market} SIGNALS (market-exclusive):
 ${articleSummaries}
+
+IMPORTANT: These articles are ONLY relevant to ${market} market. Do NOT reference other APAC markets.
 
 Write ONE synthesized paragraph (3-4 sentences) that:
 1. Opens with the key theme for ${market} this week
 2. Connects 2-3 of the articles into a coherent narrative
-3. Ends with a specific IBM positioning or action point
+3. Ends with a specific IBM positioning or action point for ${market}
 
 Rules:
 - Sound like a senior technical leader, not a news aggregator
-- Reference specific companies/regulators mentioned
-- Include ONE actionable takeaway
+- Reference specific companies/regulators mentioned in the articles
+- Focus ONLY on ${market} market implications
+- Include ONE actionable takeaway for ${market} teams
 
 Return ONLY a JSON object:
 {
   "synthesis": "Your 3-4 sentence synthesis here",
-  "keyMessage": "One-line key message for ATL to remember"
+  "keyMessage": "One-line key message for ${market} teams to remember"
 }`;
 
         try {
@@ -5438,7 +5451,7 @@ Return ONLY a JSON object:
                         url: s.article.url,
                         source: s.article.source || s.article.sourceName
                     })),
-                    copyText: generateATLCopyText(market, signals, result.synthesis, result.keyMessage)
+                    copyText: generateMarketCopyText(market, signals, result.synthesis, result.keyMessage)
                 });
             } else {
                 // Fallback
@@ -5450,11 +5463,11 @@ Return ONLY a JSON object:
                         url: s.article.url,
                         source: s.article.source || s.article.sourceName
                     })),
-                    copyText: generateATLCopyText(market, signals)
+                    copyText: generateMarketCopyText(market, signals)
                 });
             }
         } catch (error) {
-            console.error(`ATL synthesis error for ${market}:`, error);
+            console.error(`Market synthesis error for ${market}:`, error);
             briefs.push({
                 market,
                 synthesis: `${signals.length} signals detected for ${market} market. Review sources below.`,
@@ -5463,18 +5476,18 @@ Return ONLY a JSON object:
                     url: s.article.url,
                     source: s.article.source || s.article.sourceName
                 })),
-                copyText: generateATLCopyText(market, signals)
+                copyText: generateMarketCopyText(market, signals)
             });
         }
     }
     
-    listEl.innerHTML = briefs.map(renderATLBriefCard).join('');
-    cacheATLEnablement(briefs);
+    listEl.innerHTML = briefs.map(renderMarketBriefCard).join('');
+    cacheMarketInsights(briefs);
 }
 
-function generateATLCopyText(market, signals, synthesis = null, keyMessage = null) {
+function generateMarketCopyText(market, signals, synthesis = null, keyMessage = null) {
     const date = new Date().toLocaleDateString('en-SG', { weekday: 'short', month: 'short', day: 'numeric' });
-    let text = `📡 The Signal Today | ${market} | ${date}\n\n`;
+    let text = `📡 The Signal Today | ${market} Market Insights | ${date}\n\n`;
     
     if (synthesis) {
         text += `${synthesis}\n\n`;
@@ -5492,36 +5505,36 @@ function generateATLCopyText(market, signals, synthesis = null, keyMessage = nul
     return text;
 }
 
-function renderATLBriefCard(brief) {
-    const sourcesHtml = (brief.sources || []).map(s => 
-        `<a href="${s.url || '#'}" target="_blank" class="atl-source-link">${escapeHtml(s.title)}</a> <span class="atl-source-name">(${escapeHtml(s.source || 'Source')})</span>`
+function renderMarketBriefCard(brief) {
+    const sourcesHtml = (brief.sources || []).map(s =>
+        `<a href="${s.url || '#'}" target="_blank" class="market-source-link">${escapeHtml(s.title)}</a> <span class="market-source-name">(${escapeHtml(s.source || 'Source')})</span>`
     ).join('<br>');
     
     return `
-        <div class="atl-brief" data-copy-text="${escapeHtml(brief.copyText || '')}">
-            <div class="atl-brief-header">
-                <span class="atl-brief-market">${brief.market}</span>
-                <span class="atl-brief-count">${brief.sources?.length || 0} signals</span>
-                <button class="atl-brief-copy" onclick="copyATLBrief(this, '${brief.market}')" title="Copy to clipboard">📋</button>
+        <div class="market-brief" data-copy-text="${escapeHtml(brief.copyText || '')}">
+            <div class="market-brief-header">
+                <span class="market-brief-market">${brief.market}</span>
+                <span class="market-brief-count">${brief.sources?.length || 0} signals</span>
+                <button class="market-brief-copy" onclick="copyMarketBrief(this, '${brief.market}')" title="Copy to clipboard">📋</button>
             </div>
-            <div class="atl-brief-synthesis">${escapeHtml(brief.synthesis || '')}</div>
-            ${brief.keyMessage ? `<div class="atl-brief-key-message">💡 <strong>Key Message:</strong> ${escapeHtml(brief.keyMessage)}</div>` : ''}
-            <div class="atl-brief-sources">
-                <span class="atl-sources-label">Sources:</span>
+            <div class="market-brief-synthesis">${escapeHtml(brief.synthesis || '')}</div>
+            ${brief.keyMessage ? `<div class="market-brief-key-message">💡 <strong>Key Message:</strong> ${escapeHtml(brief.keyMessage)}</div>` : ''}
+            <div class="market-brief-sources">
+                <span class="market-sources-label">Sources:</span>
                 ${sourcesHtml}
             </div>
         </div>
     `;
 }
 
-function cacheATLEnablement(briefs) {
+function cacheMarketInsights(briefs) {
     try {
-        localStorage.setItem('signal-today-atl-enablement-cache', JSON.stringify({
+        localStorage.setItem('signal-today-market-insights-cache', JSON.stringify({
             briefs,
             timestamp: Date.now()
         }));
     } catch (e) {
-        console.log('ATL enablement cache write error:', e);
+        console.log('Market insights cache write error:', e);
     }
 }
 
@@ -5631,15 +5644,21 @@ function classifySignalType(article) {
     return 'general';
 }
 
-function copyATLBrief(btn, market) {
-    const brief = btn.closest('.atl-brief');
-    const content = brief.dataset.copyText || brief.querySelector('.atl-brief-content').textContent;
+function copyMarketBrief(btn, market) {
+    const brief = btn.closest('.market-brief');
+    const content = brief.dataset.copyText || brief.querySelector('.market-brief-content')?.textContent || '';
     navigator.clipboard.writeText(content).then(() => {
         btn.textContent = '✓';
         btn.classList.add('copied');
         setTimeout(() => {
             btn.textContent = '📋';
             btn.classList.remove('copied');
+        }, 2000);
+    }).catch(err => {
+        console.error('Copy failed:', err);
+        btn.textContent = '❌';
+        setTimeout(() => {
+            btn.textContent = '📋';
         }, 2000);
     });
 }
@@ -7328,7 +7347,7 @@ window.app = app;
 // These ensure onclick="methodName()" works reliably across all browsers
 window.refreshApp = function() { app.refresh(); };
 window.openAppSettings = function() { app.openSettings(); };
-window.copyAllATLBriefs = function() { app.copyAllATLBriefs(); };
+window.copyAllMarketBriefs = function() { app.copyAllMarketBriefs(); };
 window.exportBrief = function() { app.exportBrief(); };
 window.openGTMDigest = function() { app.openGTMDigest(); };
 window.deepReadArticle = function(id, btn) { app.deepReadArticle(id, btn); };
