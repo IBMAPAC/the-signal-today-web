@@ -5275,6 +5275,7 @@ function renderMarketInsights(forceRefresh = false) {
             for (const [market, context] of Object.entries(APAC_MARKET_CONTEXT)) {
                 if (!marketSignals[market]) continue;
                 
+                // Check all priority levels for this market and keep the best one
                 // Priority 1: Regulators (most specific)
                 const matchedRegulator = context.regulators?.find(r => text.includes(r.toLowerCase()));
                 if (matchedRegulator && 1 < bestPriority) {
@@ -5282,7 +5283,6 @@ function renderMarketInsights(forceRefresh = false) {
                     bestPriority = 1;
                     bestSignal = matchedRegulator.toUpperCase();
                     bestType = 'regulatory';
-                    continue;
                 }
                 
                 // Priority 1.5: Countries/cities (geographic routing)
@@ -5292,7 +5292,6 @@ function renderMarketInsights(forceRefresh = false) {
                     bestPriority = 1.5;
                     bestSignal = matchedCountry;
                     bestType = 'geographic';
-                    continue;
                 }
                 
                 // Priority 2: Market priorities
@@ -5302,7 +5301,6 @@ function renderMarketInsights(forceRefresh = false) {
                     bestPriority = 2;
                     bestSignal = matchedPriority;
                     bestType = 'priority';
-                    continue;
                 }
                 
                 // Priority 3: Watchwords
