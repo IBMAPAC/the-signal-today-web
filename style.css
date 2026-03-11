@@ -1360,3 +1360,23 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+/* ==========================================
+   PHASE 3.2: Section Timestamp Styling
+   ========================================== */
+.section-timestamp {
+    font-size: 0.75rem;
+    color: var(--cds-text-placeholder);
+    font-weight: 400;
+    margin-left: auto;
+    margin-right: 0.5rem;
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.section-timestamp.cached {
+    color: var(--cds-support-info);
+}
+
+.section-timestamp.fresh {
+    color: var(--cds-support-success);
+}

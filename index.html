@@ -69,6 +69,7 @@
                     <div class="card-header card-header--collapsible" onclick="toggleSection('executive-summary')">
                         <h2>📊 Today's Brief</h2>
                         <span class="badge badge-muted">Top 3</span>
+                        <span id="executive-summary-timestamp" class="section-timestamp"></span>
                         <span class="chevron collapsed">▼</span>
                     </div>
                     <div id="executive-summary-content" class="card-body collapsed">
@@ -82,6 +83,7 @@
                     <div class="card-header card-header--collapsible" onclick="toggleSection('market-insights')">
                         <h2>📢 Market Insights</h2>
                         <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyAllMarketBriefs()" title="Copy all">📋 Copy All</button>
+                        <span id="market-insights-timestamp" class="section-timestamp"></span>
                         <span class="chevron collapsed">▼</span>
                     </div>
                     <div id="market-insights-content" class="card-body collapsed">

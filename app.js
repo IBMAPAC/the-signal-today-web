@@ -220,6 +220,17 @@ const CORS_PROXIES = [
 // Feed cache to avoid refetching within 2 minutes (short enough to stay fresh)
 const feedCache = new Map();
 const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
+
+// PHASE 1: Staggered cache durations for cost optimization
+// Different content types have different update frequencies
+const CACHE_DURATIONS = {
+    INTELLIGENCE: 4 * 60 * 60 * 1000,      // 4 hours - changes frequently
+    DAILY_DIGEST: 8 * 60 * 60 * 1000,      // 8 hours - once per day
+    MARKET_INSIGHTS: 12 * 60 * 60 * 1000,  // 12 hours - slow-moving trends
+    TODAYS_SIGNALS: 6 * 60 * 60 * 1000,    // 6 hours - mid-frequency
+    DEEP_READS: 24 * 60 * 60 * 1000        // 24 hours - weekly content
+};
+
 const STORAGE_KEYS = {
     API_KEY: 'signal_api_key',
     SOURCES: 'signal_sources',
@@ -2396,10 +2407,18 @@ ${articleList}`;
         
         // Generate signals first (async), then extract Action Required and build Signal Feed
         // Pass forceRefresh to ensure Action Required updates on refresh
-        renderTodaysSignals(forceRefresh).then(() => {
-            renderActionRequired();
-            renderSignalFeed();
-        });
+        renderTodaysSignals(forceRefresh)
+            .then(() => {
+                renderActionRequired();
+                renderSignalFeed();
+            })
+            .catch((error) => {
+                console.error('Signal generation failed:', error);
+                // Still render Action Required and Signal Feed from cache
+                // This ensures the UI updates even if signal generation fails
+                renderActionRequired();
+                renderSignalFeed();
+            });
         
         // These can render in parallel
         renderExecutiveSummary(forceRefresh);
@@ -5226,7 +5245,7 @@ function renderMarketInsights(forceRefresh = false) {
             if (cached) {
                 const { briefs, timestamp } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
-                if (age < 8 * 60 * 60 * 1000 && briefs && briefs.length > 0) {
+                if (age < CACHE_DURATIONS.MARKET_INSIGHTS && briefs && briefs.length > 0) {
                     list.innerHTML = briefs.map(renderMarketBriefCard).join('');
                     return;
                 }
@@ -5400,8 +5419,25 @@ function renderMarketInsights(forceRefresh = false) {
     generateMarketSynthesis(activeMarkets, apiKey, list);
 }
 
+// Helper function to check if market has new articles since last generation
+function hasNewArticlesForMarket(market, signals, lastGenerationTime) {
+    if (!lastGenerationTime) return true; // First time generation
+    
+    // Check if any articles in this market are newer than last generation
+    return signals.some(s => {
+        const article = s.article;
+        if (!article) return false;
+        
+        const articleDate = new Date(article.pubDate || article.isoDate).getTime();
+        return articleDate > lastGenerationTime;
+    });
+}
+
 async function generateMarketSynthesis(activeMarkets, apiKey, listEl) {
     const briefs = [];
+    
+    // PHASE 2.1: Separate markets into cached vs needs-generation
+    const marketsToGenerate = [];
     
     for (const { market, signals, hasSignals } of activeMarkets) {
         // Skip AI synthesis for markets with no signals
@@ -5416,35 +5452,72 @@ async function generateMarketSynthesis(activeMarkets, apiKey, listEl) {
             continue;
         }
         
-        const articleSummaries = signals.map((s, i) => {
-            const a = s.article;
-            // OPTIMIZATION: Reduced from 100 to 75 chars (Package A)
-            return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nType: ${s.type}, Signal: ${s.signal}\nSummary: ${(a.summary || '').substring(0, 75)}`;
-        }).join('\n\n');
+        // PHASE 1.2: Check if market has new articles since last generation
+        const cacheKey = `market_insights_${market}_timestamp`;
+        const lastGenTime = parseInt(localStorage.getItem(cacheKey) || '0');
         
-        const prompt = `You are briefing IBM APAC leaders on ${market} market intelligence.
+        if (!hasNewArticlesForMarket(market, signals, lastGenTime)) {
+            // Use cached insight for this market - no new articles
+            try {
+                const cached = localStorage.getItem(`market_insights_${market}_cache`);
+                if (cached) {
+                    const cachedBrief = JSON.parse(cached);
+                    briefs.push(cachedBrief);
+                    console.log(`Using cached insight for ${market} - no new articles`);
+                    continue; // Skip API call
+                }
+            } catch (e) {
+                console.log(`Cache read error for ${market}:`, e);
+            }
+        }
+        
+        // Market needs generation - add to batch
+        marketsToGenerate.push({ market, signals, hasSignals });
+    }
+    
+    // PHASE 2.1: If multiple markets need generation, batch them in ONE API call
+    if (marketsToGenerate.length > 0) {
+        console.log(`Batching ${marketsToGenerate.length} markets in single API call`);
+        
+        // Build batched prompt with all markets
+        const marketPrompts = marketsToGenerate.map(({ market, signals }) => {
+            const articleSummaries = signals.map((s, i) => {
+                const a = s.article;
+                return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nType: ${s.type}, Signal: ${s.signal}\nSummary: ${(a.summary || '').substring(0, 75)}`;
+            }).join('\n\n');
+            
+            return `## ${market} MARKET
+${articleSummaries}`;
+        }).join('\n\n---\n\n');
+        
+        const batchedPrompt = `You are briefing IBM APAC leaders on market intelligence across multiple markets.
 
-TODAY'S ${market} SIGNALS (market-exclusive):
-${articleSummaries}
+TODAY'S SIGNALS BY MARKET:
+${marketPrompts}
 
-IMPORTANT: These articles are ONLY relevant to ${market} market. Do NOT reference other APAC markets.
-
-Write ONE synthesized paragraph (3-4 sentences) that:
-1. Opens with the key theme for ${market} this week
+For EACH market listed above, write ONE synthesized paragraph (3-4 sentences) that:
+1. Opens with the key theme for that market this week
 2. Connects 2-3 of the articles into a coherent narrative
-3. Ends with a specific IBM positioning or action point for ${market}
+3. Ends with a specific IBM positioning or action point for that market
 
 Rules:
 - Sound like a senior technical leader, not a news aggregator
 - Reference specific companies/regulators mentioned in the articles
-- Focus ONLY on ${market} market implications
-- Include ONE actionable takeaway for ${market} teams
+- Focus ONLY on each market's specific implications (do NOT cross-reference other markets)
+- Include ONE actionable takeaway per market
 
-Return ONLY a JSON object:
+Return ONLY a JSON object with this structure:
 {
-  "synthesis": "Your 3-4 sentence synthesis here",
-  "keyMessage": "One-line key message for ${market} teams to remember"
-}`;
+  "markets": {
+    "ANZ": { "synthesis": "...", "keyMessage": "..." },
+    "ASEAN": { "synthesis": "...", "keyMessage": "..." },
+    "GCG": { "synthesis": "...", "keyMessage": "..." },
+    "ISA": { "synthesis": "...", "keyMessage": "..." },
+    "KOREA": { "synthesis": "...", "keyMessage": "..." }
+  }
+}
+
+Only include markets that were provided in the input above.`;
 
         try {
             const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -5457,8 +5530,8 @@ Return ONLY a JSON object:
                 },
                 body: JSON.stringify({
                     model: 'claude-sonnet-4-20250514',
-                    max_tokens: 300,
-                    messages: [{ role: 'user', content: prompt }]
+                    max_tokens: 1000, // Increased for multiple markets
+                    messages: [{ role: 'user', content: batchedPrompt }]
                 })
             });
             
@@ -5470,47 +5543,76 @@ Return ONLY a JSON object:
             
             if (jsonMatch) {
                 const result = JSON.parse(jsonMatch[0]);
-                briefs.push({
-                    market,
-                    synthesis: result.synthesis,
-                    keyMessage: result.keyMessage,
-                    sources: signals.map(s => ({
-                        title: s.article.title,
-                        url: s.article.url,
-                        source: s.article.source || s.article.sourceName
-                    })),
-                    copyText: generateMarketCopyText(market, signals, result.synthesis, result.keyMessage)
+                
+                // Extract results for each market
+                marketsToGenerate.forEach(({ market, signals }) => {
+                    const marketResult = result.markets?.[market];
+                    
+                    if (marketResult) {
+                        const brief = {
+                            market,
+                            synthesis: marketResult.synthesis,
+                            keyMessage: marketResult.keyMessage,
+                            sources: signals.map(s => ({
+                                title: s.article.title,
+                                url: s.article.url,
+                                source: s.article.source || s.article.sourceName
+                            })),
+                            copyText: generateMarketCopyText(market, signals, marketResult.synthesis, marketResult.keyMessage),
+                            hasSignals: true
+                        };
+                        briefs.push(brief);
+                        
+                        // Cache the generated insight
+                        try {
+                            localStorage.setItem(`market_insights_${market}_cache`, JSON.stringify(brief));
+                            localStorage.setItem(`market_insights_${market}_timestamp`, Date.now().toString());
+                            console.log(`Cached batched insight for ${market}`);
+                        } catch (e) {
+                            console.log(`Cache write error for ${market}:`, e);
+                        }
+                    } else {
+                        // Fallback if market missing from response
+                        briefs.push({
+                            market,
+                            synthesis: `${signals.length} signals detected for ${market} market.`,
+                            sources: signals.map(s => ({
+                                title: s.article.title,
+                                url: s.article.url,
+                                source: s.article.source || s.article.sourceName
+                            })),
+                            copyText: generateMarketCopyText(market, signals),
+                            hasSignals: true
+                        });
+                    }
                 });
             } else {
-                // Fallback
+                throw new Error('No valid JSON in batched response');
+            }
+        } catch (error) {
+            console.error('Batched market synthesis error:', error);
+            // Fallback: add basic briefs for all markets that failed
+            marketsToGenerate.forEach(({ market, signals }) => {
                 briefs.push({
                     market,
-                    synthesis: `${signals.length} signals detected for ${market} market.`,
+                    synthesis: `${signals.length} signals detected for ${market} market. Review sources below.`,
                     sources: signals.map(s => ({
                         title: s.article.title,
                         url: s.article.url,
                         source: s.article.source || s.article.sourceName
                     })),
-                    copyText: generateMarketCopyText(market, signals)
+                    copyText: generateMarketCopyText(market, signals),
+                    hasSignals: true
                 });
-            }
-        } catch (error) {
-            console.error(`Market synthesis error for ${market}:`, error);
-            briefs.push({
-                market,
-                synthesis: `${signals.length} signals detected for ${market} market. Review sources below.`,
-                sources: signals.map(s => ({
-                    title: s.article.title,
-                    url: s.article.url,
-                    source: s.article.source || s.article.sourceName
-                })),
-                copyText: generateMarketCopyText(market, signals)
             });
         }
     }
     
     listEl.innerHTML = briefs.map(renderMarketBriefCard).join('');
     cacheMarketInsights(briefs);
+    
+    // PHASE 3.2: Update timestamp for Market Insights
+    updateSectionTimestamp('market-insights', Date.now(), false);
 }
 
 function generateMarketCopyText(market, signals, synthesis = null, keyMessage = null) {
@@ -5713,11 +5815,14 @@ async function renderExecutiveSummary(forceRefresh = false) {
         try {
             const cached = localStorage.getItem(STORAGE_KEY_EXEC_SUMMARY);
             if (cached) {
-                const { insights, timestamp } = JSON.parse(cached);
+                const { insights, timestamp, articleCount } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
-                if (age < 8 * 60 * 60 * 1000 && insights && insights.length > 0) {
+                if (age < CACHE_DURATIONS.DAILY_DIGEST && insights && insights.length > 0) {
                     list.innerHTML = insights.map(renderExecutiveInsight).join('');
                     content.querySelector('.executive-summary-intro')?.classList.add('hidden');
+                    
+                    // PHASE 3.2: Update timestamp for cached content
+                    updateSectionTimestamp('executive-summary', timestamp, true);
                     return;
                 }
             }
@@ -5734,6 +5839,38 @@ async function renderExecutiveSummary(forceRefresh = false) {
         return;
     }
     
+    // PHASE 3.1: Smart triggering - check if we have enough new articles
+    if (!forceRefresh && apiKey) {
+        try {
+            const cached = localStorage.getItem(STORAGE_KEY_EXEC_SUMMARY);
+            if (cached) {
+                const { insights, timestamp, articleCount } = JSON.parse(cached);
+                const age = Date.now() - timestamp;
+                
+                // Count new articles since last generation
+                const newArticles = todayArticles.filter(a => {
+                    const articleDate = new Date(a.pubDate || a.isoDate).getTime();
+                    return articleDate > timestamp;
+                });
+                
+                // If cache is still valid AND fewer than 5 new articles, use cache
+                if (age < CACHE_DURATIONS.DAILY_DIGEST && newArticles.length < 5) {
+                    console.log(`Daily Digest: Only ${newArticles.length} new articles, using cache`);
+                    list.innerHTML = insights.map(renderExecutiveInsight).join('');
+                    content.querySelector('.executive-summary-intro')?.classList.add('hidden');
+                    
+                    // PHASE 3.2 & 3.3: Update timestamp and show "no new insights" indicator
+                    updateSectionTimestamp('executive-summary', timestamp, true, `No new insights (${newArticles.length} new articles)`);
+                    return;
+                }
+                
+                console.log(`Daily Digest: ${newArticles.length} new articles, regenerating`);
+            }
+        } catch (e) {
+            console.log('Smart trigger check error:', e);
+        }
+    }
+    
     // Prepare article data for synthesis
     const topArticles = todayArticles
         .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
@@ -5747,7 +5884,7 @@ async function renderExecutiveSummary(forceRefresh = false) {
         const insights = generateKeywordBasedInsights(topArticles, weeklyTrends);
         list.innerHTML = insights.map(renderExecutiveInsight).join('');
         content.querySelector('.executive-summary-intro')?.classList.add('hidden');
-        cacheExecutiveSummary(insights);
+        cacheExecutiveSummary(insights, todayArticles.length);
         return;
     }
     
@@ -5831,9 +5968,12 @@ Return ONLY valid JSON array.`;
                 }).filter(Boolean)
             }));
             
-            cacheExecutiveSummary(insights);
+            cacheExecutiveSummary(insights, todayArticles.length);
             list.innerHTML = insights.map(renderExecutiveInsight).join('');
             content.querySelector('.executive-summary-intro')?.classList.add('hidden');
+            
+            // PHASE 3.2: Update timestamp
+            updateSectionTimestamp('executive-summary', Date.now(), false);
         } else {
             throw new Error('Could not parse AI response');
         }
@@ -5843,7 +5983,7 @@ Return ONLY valid JSON array.`;
         const insights = generateKeywordBasedInsights(topArticles, weeklyTrends);
         list.innerHTML = insights.map(renderExecutiveInsight).join('');
         content.querySelector('.executive-summary-intro')?.classList.add('hidden');
-        cacheExecutiveSummary(insights);
+        cacheExecutiveSummary(insights, todayArticles.length);
     }
 }
 
@@ -5991,11 +6131,12 @@ function renderExecutiveInsight(insight) {
     `;
 }
 
-function cacheExecutiveSummary(insights) {
+function cacheExecutiveSummary(insights, articleCount = 0) {
     try {
         localStorage.setItem(STORAGE_KEY_EXEC_SUMMARY, JSON.stringify({
             insights,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            articleCount
         }));
     } catch (e) {
         console.log('Exec summary cache write error:', e);
@@ -6020,8 +6161,8 @@ async function renderTodaysSignals(forceRefresh = false) {
             if (cached) {
                 const { signals, timestamp, articlesData } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
-                // Show cached if less than 8 hours old and has content
-                if (age < 8 * 60 * 60 * 1000 && signals && signals.length > 0) {
+                // Show cached if less than configured duration and has content
+                if (age < CACHE_DURATIONS.TODAYS_SIGNALS && signals && signals.length > 0) {
                     countEl.textContent = signals.length;
                     introEl.textContent = `${signals.length} actionable signals (${formatTimeAgo(timestamp)})`;
                     list.innerHTML = signals.map((s, i) => renderCachedSignal(s, articlesData?.[i])).join('');
@@ -6135,17 +6276,17 @@ async function renderTodaysSignals(forceRefresh = false) {
     // With API key: generate AI-powered synthesis
     introEl.textContent = 'Synthesizing actionable intelligence...';
     
-    // Include more context in the prompt
+    // PHASE 2.2 & 2.3: Extract key entities instead of full context
     const signalSummaries = rawSignals.slice(0, 5).map(s => {
-        const summary = s.summary || s.articles?.[0]?.summary || '';
-        const context = summary ? `\n  Context: ${summary.substring(0, 150)}` : '';
-        return `- ${s.headline} (${s.sources.join(', ')})${s.clients.length > 0 ? ` [Clients: ${s.clients.join(', ')}]` : ''}${context}`;
+        const entities = extractKeyEntities(s);
+        const clientInfo = s.clients.length > 0 ? ` [Clients: ${s.clients.slice(0, 3).join(', ')}]` : '';
+        return `- ${s.headline} (${s.sources.join(', ')})${clientInfo}\n  Entities: ${entities}`;
     }).join('\n\n');
     
     const tier1Clients = app.clients.filter(c => c.tier === 1).map(c => c.name).slice(0, 10).join(', ');
     
     // Identify which markets have signals
-    const marketsInSignals = [...new Set(rawSignals.flatMap(s => 
+    const marketsInSignals = [...new Set(rawSignals.flatMap(s =>
         (s.clients || []).map(clientName => {
             const client = app.clients.find(c => c.name === clientName);
             return client?.market || null;
@@ -6233,6 +6374,46 @@ Return ONLY valid JSON array, no markdown, max 5 signals, ordered by urgency (ES
         introEl.textContent = `${rawSignals.length} signals (AI synthesis unavailable)`;
         list.innerHTML = rawSignals.slice(0, 5).map(signal => renderBasicSignal(signal)).join('');
     }
+}
+
+// PHASE 2.3: Extract key entities from signal for context reduction
+function extractKeyEntities(signal) {
+    // Combine headline and summary for entity extraction
+    const text = `${signal.headline} ${signal.summary || ''}`.toLowerCase();
+    
+    const entities = [];
+    
+    // Companies (common tech/enterprise names)
+    const companies = ['aws', 'microsoft', 'azure', 'google', 'salesforce', 'oracle', 'sap', 'servicenow',
+                      'ibm', 'red hat', 'accenture', 'deloitte', 'pwc', 'ey', 'kpmg', 'tcs', 'infosys',
+                      'nvidia', 'intel', 'amd', 'cisco', 'vmware', 'dell', 'hp', 'lenovo'];
+    companies.forEach(company => {
+        if (text.includes(company)) entities.push(company.toUpperCase());
+    });
+    
+    // Technologies
+    const techs = ['ai', 'artificial intelligence', 'machine learning', 'cloud', 'kubernetes', 'openshift',
+                  'quantum', 'blockchain', 'cybersecurity', 'data center', 'edge computing', 'iot',
+                  'generative ai', 'llm', 'agentic', 'automation', 'analytics'];
+    techs.forEach(tech => {
+        if (text.includes(tech)) entities.push(tech.toUpperCase());
+    });
+    
+    // Regulatory/governance terms
+    const regulatory = ['regulation', 'compliance', 'sovereignty', 'gdpr', 'privacy', 'security',
+                       'audit', 'governance', 'risk', 'data localization'];
+    regulatory.forEach(term => {
+        if (text.includes(term)) entities.push(term.toUpperCase());
+    });
+    
+    // Industries
+    const industries = signal.industries || [];
+    industries.forEach(ind => entities.push(ind));
+    
+    // Deduplicate and limit to top 5 entities
+    const uniqueEntities = [...new Set(entities)].slice(0, 5);
+    
+    return uniqueEntities.length > 0 ? uniqueEntities.join(', ') : 'General tech news';
 }
 
 function cacheSignals(signals, rawSignals) {
