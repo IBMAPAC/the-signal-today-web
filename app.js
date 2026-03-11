@@ -6112,12 +6112,61 @@ function generateKeywordBasedInsights(articles, trends) {
         if (byType[type]) byType[type].push(a);
     });
     
+    // Helper to extract key themes from articles
+    const extractThemes = (articleList) => {
+        const themes = new Set();
+        const competitors = new Set();
+        const clients = new Set();
+        
+        articleList.forEach(a => {
+            // Extract competitors
+            const text = `${a.title} ${a.summary || ''}`.toLowerCase();
+            ['microsoft', 'aws', 'google', 'salesforce', 'oracle', 'sap'].forEach(comp => {
+                if (text.includes(comp)) competitors.add(comp.charAt(0).toUpperCase() + comp.slice(1));
+            });
+            
+            // Extract clients if available
+            if (a.matchedClients && a.matchedClients.length > 0) {
+                a.matchedClients.forEach(c => clients.add(c));
+            }
+            
+            // Extract key themes
+            if (text.includes('ai') || text.includes('artificial intelligence')) themes.add('AI');
+            if (text.includes('cloud')) themes.add('cloud');
+            if (text.includes('security') || text.includes('cybersecurity')) themes.add('security');
+            if (text.includes('regulation') || text.includes('compliance')) themes.add('regulation');
+            if (text.includes('data sovereignty')) themes.add('data sovereignty');
+        });
+        
+        return { themes: Array.from(themes), competitors: Array.from(competitors), clients: Array.from(clients) };
+    };
+    
     // Insight 1: Top risk or regulatory signal
     const riskArticles = [...byType.risk, ...byType.regulatory].slice(0, 3);
     if (riskArticles.length > 0) {
+        const { themes, competitors, clients } = extractThemes(riskArticles);
+        const topArticle = riskArticles[0];
+        
+        let synthesis = '';
+        if (themes.length > 0) {
+            synthesis = `${themes.join(' and ')} ${themes.length > 1 ? 'developments' : 'development'} creating ${riskArticles.length > 1 ? 'multiple risk signals' : 'a risk signal'}. `;
+        } else {
+            synthesis = `${riskArticles.length} ${riskArticles.length > 1 ? 'articles signal' : 'article signals'} regulatory or risk themes. `;
+        }
+        
+        if (competitors.length > 0) {
+            synthesis += `${competitors.join(', ')} ${competitors.length > 1 ? 'are' : 'is'} mentioned. `;
+        }
+        
+        if (clients.length > 0) {
+            synthesis += `Affects ${clients.slice(0, 2).join(', ')}${clients.length > 2 ? ` and ${clients.length - 2} others` : ''}. `;
+        }
+        
+        synthesis += 'Review for client exposure and IBM positioning opportunities.';
+        
         insights.push({
-            headline: 'Regulatory & Risk Signals',
-            synthesis: `${riskArticles.length} articles signal regulatory or risk themes today. Review for client exposure and IBM positioning opportunities.`,
+            headline: themes.length > 0 ? `${themes[0]} Risk Signals` : 'Regulatory & Risk Signals',
+            synthesis: synthesis,
             signalType: 'risk',
             sources: riskArticles.map(a => ({
                 title: a.title,
@@ -6130,9 +6179,24 @@ function generateKeywordBasedInsights(articles, trends) {
     // Insight 2: Competitive landscape
     const compArticles = byType.competitive.slice(0, 3);
     if (compArticles.length > 0) {
+        const { themes, competitors, clients } = extractThemes(compArticles);
+        
+        let synthesis = '';
+        if (competitors.length > 0) {
+            synthesis = `${competitors.join(', ')} ${competitors.length > 1 ? 'are' : 'is'} active in ${themes.length > 0 ? themes.join(' and ') : 'the market'}. `;
+        } else {
+            synthesis = `${compArticles.length} competitive ${compArticles.length > 1 ? 'signals' : 'signal'} detected. `;
+        }
+        
+        if (clients.length > 0) {
+            synthesis += `Potential impact on ${clients.slice(0, 2).join(', ')}${clients.length > 2 ? ` and ${clients.length - 2} others` : ''}. `;
+        }
+        
+        synthesis += 'Monitor for IBM counter-positioning opportunities.';
+        
         insights.push({
-            headline: 'Competitive Movement',
-            synthesis: `${compArticles.length} competitive signals detected. Monitor for IBM counter-positioning opportunities in affected accounts.`,
+            headline: competitors.length > 0 ? `${competitors[0]} Competitive Activity` : 'Competitive Movement',
+            synthesis: synthesis,
             signalType: 'competitive',
             sources: compArticles.map(a => ({
                 title: a.title,
@@ -6145,9 +6209,28 @@ function generateKeywordBasedInsights(articles, trends) {
     // Insight 3: Opportunity signals
     const oppArticles = byType.opportunity.slice(0, 3);
     if (oppArticles.length > 0) {
+        const { themes, competitors, clients } = extractThemes(oppArticles);
+        
+        let synthesis = '';
+        if (themes.length > 0) {
+            synthesis = `${themes.join(' and ')} ${themes.length > 1 ? 'opportunities' : 'opportunity'} identified. `;
+        } else {
+            synthesis = `${oppArticles.length} opportunity ${oppArticles.length > 1 ? 'signals' : 'signal'} detected. `;
+        }
+        
+        if (competitors.length > 0) {
+            synthesis += `${competitors.join(', ')} ${competitors.length > 1 ? 'face' : 'faces'} challenges. `;
+        }
+        
+        if (clients.length > 0) {
+            synthesis += `Target ${clients.slice(0, 2).join(', ')}${clients.length > 2 ? ` and ${clients.length - 2} others` : ''} for outreach. `;
+        } else {
+            synthesis += 'Brief relevant ATLs for proactive outreach this week.';
+        }
+        
         insights.push({
-            headline: 'Growth Opportunities',
-            synthesis: `${oppArticles.length} opportunity signals identified. Brief relevant ATLs for proactive outreach this week.`,
+            headline: themes.length > 0 ? `${themes[0]} Growth Opportunities` : 'Growth Opportunities',
+            synthesis: synthesis,
             signalType: 'opportunity',
             sources: oppArticles.map(a => ({
                 title: a.title,
@@ -6159,14 +6242,29 @@ function generateKeywordBasedInsights(articles, trends) {
     
     // Ensure we have at least 3 insights
     if (insights.length < 3 && articles.length > 0) {
-        const remaining = articles.filter(a => 
+        const remaining = articles.filter(a =>
             !insights.some(i => i.sources?.some(s => s.title === a.title))
         ).slice(0, 3);
         
         if (remaining.length > 0) {
+            const { themes, competitors } = extractThemes(remaining);
+            
+            let synthesis = '';
+            if (themes.length > 0) {
+                synthesis = `${themes.join(', ')} trends emerging. `;
+            } else {
+                synthesis = `${remaining.length} additional ${remaining.length > 1 ? 'signals' : 'signal'} detected. `;
+            }
+            
+            if (competitors.length > 0) {
+                synthesis += `Mentions ${competitors.join(', ')}. `;
+            }
+            
+            synthesis += 'Monitor for strategic implications.';
+            
             insights.push({
-                headline: 'Additional Signals',
-                synthesis: `${remaining.length} additional signals worth monitoring for emerging trends.`,
+                headline: themes.length > 0 ? `${themes[0]} Trends` : 'Additional Signals',
+                synthesis: synthesis,
                 signalType: 'general',
                 sources: remaining.map(a => ({
                     title: a.title,
