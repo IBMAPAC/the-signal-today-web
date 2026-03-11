@@ -406,6 +406,41 @@ function resetTokenStats() {
     localStorage.setItem('signal_token_stats', JSON.stringify(tokenUsageStats));
 }
 
+/**
+ * Update section timestamp display
+ * @param {string} sectionId - Section identifier (e.g., 'executive-summary', 'market-insights')
+ * @param {number} timestamp - Unix timestamp of when content was generated
+ * @param {boolean} isCached - Whether content is from cache
+ * @param {string} [message] - Optional additional message to display
+ */
+function updateSectionTimestamp(sectionId, timestamp, isCached, message = '') {
+    const el = document.getElementById(`${sectionId}-timestamp`);
+    if (!el) return;
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    
+    let timeStr;
+    if (diffMins < 1) {
+        timeStr = 'just now';
+    } else if (diffMins < 60) {
+        timeStr = `${diffMins}m ago`;
+    } else if (diffHours < 24) {
+        timeStr = `${diffHours}h ago`;
+    } else {
+        timeStr = date.toLocaleDateString();
+    }
+    
+    const cacheIndicator = isCached ? '📦 ' : '✨ ';
+    const displayText = message || (isCached ? `cached ${timeStr}` : `updated ${timeStr}`);
+    
+    el.textContent = `${cacheIndicator}${displayText}`;
+    el.title = `Generated: ${date.toLocaleString()}${isCached ? ' (from cache)' : ' (fresh)'}`;
+}
+
 const STORAGE_KEYS = {
     API_KEY: 'signal_api_key',
     SOURCES: 'signal_sources',
