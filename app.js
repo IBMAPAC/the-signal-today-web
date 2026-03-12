@@ -6585,7 +6585,12 @@ function extractKeyEntities(signal) {
 function cacheSignals(signals, rawSignals) {
     try {
         const articlesData = rawSignals.map(s => ({
-            articles: (s.articles || []).map(a => ({ id: a.id, source: a.source, url: a.url, title: a.title }))
+            articles: (s.articles || []).map(a => ({
+                id: a.id,
+                source: a.source || a.sourceName || 'Unknown Source',
+                url: a.url,
+                title: a.title
+            }))
         }));
         localStorage.setItem(STORAGE_KEYS.TODAYS_SIGNALS, JSON.stringify({
             signals,
