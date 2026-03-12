@@ -2522,7 +2522,7 @@ Return ONLY valid JSON, no markdown fences:
             "industry": "Financial Services",
             "emoji": "🏦",
             "headline": "One-sentence signal grounded in today's articles. Name a client if one was matched.",
-            "ibmAngle": "Specific IBM product: watsonx.ai / watsonx.governance / IBM Consulting / Red Hat OpenShift / IBM Security / IBM Z / hybrid cloud.",
+            "ibmAngle": "Specific IBM product: watsonx / Red Hat OpenShift / IBM Z / hybrid cloud.",
             "salesAction": "Specific action for an ATL this week. Name a client account if relevant."
         }
     ]
@@ -3313,7 +3313,7 @@ ${signalContext}${weekContext}
 FIELD DEFINITIONS:
 - keyFacts: 3 facts extracted directly from the article. One sentence each. No interpretation.
 - soWhat: The market-level shift this article signals. Why does this matter RIGHT NOW in APAC? Be specific about timing, geography, or competitive dynamics. Do NOT mention IBM here — this is about what is changing in the market.
-- ibmAngle: Which specific IBM capability is most relevant (watsonx.ai, watsonx.governance, IBM Consulting, Red Hat OpenShift, IBM Security, IBM Z, hybrid cloud), and why is NOW the right moment to position it?
+- ibmAngle: Which specific IBM capability is most relevant (watsonx, Red Hat OpenShift, IBM Z, hybrid cloud), and why is NOW the right moment to position it?
 - clientImplication: Answer TWO questions in one field: (1) If watchlist clients were matched above, does this article reveal a broader industry trend the Field CTO should know before their next meeting with that client? (2) What should the ATL aligned to that client do with this information this week? If no clients matched, describe the APAC enterprise type most affected.
 - competitiveWatch: Name any competitor (AWS, Azure, Google, Salesforce, SAP, Oracle, ServiceNow, Accenture, TCS, Alibaba Cloud, Huawei Cloud, Fujitsu) whose position is strengthened or weakened. Return empty string if genuinely not applicable.
 - conversationOpener: A question that demonstrates you have a point of view — not just that you read the headline. Frame as a hypothesis: "I've been thinking that [observation from this article] — is that consistent with what you're seeing?" Peer CTO tone. Not a sales pitch.
@@ -3477,7 +3477,7 @@ ${articleList || 'No recent news found.'}
 BRIEF RULES:
 - If LIVE MEETING BRIEF: lead with the most time-sensitive signal; frame talking points as what to say in the room today
 - If ATL ENABLEMENT BRIEF: frame talking points as intelligence the ATL can use in their next client touchpoint or QBR
-- talkingPoints: produce EXACTLY 3 points, each framed as a ${clientIndustry || 'enterprise'} challenge with a specific IBM product angle (watsonx.ai, watsonx.governance, IBM Consulting, Red Hat OpenShift, IBM Security, IBM Z, hybrid cloud)
+- talkingPoints: produce EXACTLY 3 points, each framed as a ${clientIndustry || 'enterprise'} challenge with a specific IBM product angle (watsonx, Red Hat OpenShift, IBM Z, hybrid cloud)
 - riskFlags: specific risks only — reputational issues, known competitor relationships, regulatory exposure, C-suite changes, or deal blockers. Omit array if none.
 - openingQuestion: frame as a hypothesis to test, not an open-ended probe. Style: "I've been thinking that [observation from the news] — is that consistent with what you're seeing?" Peer CTO tone, not a sales pitch.
 - salesAngle: name a specific IBM product AND a specific trigger (regulatory deadline, competitor move, or client news) that makes NOW the right time
@@ -4164,8 +4164,8 @@ ACTION ITEMS BY MARKET
 [If a market has no signals, skip it entirely.]
 
 COMPETITIVE WATCH
+[2-3 sentences on competitive threats or positioning opportunities. Name specific competitors (Microsoft, AWS, Accenture, etc.) and the IBM counter-position. Reference specific IBM solutions (watsonx, Red Hat OpenShift, IBM Z).]
 
-[2-3 sentences on competitive threats or positioning opportunities. Name specific competitors (Microsoft, AWS, Accenture, etc.) and the IBM counter-position. Reference specific IBM solutions (watsonx.ai, watsonx.governance, Red Hat OpenShift, IBM Consulting).]
 
 ATL TALKING POINTS
 
@@ -6522,7 +6522,7 @@ For each signal, provide a JSON array with EXACTLY this structure:
     "actionType": "ESCALATE" or "BRIEF_ATL" or "POSITION" or "MONITOR",
     "action": "Specific action for Field CTO (who to contact, what to prepare, by when)",
     "affectedMarkets": ["ANZ", "ASEAN", "GCG", "ISA", "KOREA"] — which markets this impacts,
-    "ibmAngle": "Specific IBM solution to position: watsonx.ai, watsonx.governance, watsonx.data, Red Hat OpenShift, IBM Consulting, QRadar, Instana, etc.",
+    "ibmAngle": "Specific IBM solution to position: watsonx, Red Hat OpenShift, IBM Z, Instana, etc.",
     "talkingPoint": "One sentence the ATL can use with client CTO (conversational, not salesy)",
     "competitive": "Competitor name if relevant (Microsoft, AWS, Google, Accenture, etc.) or null"
   }
