@@ -6326,10 +6326,16 @@ function cacheExecutiveSummary(insights, articleCount = 0) {
 // ==========================================
 
 async function renderTodaysSignals(forceRefresh = false) {
-    const list = document.getElementById('signals-list');
-    const introEl = document.getElementById('signals-intro');
-    const countEl = document.getElementById('signals-count');
-    if (!list) return;
+    // Note: Using signal-feed elements since signals-list doesn't exist in HTML
+    const list = document.getElementById('signal-feed-list');
+    const countEl = document.getElementById('signal-feed-count');
+    // signals-intro doesn't exist in current HTML, so we'll skip intro text updates
+    const introEl = null;
+    
+    if (!list) {
+        console.warn('renderTodaysSignals: signal-feed-list element not found, skipping signal generation');
+        return;
+    }
     
     // Check cache first unless forcing refresh
     if (!forceRefresh) {
@@ -6340,8 +6346,8 @@ async function renderTodaysSignals(forceRefresh = false) {
                 const age = Date.now() - timestamp;
                 // Show cached if less than configured duration and has content
                 if (age < CACHE_DURATIONS.TODAYS_SIGNALS && signals && signals.length > 0) {
-                    countEl.textContent = signals.length;
-                    introEl.textContent = `${signals.length} actionable signals (${formatTimeAgo(timestamp)})`;
+                    if (countEl) countEl.textContent = signals.length;
+                    if (introEl) introEl.textContent = `${signals.length} actionable signals (${formatTimeAgo(timestamp)})`;
                     list.innerHTML = signals.map((s, i) => renderCachedSignal(s, articlesData?.[i])).join('');
                     return;
                 }
@@ -6431,14 +6437,14 @@ async function renderTodaysSignals(forceRefresh = false) {
     countEl.textContent = Math.min(rawSignals.length, 5);
     
     if (rawSignals.length === 0) {
-        introEl.textContent = 'Click Refresh to generate signals.';
+        if (introEl) introEl.textContent = 'Click Refresh to generate signals.';
         list.innerHTML = '<p class="card-description">No signals yet. Click Refresh to fetch latest news and generate actionable intelligence.</p>';
         return;
     }
     
     // Without API key: render basic signals with article context
     if (!apiKey) {
-        introEl.textContent = `${rawSignals.length} signals detected. Add API key for AI synthesis.`;
+        if (introEl) introEl.textContent = `${rawSignals.length} signals detected. Add API key for AI synthesis.`;
         list.innerHTML = rawSignals.slice(0, 5).map(signal => renderBasicSignal(signal)).join('');
         // Cache basic signals too
         cacheSignals(rawSignals.slice(0, 5).map(s => ({
@@ -6451,7 +6457,7 @@ async function renderTodaysSignals(forceRefresh = false) {
     }
     
     // With API key: generate AI-powered synthesis
-    introEl.textContent = 'Synthesizing actionable intelligence...';
+    if (introEl) introEl.textContent = 'Synthesizing actionable intelligence...';
     
     // PHASE 2.2 & 2.3: Extract key entities instead of full context
     const signalSummaries = rawSignals.slice(0, 5).map(s => {
@@ -6517,7 +6523,7 @@ Return ONLY valid JSON array, no markdown, max 5 signals, ordered by urgency (ES
         
         if (jsonMatch) {
             const synthesized = JSON.parse(jsonMatch[0]);
-            introEl.textContent = `${synthesized.length} actionable signals for today`;
+            if (introEl) introEl.textContent = `${synthesized.length} actionable signals for today`;
             
             // Cache the synthesized signals with article data
             cacheSignals(synthesized, rawSignals.slice(0, 5));
@@ -6531,7 +6537,7 @@ Return ONLY valid JSON array, no markdown, max 5 signals, ordered by urgency (ES
         }
     } catch (err) {
         console.error('Signal synthesis error:', err);
-        introEl.textContent = `${rawSignals.length} signals (AI synthesis unavailable)`;
+        if (introEl) introEl.textContent = `${rawSignals.length} signals (AI synthesis unavailable)`;
         list.innerHTML = rawSignals.slice(0, 5).map(signal => renderBasicSignal(signal)).join('');
     }
 }
