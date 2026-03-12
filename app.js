@@ -2336,9 +2336,27 @@ Return ONLY valid JSON, no markdown fences:
         try {
             // COST OPTIMIZATION: Use unified API helper with token tracking
             const { text } = await callClaudeAPI('MULTI_SOURCE_ANALYSIS', deltaPrompt, 1500, apiKey);
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                const updated = JSON.parse(jsonMatch[0]);
+            
+            // Try to extract JSON more carefully
+            let jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (!jsonMatch) {
+                throw new Error('No JSON found in response');
+            }
+            
+            let jsonStr = jsonMatch[0];
+            
+            // Clean up common JSON issues from Claude
+            // Remove trailing commas before closing brackets/braces
+            jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+            
+            try {
+                const updated = JSON.parse(jsonStr);
+                
+                // Validate the structure
+                if (!updated.executiveSummary || !updated.sections) {
+                    throw new Error('Invalid digest structure');
+                }
+                
                 // Preserve fingerprint metadata from the merge
                 this.digest = {
                     ...updated,
@@ -2350,8 +2368,10 @@ Return ONLY valid JSON, no markdown fences:
                     deltaCount: (this.digest.deltaCount || 0) + newArticles.length,
                 };
                 console.log(`✅ Delta merge complete — ${newArticles.length} new articles incorporated`);
-            } else {
-                throw new Error('Could not parse delta merge response');
+            } catch (parseError) {
+                console.error('JSON parse error:', parseError.message);
+                console.error('Problematic JSON:', jsonStr.substring(0, 500) + '...');
+                throw parseError;
             }
         } catch (error) {
             console.error('Delta merge failed, falling back to full generation:', error);
