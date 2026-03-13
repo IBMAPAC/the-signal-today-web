@@ -5860,6 +5860,8 @@ Rules:
 - Reference specific companies/regulators mentioned in the articles
 - Focus ONLY on each market's specific implications (do NOT cross-reference other markets)
 - Include ONE actionable takeaway per market
+- VALIDATE: If an article discusses a different region than the target market (e.g., Hong Kong event in ANZ brief, Europe news in ASEAN brief), exclude it from synthesis or note the misclassification
+- Geographic scope: ANZ (Australia/New Zealand), ASEAN (Singapore/Malaysia/Indonesia/Thailand/Philippines/Vietnam), GCG (Hong Kong/Taiwan/China), ISA (India/Sri Lanka/Bangladesh), KOREA (South Korea)
 
 Return ONLY a JSON object with this structure:
 {
@@ -6725,12 +6727,18 @@ CONTEXT:
 - Markets with signals: ${marketsInSignals.length > 0 ? marketsInSignals.join(', ') : 'All markets'}
 - Dual-wave thesis: AI/Agentic + Sovereignty/Regulation
 - Goal: Earn "Client CTO" posture
+- APAC Geographic Scope: ANZ (Australia/New Zealand), ASEAN (Singapore/Malaysia/Indonesia/Thailand/Philippines/Vietnam), GCG (Hong Kong/Taiwan/China), ISA (India/Sri Lanka/Bangladesh), KOREA (South Korea)
 
 ACTION TYPES:
 - ESCALATE: Contact TSL/client exec within 48h (C-suite change, competitive threat, deal signal)
 - BRIEF_ATL: Prepare talking points for ATL team (industry trend, regulatory change)
 - POSITION: Develop IBM counter-positioning (competitor move, market shift)
 - MONITOR: Track for pattern/escalation (early signal, emerging trend)
+
+VALIDATION RULES:
+- Only synthesize signals relevant to APAC markets listed above
+- If a signal discusses events outside APAC (e.g., Europe, Americas), mark actionType as MONITOR and note geographic limitation in context
+- Prioritize signals with clear APAC client/market impact
 
 Analyze each signal IN ORDER. Return JSON array with one entry per signal in SAME ORDER:
 [
