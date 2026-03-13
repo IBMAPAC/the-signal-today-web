@@ -6257,7 +6257,7 @@ Return JSON array:
   {
     "headline": "Sharp, memorable (8 words max)",
     "synthesis": "2-3 sentences: what's happening, why it matters for IBM APAC, what to do",
-    "signalType": "risk" | "opportunity" | "competitive" | "regulatory",
+    "signalType": "risk or opportunity or competitive or regulatory",
     "sourceIndices": [1, 3, 5]
   }
 ]
@@ -6737,8 +6737,8 @@ Analyze each signal IN ORDER. Return JSON array with one entry per signal in SAM
   {
     "headline": "Action verb + 10 words max",
     "context": "2-3 sentences: what happened, who affected, why matters for APAC",
-    "wave": "AI" | "SOVEREIGNTY" | "COMPETITIVE",
-    "actionType": "ESCALATE" | "BRIEF_ATL" | "POSITION" | "MONITOR",
+    "wave": "AI or SOVEREIGNTY or COMPETITIVE",
+    "actionType": "ESCALATE or BRIEF_ATL or POSITION or MONITOR",
     "action": "Specific action (who, what, when)",
     "affectedMarkets": ["ANZ", "ASEAN", "GCG", "ISA", "KOREA"],
     "ibmAngle": "Specific IBM solution: watsonx, Red Hat OpenShift, IBM Z, Instana",
@@ -7798,7 +7798,7 @@ Return JSON array (max 5 articles):
     "strategicThesis": "Big idea in one powerful sentence — what market shift? (e.g., 'The mainframe moment for AI governance')",
     "leadershipImplication": "What this means for CTOs/CIOs making investment decisions",
     "cxoQuestion": "Provocative question for CxO discussion (thought-provoking, not sales-y)",
-    "timeHorizon": "6 months" | "12 months" | "2-3 years"
+    "timeHorizon": "6 months or 12 months or 2-3 years"
   }
 ]
 
