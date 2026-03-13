@@ -1380,3 +1380,84 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .section-timestamp.fresh {
     color: var(--cds-support-success);
 }
+
+/* Performance Dashboard Styles */
+.perf-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.perf-stat-card {
+    background: var(--cds-layer-02);
+    border: 1px solid var(--cds-border-subtle-01);
+    border-radius: 4px;
+    padding: 1rem;
+    text-align: center;
+}
+
+.perf-stat-label {
+    font-size: 0.75rem;
+    color: var(--cds-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.perf-stat-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--cds-text-primary);
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+.perf-details {
+    margin-top: 1.5rem;
+}
+
+.perf-details h5 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--cds-text-primary);
+    margin: 1.5rem 0 0.75rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.perf-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+}
+
+.perf-table thead {
+    background: var(--cds-layer-02);
+}
+
+.perf-table th {
+    text-align: left;
+    padding: 0.5rem;
+    font-weight: 600;
+    color: var(--cds-text-secondary);
+    border-bottom: 1px solid var(--cds-border-subtle-01);
+}
+
+.perf-table td {
+    padding: 0.5rem;
+    color: var(--cds-text-primary);
+    border-bottom: 1px solid var(--cds-border-subtle-01);
+}
+
+.perf-table tbody tr:hover {
+    background: var(--cds-layer-hover-01);
+}
+
+.perf-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--cds-border-subtle-01);
+}

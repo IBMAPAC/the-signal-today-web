@@ -275,6 +275,73 @@ try {
     }
 } catch (e) { /* ignore */ }
 
+// Cache performance tracking
+let cachePerformanceStats = {
+    sessionStart: Date.now(),
+    hits: 0,
+    misses: 0,
+    bySection: {
+        'executive-summary': { hits: 0, misses: 0, lastAccess: null },
+        'market-insights': { hits: 0, misses: 0, lastAccess: null },
+        'action-required': { hits: 0, misses: 0, lastAccess: null },
+        'deep-reads': { hits: 0, misses: 0, lastAccess: null }
+    }
+};
+
+// Load persisted cache stats
+try {
+    const saved = localStorage.getItem('signal_cache_stats');
+    if (saved) {
+        const parsed = JSON.parse(saved);
+        // Only use if from today
+        if (parsed.sessionStart && new Date(parsed.sessionStart).toDateString() === new Date().toDateString()) {
+            cachePerformanceStats = parsed;
+        }
+    }
+} catch (e) { /* ignore */ }
+
+/**
+ * Track cache access for performance monitoring
+ * @param {string} section - Section name (executive-summary, market-insights, etc.)
+ * @param {boolean} isHit - Whether cache was hit or missed
+ */
+function trackCacheAccess(section, isHit) {
+    if (isHit) {
+        cachePerformanceStats.hits++;
+        if (cachePerformanceStats.bySection[section]) {
+            cachePerformanceStats.bySection[section].hits++;
+            cachePerformanceStats.bySection[section].lastAccess = Date.now();
+        }
+    } else {
+        cachePerformanceStats.misses++;
+        if (cachePerformanceStats.bySection[section]) {
+            cachePerformanceStats.bySection[section].misses++;
+            cachePerformanceStats.bySection[section].lastAccess = Date.now();
+        }
+    }
+    
+    // Persist stats
+    try {
+        localStorage.setItem('signal_cache_stats', JSON.stringify(cachePerformanceStats));
+    } catch (e) { /* ignore */ }
+}
+
+/**
+ * Get cache hit rate for a section or overall
+ * @param {string} section - Optional section name
+ * @returns {number} Hit rate as percentage (0-100)
+ */
+function getCacheHitRate(section = null) {
+    if (section && cachePerformanceStats.bySection[section]) {
+        const stats = cachePerformanceStats.bySection[section];
+        const total = stats.hits + stats.misses;
+        return total > 0 ? (stats.hits / total * 100) : 0;
+    }
+    
+    const total = cachePerformanceStats.hits + cachePerformanceStats.misses;
+    return total > 0 ? (cachePerformanceStats.hits / total * 100) : 0;
+}
+
 /**
  * Unified API call helper with model selection, token tracking, and error handling
  * @param {string} taskType - One of MODEL_TIERS keys
@@ -4294,6 +4361,10 @@ TOP READS
     }
 
     renderIntelligenceStatsInSettings() {
+        // Use the new comprehensive performance dashboard
+        displayPerformanceStats();
+        
+        // Keep the old stats display for backward compatibility
         const container = document.getElementById('settings-intelligence-stats');
         if (!container) return;
         
@@ -4454,6 +4525,210 @@ function toggleSection(sectionId) {
 
 function closeSettings() {
     document.getElementById('settings-modal').classList.add('hidden');
+}
+
+/**
+ * Display performance dashboard in settings
+ */
+function displayPerformanceStats() {
+    const statsContainer = document.getElementById('settings-intelligence-stats');
+    if (!statsContainer) return;
+    
+    // Calculate overall cache hit rate
+    const overallHitRate = getCacheHitRate();
+    
+    // Calculate API stats
+    const totalCalls = tokenUsageStats.calls.length;
+    const totalCost = tokenUsageStats.estimatedCost;
+    const avgResponseTime = totalCalls > 0
+        ? tokenUsageStats.calls.reduce((sum, call) => sum + call.duration, 0) / totalCalls
+        : 0;
+    
+    // Group calls by type
+    const callsByType = {};
+    tokenUsageStats.calls.forEach(call => {
+        if (!callsByType[call.taskType]) {
+            callsByType[call.taskType] = { count: 0, cost: 0, tokens: 0 };
+        }
+        callsByType[call.taskType].count++;
+        callsByType[call.taskType].cost += call.cost;
+        callsByType[call.taskType].tokens += call.inputTokens + call.outputTokens;
+    });
+    
+    // Build HTML
+    let html = `
+        <div class="perf-stats-grid">
+            <div class="perf-stat-card">
+                <div class="perf-stat-label">API Calls Today</div>
+                <div class="perf-stat-value">${totalCalls}</div>
+            </div>
+            <div class="perf-stat-card">
+                <div class="perf-stat-label">Total Cost</div>
+                <div class="perf-stat-value">$${totalCost.toFixed(2)}</div>
+            </div>
+            <div class="perf-stat-card">
+                <div class="perf-stat-label">Avg Response Time</div>
+                <div class="perf-stat-value">${avgResponseTime.toFixed(0)}ms</div>
+            </div>
+            <div class="perf-stat-card">
+                <div class="perf-stat-label">Cache Hit Rate</div>
+                <div class="perf-stat-value">${overallHitRate.toFixed(1)}%</div>
+            </div>
+        </div>
+        
+        <div class="perf-details">
+            <h5>API Calls by Type</h5>
+            <table class="perf-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Calls</th>
+                        <th>Tokens</th>
+                        <th>Cost</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    Object.entries(callsByType).forEach(([type, stats]) => {
+        html += `
+            <tr>
+                <td>${type}</td>
+                <td>${stats.count}</td>
+                <td>${stats.tokens.toLocaleString()}</td>
+                <td>$${stats.cost.toFixed(3)}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+            
+            <h5>Cache Performance by Section</h5>
+            <table class="perf-table">
+                <thead>
+                    <tr>
+                        <th>Section</th>
+                        <th>Hits</th>
+                        <th>Misses</th>
+                        <th>Hit Rate</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+    
+    Object.entries(cachePerformanceStats.bySection).forEach(([section, stats]) => {
+        const total = stats.hits + stats.misses;
+        const hitRate = total > 0 ? (stats.hits / total * 100) : 0;
+        const sectionName = section.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        
+        html += `
+            <tr>
+                <td>${sectionName}</td>
+                <td>${stats.hits}</td>
+                <td>${stats.misses}</td>
+                <td>${hitRate.toFixed(1)}%</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                </tbody>
+            </table>
+            
+            <div class="perf-actions">
+                <button class="btn btn-sm btn-secondary" onclick="resetPerformanceStats()">Reset Stats</button>
+                <button class="btn btn-sm btn-secondary" onclick="exportPerformanceStats()">Export CSV</button>
+            </div>
+        </div>
+    `;
+    
+    statsContainer.innerHTML = html;
+}
+
+/**
+ * Reset performance statistics
+ */
+function resetPerformanceStats() {
+    if (!confirm('Reset all performance statistics? This cannot be undone.')) return;
+    
+    // Reset token stats
+    tokenUsageStats = {
+        sessionStart: Date.now(),
+        calls: [],
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        estimatedCost: 0
+    };
+    localStorage.setItem('signal_token_stats', JSON.stringify(tokenUsageStats));
+    
+    // Reset cache stats
+    cachePerformanceStats = {
+        sessionStart: Date.now(),
+        hits: 0,
+        misses: 0,
+        bySection: {
+            'executive-summary': { hits: 0, misses: 0, lastAccess: null },
+            'market-insights': { hits: 0, misses: 0, lastAccess: null },
+            'action-required': { hits: 0, misses: 0, lastAccess: null },
+            'deep-reads': { hits: 0, misses: 0, lastAccess: null }
+        }
+    };
+    localStorage.setItem('signal_cache_stats', JSON.stringify(cachePerformanceStats));
+    
+    // Refresh display
+    displayPerformanceStats();
+    alert('Performance statistics reset successfully.');
+}
+
+/**
+ * Export performance statistics as CSV
+ */
+function exportPerformanceStats() {
+    const date = new Date().toISOString().split('T')[0];
+    let csv = 'Signal Today Performance Report\n';
+    csv += `Generated: ${new Date().toLocaleString()}\n\n`;
+    
+    // API Calls Summary
+    csv += 'API CALLS SUMMARY\n';
+    csv += 'Type,Calls,Input Tokens,Output Tokens,Cost\n';
+    
+    const callsByType = {};
+    tokenUsageStats.calls.forEach(call => {
+        if (!callsByType[call.taskType]) {
+            callsByType[call.taskType] = { count: 0, inputTokens: 0, outputTokens: 0, cost: 0 };
+        }
+        callsByType[call.taskType].count++;
+        callsByType[call.taskType].inputTokens += call.inputTokens;
+        callsByType[call.taskType].outputTokens += call.outputTokens;
+        callsByType[call.taskType].cost += call.cost;
+    });
+    
+    Object.entries(callsByType).forEach(([type, stats]) => {
+        csv += `${type},${stats.count},${stats.inputTokens},${stats.outputTokens},$${stats.cost.toFixed(4)}\n`;
+    });
+    
+    csv += `\nTOTAL,${tokenUsageStats.calls.length},${tokenUsageStats.totalInputTokens},${tokenUsageStats.totalOutputTokens},$${tokenUsageStats.estimatedCost.toFixed(4)}\n\n`;
+    
+    // Cache Performance
+    csv += 'CACHE PERFORMANCE\n';
+    csv += 'Section,Hits,Misses,Hit Rate\n';
+    
+    Object.entries(cachePerformanceStats.bySection).forEach(([section, stats]) => {
+        const total = stats.hits + stats.misses;
+        const hitRate = total > 0 ? (stats.hits / total * 100) : 0;
+        csv += `${section},${stats.hits},${stats.misses},${hitRate.toFixed(1)}%\n`;
+    });
+    
+    // Download CSV
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `signal-today-performance-${date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
 }
 
 function saveSettings() {
@@ -5379,6 +5654,7 @@ function renderMarketInsights(forceRefresh = false) {
                 const { briefs, timestamp } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
                 if (age < CACHE_DURATIONS.MARKET_INSIGHTS && briefs && briefs.length > 0) {
+                    trackCacheAccess('market-insights', true); // Cache HIT
                     list.innerHTML = briefs.map(renderMarketBriefCard).join('');
                     return;
                 }
@@ -5387,6 +5663,8 @@ function renderMarketInsights(forceRefresh = false) {
             console.log('Market insights cache error:', e);
         }
     }
+    
+    trackCacheAccess('market-insights', false); // Cache MISS
     
     // Group signals by market
     const marketSignals = {
@@ -5934,6 +6212,7 @@ async function renderExecutiveSummary(forceRefresh = false) {
                 const { insights, timestamp, articleCount } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
                 if (age < CACHE_DURATIONS.DAILY_DIGEST && insights && insights.length > 0) {
+                    trackCacheAccess('executive-summary', true); // Cache HIT
                     list.innerHTML = insights.map(renderExecutiveInsight).join('');
                     content.querySelector('.executive-summary-intro')?.classList.add('hidden');
                     
@@ -5946,6 +6225,8 @@ async function renderExecutiveSummary(forceRefresh = false) {
             console.log('Exec summary cache error:', e);
         }
     }
+    
+    trackCacheAccess('executive-summary', false); // Cache MISS
     
     const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
     const todayArticles = app.dailyArticles.length > 0 ? app.dailyArticles : app.articles.slice(0, 30);
@@ -6546,7 +6827,13 @@ Return ONLY valid JSON array, no markdown, max 5 signals, ordered by urgency (ES
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         
         if (jsonMatch) {
-            const synthesized = JSON.parse(jsonMatch[0]);
+            // Clean up JSON before parsing (remove trailing commas, fix common issues)
+            let jsonStr = jsonMatch[0];
+            jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
+            jsonStr = jsonStr.replace(/\n/g, ' '); // Remove newlines
+            jsonStr = jsonStr.replace(/\r/g, ''); // Remove carriage returns
+            
+            const synthesized = JSON.parse(jsonStr);
             if (introEl) introEl.textContent = `${synthesized.length} actionable signals for today`;
             
             // Cache the synthesized signals with article data
@@ -6561,6 +6848,7 @@ Return ONLY valid JSON array, no markdown, max 5 signals, ordered by urgency (ES
         }
     } catch (err) {
         console.error('Signal synthesis error:', err);
+        console.error('Error details:', err.message);
         if (introEl) introEl.textContent = `${rawSignals.length} signals (AI synthesis unavailable)`;
         list.innerHTML = rawSignals.slice(0, 5).map(signal => renderBasicSignal(signal)).join('');
     }
@@ -7504,8 +7792,9 @@ async function renderDeepReads(forceRefresh = false) {
                 const age = Date.now() - timestamp;
                 // Show cached if less than 24 hours old (strategic content has longer shelf life)
                 if (age < 24 * 60 * 60 * 1000 && insights && insights.length > 0) {
+                    trackCacheAccess('deep-reads', true); // Cache HIT
                     countEl.textContent = insights.length;
-                    list.innerHTML = insights.map((insight, idx) => 
+                    list.innerHTML = insights.map((insight, idx) =>
                         renderCachedDeepRead(insight, articlesData?.[idx])
                     ).join('');
                     return;
@@ -7515,6 +7804,8 @@ async function renderDeepReads(forceRefresh = false) {
             console.log('Deep reads cache read error:', e);
         }
     }
+    
+    trackCacheAccess('deep-reads', false); // Cache MISS
     
     const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
     
