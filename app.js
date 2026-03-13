@@ -6749,9 +6749,11 @@ Analyze each signal IN ORDER. Return JSON array with one entry per signal in SAM
 
 Return valid JSON array, max 5 signals, ordered by urgency (ESCALATE first).`;
 
+    let claudeResponse = null;
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
         const { text } = await callClaudeAPI('STRATEGIC_ANALYSIS', prompt, 1000, apiKey);
+        claudeResponse = text;
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         
         if (jsonMatch) {
@@ -6782,8 +6784,8 @@ Return valid JSON array, max 5 signals, ordered by urgency (ESCALATE first).`;
         console.error('Signal synthesis error:', err);
         console.error('Error details:', err.message);
         // Log the actual response for debugging
-        if (err.message.includes('JSON')) {
-            console.error('Raw Claude response excerpt:', text?.substring(0, 500));
+        if (err.message.includes('JSON') && claudeResponse) {
+            console.error('Raw Claude response excerpt:', claudeResponse.substring(0, 500));
         }
         if (introEl) introEl.textContent = `${rawSignals.length} signals (AI synthesis unavailable)`;
         list.innerHTML = rawSignals.slice(0, 5).map(signal => renderBasicSignal(signal)).join('');
