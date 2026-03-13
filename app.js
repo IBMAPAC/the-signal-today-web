@@ -6747,7 +6747,7 @@ Analyze each signal IN ORDER. Return JSON array with one entry per signal in SAM
   }
 ]
 
-Return valid JSON array, max 5 signals, ordered by urgency (ESCALATE first).`;
+Return valid JSON array, max 5 signals, in the SAME ORDER as input signals.`;
 
     let claudeResponse = null;
     try {
