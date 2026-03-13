@@ -6752,7 +6752,7 @@ Return valid JSON array, max 5 signals, ordered by urgency (ESCALATE first).`;
     let claudeResponse = null;
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
-        const { text } = await callClaudeAPI('STRATEGIC_ANALYSIS', prompt, 1500, apiKey);
+        const { text } = await callClaudeAPI('STRATEGIC_ANALYSIS', prompt, 2000, apiKey);
         claudeResponse = text;
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         
