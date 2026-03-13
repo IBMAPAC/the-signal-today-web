@@ -703,7 +703,13 @@ Analyze this article using the rules above.`;
             throw new Error('Could not parse Claude response');
         }
         
-        const analysis = JSON.parse(jsonMatch[0]);
+        // Clean up JSON before parsing
+        let jsonStr = jsonMatch[0];
+        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
+        jsonStr = jsonStr.replace(/\n/g, ' '); // Remove newlines
+        jsonStr = jsonStr.replace(/\r/g, ''); // Remove carriage returns
+        
+        const analysis = JSON.parse(jsonStr);
         
         return {
             threatLevel: analysis.threatLevel || 0,

@@ -6761,6 +6761,10 @@ Return valid JSON array, max 5 signals, ordered by urgency (ESCALATE first).`;
             jsonStr = jsonStr.replace(/\n/g, ' '); // Remove newlines
             jsonStr = jsonStr.replace(/\r/g, ''); // Remove carriage returns
             
+            // Additional cleanup for common Claude formatting issues
+            jsonStr = jsonStr.replace(/"\s*or\s*"/g, '" or "'); // Fix "or" spacing in values
+            jsonStr = jsonStr.replace(/(['"])\s*or\s*(['"])/g, '$1 or $2'); // Normalize or operators
+            
             const synthesized = JSON.parse(jsonStr);
             if (introEl) introEl.textContent = `${synthesized.length} actionable signals for today`;
             
@@ -6777,6 +6781,10 @@ Return valid JSON array, max 5 signals, ordered by urgency (ESCALATE first).`;
     } catch (err) {
         console.error('Signal synthesis error:', err);
         console.error('Error details:', err.message);
+        // Log the actual response for debugging
+        if (err.message.includes('JSON')) {
+            console.error('Raw Claude response excerpt:', text?.substring(0, 500));
+        }
         if (introEl) introEl.textContent = `${rawSignals.length} signals (AI synthesis unavailable)`;
         list.innerHTML = rawSignals.slice(0, 5).map(signal => renderBasicSignal(signal)).join('');
     }
