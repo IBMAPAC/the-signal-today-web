@@ -5879,7 +5879,7 @@ function classifySignalType(article) {
     ];
     
     // IBM-specific - check BEFORE opportunity to correctly tag IBM news
-    const ibmKeywords = ['ibm', 'watsonx', 'watson', 'red hat', 'openshift', 'ansible', 'instana', 'qradar', 'turbonomic', 'apptio'];
+    const ibmKeywords = ['ibm', 'watsonx', 'watson', 'red hat', 'openshift', 'ansible', 'instana', 'turbonomic', 'apptio', 'hashicorp', 'terraform', 'vault', 'webMethods', 'Confluent', 'IBM Bob', 'Guardium', 'Concert', 'Maximo', 'Fusion'];
     if (hasKeyword(ibmKeywords)) return 'ibm';
     
     if (hasKeyword(opportunityKeywords)) return 'opportunity';
@@ -6042,6 +6042,8 @@ Rules:
 - One insight should be about competitive positioning
 - One insight should be actionable this week
 - Be specific about APAC markets when relevant
+
+CRITICAL: The sourceIndices array must accurately reflect which articles were used for each insight. Only include article indices that directly contributed to that specific insight. Ensure indices correspond to the [index] numbers in the articles list above.
 
 Return ONLY valid JSON array.`;
 
@@ -6512,6 +6514,8 @@ ACTION TYPE DEFINITIONS (use these exact values):
 - "BRIEF_ATL" = Prepare talking points for ATL team in affected market (industry trend, regulatory change)
 - "POSITION" = Develop IBM response/counter-positioning (competitor announcement, market shift)
 - "MONITOR" = Track for pattern/escalation (early signal, emerging trend)
+
+CRITICAL: Analyze EACH raw signal above IN ORDER and return a JSON array with one entry per signal in the SAME ORDER. Do not synthesize or combine signals. Each output signal must directly correspond to its input signal.
 
 For each signal, provide a JSON array with EXACTLY this structure:
 [
