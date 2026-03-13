@@ -289,12 +289,38 @@
                 </div>
                 <div class="modal-body">
                     <section class="settings-section">
-                        <h3>🤖 Claude AI</h3>
+                        <h3>🤖 AI Provider</h3>
                         <div class="form-group">
-                            <label for="api-key">API Key</label>
-                            <input type="password" id="api-key" placeholder="sk-ant-...">
+                            <label for="ai-provider">Select Provider</label>
+                            <select id="ai-provider" onchange="toggleProviderAPIKeys()">
+                                <option value="claude">Claude (Anthropic)</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="gemini">Google Gemini</option>
+                            </select>
+                            <p class="form-hint" id="provider-hint">Using Claude Sonnet 4 for strategic analysis, Haiku 3.5 for fast tasks</p>
+                        </div>
+                        
+                        <!-- Claude API Key -->
+                        <div class="form-group provider-api-key" id="claude-api-key-group">
+                            <label for="claude-api-key">Claude API Key</label>
+                            <input type="password" id="claude-api-key" placeholder="sk-ant-...">
                             <p class="form-hint">Get from <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></p>
                         </div>
+                        
+                        <!-- OpenAI API Key -->
+                        <div class="form-group provider-api-key hidden" id="openai-api-key-group">
+                            <label for="openai-api-key">OpenAI API Key</label>
+                            <input type="password" id="openai-api-key" placeholder="sk-proj-...">
+                            <p class="form-hint">Get from <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a> - Using GPT-4o for strategic analysis, GPT-4o-mini for fast tasks</p>
+                        </div>
+                        
+                        <!-- Gemini API Key -->
+                        <div class="form-group provider-api-key hidden" id="gemini-api-key-group">
+                            <label for="gemini-api-key">Gemini API Key</label>
+                            <input type="password" id="gemini-api-key" placeholder="AIza...">
+                            <p class="form-hint">Get from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a> - Using Gemini Exp 1206 for strategic analysis, Gemini 2.0 Flash for fast tasks</p>
+                        </div>
+                        
                         <div class="form-group">
                             <label for="week-context">This Week's Context</label>
                             <textarea id="week-context" rows="3" placeholder="e.g. Meeting DBS CTO Tuesday. Telstra deal review Thursday."></textarea>

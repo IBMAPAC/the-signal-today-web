@@ -16,8 +16,10 @@
  * for Field CTO managing 343 accounts across 5 APAC markets.
  */
 class HybridIntelligenceEngine {
-    constructor(apiKey) {
+    constructor(apiKey, provider = 'claude', providerConfig = null) {
         this.apiKey = apiKey;
+        this.provider = provider;
+        this.providerConfig = providerConfig || this.getDefaultProviderConfig();
         this.embeddingCache = new Map();
         this.analysisCache = new Map();
         
@@ -28,6 +30,58 @@ class HybridIntelligenceEngine {
             tier3Processed: 0,
             tier3Cost: 0,
             lastReset: new Date().toISOString()
+        };
+    }
+    
+    getDefaultProviderConfig() {
+        return {
+            claude: {
+                endpoint: 'https://api.anthropic.com/v1/messages',
+                model: 'claude-sonnet-4-20250514',
+                headers: (apiKey) => ({
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                }),
+                formatRequest: (model, maxTokens, prompt) => ({
+                    model,
+                    max_tokens: maxTokens,
+                    messages: [{ role: 'user', content: prompt }]
+                }),
+                extractResponse: (data) => data.content[0].text
+            },
+            openai: {
+                endpoint: 'https://api.openai.com/v1/chat/completions',
+                model: 'gpt-4o',
+                headers: (apiKey) => ({
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                }),
+                formatRequest: (model, maxTokens, prompt) => ({
+                    model,
+                    max_tokens: maxTokens,
+                    messages: [{ role: 'user', content: prompt }]
+                }),
+                extractResponse: (data) => data.choices[0]?.message?.content || ''
+            },
+            gemini: {
+                endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
+                model: 'gemini-exp-1206',
+                headers: () => ({
+                    'Content-Type': 'application/json'
+                }),
+                formatRequest: (model, maxTokens, prompt) => ({
+                    contents: [{
+                        parts: [{ text: prompt }]
+                    }],
+                    generationConfig: {
+                        maxOutputTokens: maxTokens
+                    }
+                }),
+                extractResponse: (data) => data.candidates?.[0]?.content?.parts?.[0]?.text || '',
+                useKeyInUrl: true
+            }
         };
         
         // Tier 1: Keyword patterns (fast filter)
@@ -675,28 +729,32 @@ TOP CLIENTS: ${clientList || 'None'}
 
 Analyze this article using the rules above.`;
 
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+        // Get provider configuration
+        const config = this.providerConfig[this.provider];
+        if (!config) {
+            throw new Error(`Unsupported provider: ${this.provider}`);
+        }
+        
+        // Build endpoint URL (Gemini needs API key in URL)
+        let endpoint = config.endpoint;
+        if (config.useKeyInUrl) {
+            endpoint = `${endpoint}/${config.model}:generateContent?key=${this.apiKey}`;
+        }
+        
+        // Make API call
+        const response = await fetch(endpoint, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': this.apiKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true'
-            },
-            body: JSON.stringify({
-                model: 'claude-sonnet-4-20250514',
-                max_tokens: 600,
-                messages: [{ role: 'user', content: prompt }]
-            })
+            headers: config.headers(this.apiKey),
+            body: JSON.stringify(config.formatRequest(config.model, 600, prompt))
         });
 
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));
-            throw new Error(`Claude API error: ${response.status} - ${error.error?.message || 'Unknown error'}`);
+            throw new Error(`${this.provider} API error: ${response.status} - ${error.error?.message || error.message || 'Unknown error'}`);
         }
 
         const data = await response.json();
-        const text = data.content[0].text;
+        const text = config.extractResponse(data);
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         
         if (!jsonMatch) {

@@ -236,22 +236,62 @@ const CACHE_DURATIONS = {
 // =============================================
 
 // Model pricing (per million tokens) - for tracking/display
-const MODEL_PRICING = {
-    'claude-sonnet-4-20250514': { input: 3.00, output: 15.00 },
-    'claude-haiku-3-5-20241022': { input: 0.80, output: 4.00 }
+// AI Provider Configuration
+const AI_PROVIDERS = {
+    CLAUDE: 'claude',
+    OPENAI: 'openai',
+    GEMINI: 'gemini'
 };
 
-// Model selection based on task complexity
-const MODEL_TIERS = {
-    // Haiku for simple, fast tasks (75% cost savings)
-    CLASSIFICATION: 'claude-haiku-3-5-20241022',
-    EXTRACTION: 'claude-haiku-3-5-20241022',
-    SUMMARIZATION_SHORT: 'claude-haiku-3-5-20241022',
+// Provider-specific model mappings
+const PROVIDER_MODELS = {
+    claude: {
+        HAIKU: 'claude-haiku-3-5-20241022',
+        SONNET: 'claude-sonnet-4-20250514'
+    },
+    openai: {
+        HAIKU: 'gpt-4o-mini',  // Fast/Cheap tier
+        SONNET: 'gpt-4o'       // Strategic/Quality tier
+    },
+    gemini: {
+        HAIKU: 'gemini-2.0-flash-exp',  // Fast/Cheap tier
+        SONNET: 'gemini-exp-1206'       // Strategic/Quality tier
+    }
+};
+
+// Provider API endpoints
+const PROVIDER_ENDPOINTS = {
+    claude: 'https://api.anthropic.com/v1/messages',
+    openai: 'https://api.openai.com/v1/chat/completions',
+    gemini: 'https://generativelanguage.googleapis.com/v1beta/models'
+};
+
+// Comprehensive pricing for all providers (per million tokens)
+const MODEL_PRICING = {
+    // Claude models
+    'claude-sonnet-4-20250514': { input: 3.00, output: 15.00 },
+    'claude-haiku-3-5-20241022': { input: 0.80, output: 4.00 },
     
-    // Sonnet for complex analysis tasks
-    SYNTHESIS: 'claude-sonnet-4-20250514',
-    STRATEGIC_ANALYSIS: 'claude-sonnet-4-20250514',
-    MULTI_SOURCE_ANALYSIS: 'claude-sonnet-4-20250514'
+    // OpenAI models (current market rates as of 2026)
+    'gpt-4o': { input: 2.50, output: 10.00 },
+    'gpt-4o-mini': { input: 0.15, output: 0.60 },
+    
+    // Gemini models (current market rates as of 2026)
+    'gemini-exp-1206': { input: 0.00, output: 0.00 },  // Free during preview
+    'gemini-2.0-flash-exp': { input: 0.00, output: 0.00 }  // Free during preview
+};
+
+// Model selection based on task complexity (tier-based)
+const MODEL_TIERS = {
+    // Haiku tier for simple, fast tasks (75% cost savings)
+    CLASSIFICATION: 'HAIKU',
+    EXTRACTION: 'HAIKU',
+    SUMMARIZATION_SHORT: 'HAIKU',
+    
+    // Sonnet tier for complex analysis tasks
+    SYNTHESIS: 'SONNET',
+    STRATEGIC_ANALYSIS: 'SONNET',
+    MULTI_SOURCE_ANALYSIS: 'SONNET'
 };
 
 // Token usage tracking for the session
@@ -350,44 +390,146 @@ function getCacheHitRate(section = null) {
  * @param {string} apiKey - Claude API key
  * @returns {Promise<{text: string, usage: object}>}
  */
-async function callClaudeAPI(taskType, prompt, maxTokens, apiKey) {
-    const model = MODEL_TIERS[taskType] || MODEL_TIERS.SYNTHESIS;
-    const pricing = MODEL_PRICING[model];
-    
+/**
+ * Get current AI provider and API keys from settings
+ */
+function getAIProviderSettings() {
+    const provider = localStorage.getItem('signal_ai_provider') || AI_PROVIDERS.CLAUDE;
+    const apiKeys = {
+        claude: localStorage.getItem('signal_api_key') || localStorage.getItem('apiKey') || '', // Backward compatibility
+        openai: localStorage.getItem('signal_openai_api_key') || '',
+        gemini: localStorage.getItem('signal_gemini_api_key') || ''
+    };
+    return { provider, apiKeys };
+}
+
+/**
+ * Unified AI API caller - supports Claude, OpenAI, and Gemini
+ */
+async function callAI(taskType, prompt, maxTokens, apiKey = null, provider = null) {
     const startTime = Date.now();
     
-    try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true'
-            },
-            body: JSON.stringify({
-                model: model,
-                max_tokens: maxTokens,
-                messages: [{ role: 'user', content: prompt }]
-            })
-        });
-
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error?.message || `API error: ${response.status}`);
+    // Get provider settings
+    if (!provider) {
+        const settings = getAIProviderSettings();
+        provider = settings.provider;
+        if (!apiKey) {
+            apiKey = settings.apiKeys[provider];
         }
-
-        const data = await response.json();
-        const text = data.content[0]?.text || '';
+    }
+    
+    if (!apiKey) {
+        throw new Error(`No API key configured for ${provider}`);
+    }
+    
+    // Get model tier and actual model name
+    const modelTier = MODEL_TIERS[taskType] || MODEL_TIERS.SYNTHESIS;
+    const model = PROVIDER_MODELS[provider][modelTier];
+    const pricing = MODEL_PRICING[model];
+    
+    try {
+        let response, data, text, usage;
+        
+        switch (provider) {
+            case AI_PROVIDERS.CLAUDE:
+                response = await fetch(PROVIDER_ENDPOINTS.claude, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        max_tokens: maxTokens,
+                        messages: [{ role: 'user', content: prompt }]
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error?.message || `Claude API error: ${response.status}`);
+                }
+                
+                data = await response.json();
+                text = data.content[0]?.text || '';
+                usage = {
+                    input_tokens: data.usage?.input_tokens || 0,
+                    output_tokens: data.usage?.output_tokens || 0
+                };
+                break;
+                
+            case AI_PROVIDERS.OPENAI:
+                response = await fetch(PROVIDER_ENDPOINTS.openai, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        max_tokens: maxTokens,
+                        messages: [{ role: 'user', content: prompt }]
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error?.message || `OpenAI API error: ${response.status}`);
+                }
+                
+                data = await response.json();
+                text = data.choices[0]?.message?.content || '';
+                usage = {
+                    input_tokens: data.usage?.prompt_tokens || 0,
+                    output_tokens: data.usage?.completion_tokens || 0
+                };
+                break;
+                
+            case AI_PROVIDERS.GEMINI:
+                // Gemini uses a different URL structure with model in path
+                const geminiUrl = `${PROVIDER_ENDPOINTS.gemini}/${model}:generateContent?key=${apiKey}`;
+                response = await fetch(geminiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: prompt }]
+                        }],
+                        generationConfig: {
+                            maxOutputTokens: maxTokens
+                        }
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.error?.message || `Gemini API error: ${response.status}`);
+                }
+                
+                data = await response.json();
+                text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                usage = {
+                    input_tokens: data.usageMetadata?.promptTokenCount || 0,
+                    output_tokens: data.usageMetadata?.candidatesTokenCount || 0
+                };
+                break;
+                
+            default:
+                throw new Error(`Unsupported AI provider: ${provider}`);
+        }
         
         // Track usage
-        const usage = data.usage || { input_tokens: 0, output_tokens: 0 };
-        const callCost = (usage.input_tokens * pricing.input / 1000000) + 
+        const callCost = (usage.input_tokens * pricing.input / 1000000) +
                          (usage.output_tokens * pricing.output / 1000000);
         
         tokenUsageStats.calls.push({
             timestamp: Date.now(),
             taskType,
+            provider,
             model,
             inputTokens: usage.input_tokens,
             outputTokens: usage.output_tokens,
@@ -405,9 +547,17 @@ async function callClaudeAPI(taskType, prompt, maxTokens, apiKey) {
         
         return { text, usage };
     } catch (error) {
-        console.error(`API call failed (${taskType}):`, error);
+        console.error(`${provider} API call failed (${taskType}):`, error);
         throw error;
     }
+}
+
+/**
+ * Legacy function for backward compatibility
+ * @deprecated Use callAI() instead
+ */
+async function callClaudeAPI(taskType, prompt, maxTokens, apiKey) {
+    return callAI(taskType, prompt, maxTokens, apiKey, AI_PROVIDERS.CLAUDE);
 }
 
 /**
@@ -586,10 +736,11 @@ class SignalApp {
             this.loadFromStorage();
 
             // Initialize intelligence engine if API key available
-            const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+            const settings = getAIProviderSettings();
+            const apiKey = settings.apiKeys[settings.provider];
             if (apiKey && typeof HybridIntelligenceEngine !== 'undefined') {
-                this.intelligenceEngine = new HybridIntelligenceEngine(apiKey);
-                console.log('🧠 Hybrid Intelligence Engine initialized');
+                this.intelligenceEngine = new HybridIntelligenceEngine(apiKey, settings.provider);
+                console.log(`🧠 Hybrid Intelligence Engine initialized (${settings.provider})`);
             } else if (!apiKey) {
                 console.log('⚠️ Intelligence Engine disabled: No API key configured');
             }
@@ -2402,7 +2553,7 @@ Return ONLY valid JSON, no markdown fences:
 
         try {
             // COST OPTIMIZATION: Use unified API helper with token tracking
-            const { text } = await callClaudeAPI('MULTI_SOURCE_ANALYSIS', deltaPrompt, 1500, apiKey);
+            const { text } = await callAI('MULTI_SOURCE_ANALYSIS', deltaPrompt, 1500, apiKey);
             
             // Try to extract JSON more carefully
             let jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -2572,7 +2723,7 @@ ${articleList}`;
 
         try {
             // COST OPTIMIZATION: Use unified API helper with token tracking
-            const { text } = await callClaudeAPI('MULTI_SOURCE_ANALYSIS', prompt, 2500, apiKey);
+            const { text } = await callAI('MULTI_SOURCE_ANALYSIS', prompt, 2500, apiKey);
             
             // Parse JSON from response
             const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -3361,7 +3512,7 @@ Return valid JSON:
         
         try {
             // COST OPTIMIZATION: Use unified API helper with token tracking
-            const { text } = await callClaudeAPI('STRATEGIC_ANALYSIS', prompt, 600, apiKey);
+            const { text } = await callAI('STRATEGIC_ANALYSIS', prompt, 600, apiKey);
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             
             if (jsonMatch) {
@@ -3528,7 +3679,7 @@ Return valid JSON:
         
         try {
             // COST OPTIMIZATION: Use unified API helper with token tracking
-            const { text } = await callClaudeAPI('STRATEGIC_ANALYSIS', prompt, 900, apiKey);
+            const { text } = await callAI('STRATEGIC_ANALYSIS', prompt, 900, apiKey);
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             
             if (jsonMatch) {
@@ -4200,7 +4351,7 @@ TOP READS
 
         try {
             // COST OPTIMIZATION: Use unified API helper with token tracking
-            const { text } = await callClaudeAPI('MULTI_SOURCE_ANALYSIS', prompt, 1500, apiKey);
+            const { text } = await callAI('MULTI_SOURCE_ANALYSIS', prompt, 1500, apiKey);
 
             this._lastGTMDigestText = text;
             bodyEl.innerHTML = `<pre class="gtm-digest-text">${this.escapeHtml(text)}</pre>`;
@@ -4249,8 +4400,34 @@ TOP READS
     // ==========================================
 
     openSettings() {
-        // Populate settings
-        document.getElementById('api-key').value = localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
+        // Get current provider settings with backward compatibility
+        const currentProvider = localStorage.getItem('signal_ai_provider') || AI_PROVIDERS.CLAUDE;
+        const legacyApiKey = localStorage.getItem(STORAGE_KEYS.API_KEY) || localStorage.getItem('apiKey');
+        
+        // Populate provider selector
+        const providerSelect = document.getElementById('ai-provider');
+        if (providerSelect) {
+            providerSelect.value = currentProvider;
+        }
+        
+        // Populate API keys for each provider
+        const claudeKeyEl = document.getElementById('claude-api-key');
+        if (claudeKeyEl) {
+            claudeKeyEl.value = localStorage.getItem('signal_claude_api_key') || legacyApiKey || '';
+        }
+        
+        const openaiKeyEl = document.getElementById('openai-api-key');
+        if (openaiKeyEl) {
+            openaiKeyEl.value = localStorage.getItem('signal_openai_api_key') || '';
+        }
+        
+        const geminiKeyEl = document.getElementById('gemini-api-key');
+        if (geminiKeyEl) {
+            geminiKeyEl.value = localStorage.getItem('signal_gemini_api_key') || '';
+        }
+        
+        // Show/hide appropriate API key fields
+        toggleProviderAPIKeys();
         
         // Populate new fields if they exist in the DOM
         const weekContextEl = document.getElementById('week-context');
@@ -4331,13 +4508,27 @@ TOP READS
             ? `${Math.round((tier3Processed / tier2Processed) * 100)}%`
             : 'N/A';
         
-        // Format token usage by model
+        // Format token usage by model with provider info
         const modelBreakdown = Object.entries(tokenStats.byModel || {}).map(([model, data]) => {
-            const modelName = model.includes('haiku') ? '⚡ Haiku' : '🧠 Sonnet';
+            let modelName = '🤖 AI';
+            let provider = '';
+            
+            // Detect provider and tier from model name
+            if (model.includes('claude')) {
+                provider = 'Claude';
+                modelName = model.includes('haiku') ? '⚡ Haiku' : '🧠 Sonnet';
+            } else if (model.includes('gpt')) {
+                provider = 'OpenAI';
+                modelName = model.includes('mini') ? '⚡ GPT-4o-mini' : '🧠 GPT-4o';
+            } else if (model.includes('gemini')) {
+                provider = 'Gemini';
+                modelName = model.includes('flash') ? '⚡ Flash' : '🧠 Exp';
+            }
+            
             return `
                 <div class="stat-item">
-                    <div class="stat-label">${modelName} Calls</div>
-                    <div class="stat-value">${data.calls}</div>
+                    <div class="stat-label">${modelName} (${provider})</div>
+                    <div class="stat-value">${data.calls} calls</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">${modelName} Cost</div>
@@ -4676,13 +4867,51 @@ function exportPerformanceStats() {
 }
 
 function saveSettings() {
-    const apiKey = document.getElementById('api-key').value.trim();
-
-    // Save API key to localStorage (NOTE: stored unencrypted - user was warned in Settings UI)
-    if (apiKey) {
-        localStorage.setItem(STORAGE_KEYS.API_KEY, apiKey);
-    } else {
-        localStorage.removeItem(STORAGE_KEYS.API_KEY);
+    // Save provider selection
+    const providerSelect = document.getElementById('ai-provider');
+    if (providerSelect) {
+        localStorage.setItem('signal_ai_provider', providerSelect.value);
+    }
+    
+    // Save API keys for each provider
+    const claudeKeyEl = document.getElementById('claude-api-key');
+    if (claudeKeyEl) {
+        const claudeKey = claudeKeyEl.value.trim();
+        if (claudeKey) {
+            localStorage.setItem('signal_claude_api_key', claudeKey);
+            // Also save to legacy key for backward compatibility
+            localStorage.setItem(STORAGE_KEYS.API_KEY, claudeKey);
+        } else {
+            localStorage.removeItem('signal_claude_api_key');
+        }
+    }
+    
+    const openaiKeyEl = document.getElementById('openai-api-key');
+    if (openaiKeyEl) {
+        const openaiKey = openaiKeyEl.value.trim();
+        if (openaiKey) {
+            localStorage.setItem('signal_openai_api_key', openaiKey);
+        } else {
+            localStorage.removeItem('signal_openai_api_key');
+        }
+    }
+    
+    const geminiKeyEl = document.getElementById('gemini-api-key');
+    if (geminiKeyEl) {
+        const geminiKey = geminiKeyEl.value.trim();
+        if (geminiKey) {
+            localStorage.setItem('signal_gemini_api_key', geminiKey);
+        } else {
+            localStorage.removeItem('signal_gemini_api_key');
+        }
+    }
+    
+    // Reinitialize intelligence engine with new provider
+    const settings = getAIProviderSettings();
+    const apiKey = settings.apiKeys[settings.provider];
+    if (apiKey && typeof HybridIntelligenceEngine !== 'undefined') {
+        app.intelligenceEngine = new HybridIntelligenceEngine(apiKey, settings.provider);
+        console.log(`🧠 Intelligence Engine reinitialized (${settings.provider})`);
     }
     
     // Save context fields if present in DOM
@@ -4729,6 +4958,35 @@ function saveSettings() {
     }
     
     console.log('✅ Settings saved');
+}
+
+/**
+ * Toggle visibility of API key fields based on selected provider
+ */
+function toggleProviderAPIKeys() {
+    const provider = document.getElementById('ai-provider')?.value || AI_PROVIDERS.CLAUDE;
+    const providerHint = document.getElementById('provider-hint');
+    
+    // Hide all provider API key groups
+    document.getElementById('claude-api-key-group')?.classList.add('hidden');
+    document.getElementById('openai-api-key-group')?.classList.add('hidden');
+    document.getElementById('gemini-api-key-group')?.classList.add('hidden');
+    
+    // Show the selected provider's API key group
+    const selectedGroup = document.getElementById(`${provider}-api-key-group`);
+    if (selectedGroup) {
+        selectedGroup.classList.remove('hidden');
+    }
+    
+    // Update provider hint text
+    if (providerHint) {
+        const hints = {
+            claude: 'Using Claude Sonnet 4 for strategic analysis, Haiku 3.5 for fast tasks',
+            openai: 'Using GPT-4o for strategic analysis, GPT-4o-mini for fast tasks',
+            gemini: 'Using Gemini Exp 1206 for strategic analysis, Gemini 2.0 Flash for fast tasks (Free during preview)'
+        };
+        providerHint.textContent = hints[provider] || hints.claude;
+    }
 }
 
 function resetSources() {
@@ -5553,7 +5811,7 @@ Format for Slack (use emoji sparingly). Start with "🔔 Client Signal: ${client
 
     try {
         // COST OPTIMIZATION: Use Haiku for short summarization (75% cost savings)
-        const { text: briefText } = await callClaudeAPI('SUMMARIZATION_SHORT', prompt, 300, apiKey);
+        const { text: briefText } = await callAI('SUMMARIZATION_SHORT', prompt, 300, apiKey);
         
         contentEl.innerHTML = `<div class="brief-atl-slack">${escapeHtml(briefText)}</div>`;
         app.lastBriefATLText = briefText;
@@ -5878,7 +6136,7 @@ Only include markets that were provided in the input above.`;
 
         try {
             // COST OPTIMIZATION: Use unified API helper with token tracking
-            const { text } = await callClaudeAPI('SYNTHESIS', batchedPrompt, 800, apiKey);
+            const { text } = await callAI('SYNTHESIS', batchedPrompt, 800, apiKey);
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             
             if (jsonMatch) {
@@ -6268,7 +6526,7 @@ Rules: Each insight references 2+ articles (use [index] numbers). One competitiv
 
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
-        const { text } = await callClaudeAPI('SYNTHESIS', prompt, 600, apiKey);
+        const { text } = await callAI('SYNTHESIS', prompt, 600, apiKey);
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         
         if (jsonMatch) {
@@ -6760,7 +7018,7 @@ Return valid JSON array, max 5 signals, in the SAME ORDER as input signals.`;
     let claudeResponse = null;
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
-        const { text } = await callClaudeAPI('STRATEGIC_ANALYSIS', prompt, 2000, apiKey);
+        const { text } = await callAI('STRATEGIC_ANALYSIS', prompt, 2000, apiKey);
         claudeResponse = text;
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         
@@ -7824,7 +8082,7 @@ Strategic thesis must be memorable/quotable. Leadership implication must be conc
 
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
-        const { text } = await callClaudeAPI('STRATEGIC_ANALYSIS', prompt, 900, apiKey);
+        const { text } = await callAI('STRATEGIC_ANALYSIS', prompt, 900, apiKey);
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         
         if (jsonMatch) {
