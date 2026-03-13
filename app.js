@@ -2516,47 +2516,19 @@ YOUR JOB IS NOT TO SUMMARIZE NEWS. Answer these four questions:
 4. What OPPORTUNITY should I act on this week?
 
 ROLE CONTEXT:
-- You lead 115 Account Technical Leaders (ATLs) across 343 enterprise accounts in Asia Pacific (excluding Japan)
-- Dual-wave thesis: every insight belongs to either the AI/Agentic wave OR the Sovereignty/Regulation wave
-- Tag EVERY insight as [AI WAVE] or [SOVEREIGNTY WAVE] — this routes it to the right conversation
+- You lead 115 ATLs across 343 enterprise accounts in Asia Pacific (excluding Japan)
+- Dual-wave thesis: Tag EVERY insight as [AI WAVE] or [SOVEREIGNTY WAVE]
 - Priority industries: Financial Services, Government, Manufacturing, Energy, Retail
 - Competitors: Microsoft Azure, AWS, Google Cloud, Salesforce, SAP, Oracle, ServiceNow, Databricks, Snowflake
 
-CITATION RULES (strictly enforced):
-1. ALWAYS cite with the actual source name: [MIT Tech Review](https://...)
-2. NEVER use generic "Source" — use the real source name from the article list
-3. Every factual claim needs a citation
+RULES:
+- Citations: Use actual source names [MIT Tech Review](url), never generic "Source"
+- Framing: Frame insights as ACTIONS, not information summaries
+- Client signals: For Tier 1 clients (${tier1ClientList}), flag explicitly in executiveSummary. If thisWeekContext mentions a client, surface their signals first
+- Industry signals: Only include if today's articles contain relevant signals. Name client if they're the evidence
+- Sections: Only include if articles contain relevant signals. Produce EXACTLY 3 conversationStarters
 
-FRAMING RULES (strictly enforced):
-1. Frame EVERY insight as an ACTION, not information
-2. BAD: "Microsoft announced new Azure AI services"
-3. GOOD: "[AI WAVE] COMPETITIVE ALERT: Microsoft's Azure AI Foundry [Azure Blog](url) now offers
-   on-premises deployment — directly challenges IBM's hybrid cloud positioning. ACTION: Lead with
-   watsonx.ai's enterprise governance in your next ${sampleClients} conversation."
-
-CLIENT INTELLIGENCE RULES:
-- Articles tagged with a Client name are watchlist client signals
-- For Tier 1 clients (${tier1ClientList}):
-  flag their signals explicitly in executiveSummary or the relevant section
-- If thisWeekContext mentions a client by name, that client's signals are MEETING PREP —
-  surface them first in executiveSummary
-- When a client article reveals a broader industry pattern, reference it in the
-  corresponding industrySignals entry as evidence (e.g. "${sampleClient}'s AI announcement signals...")
-
-INDUSTRY SIGNALS RULES:
-- Scan today's articles for each Tier 1 industry: Financial Services, Government, Manufacturing, Energy, Retail
-- Only produce an industrySignals entry if today's articles contain a relevant signal
-- Omit industries with no relevant signal — do not produce filler
-- If a watchlist client article is the evidence for an industry signal, name the client in the headline
-- salesAction must name a specific client account where possible
-
-SECTION RULES:
-- Only include a section if today's articles contain at least one relevant signal
-- Omit sections with no content — do not produce generic filler
-- Produce EXACTLY 3 conversationStarters — no more, no fewer
-- Do NOT include readingTimeMinutes in any section
-
-Return ONLY valid JSON, no markdown fences:
+Return valid JSON:
 {
     "executiveSummary": "3-4 ACTION-ORIENTED sentences. Tag each [AI WAVE] or [SOVEREIGNTY WAVE]. Cite sources. If thisWeekContext mentions a client meeting, lead with that signal.",
     "sections": [
@@ -3367,7 +3339,7 @@ ${articleList}`;
             ? `\nThis week's context: ${this.settings.thisWeekContext}` : '';
 
         const prompt = `You are the intelligence analyst for the IBM APAC Field CTO.
-Turn this article into a 60-second strategic brief that answers: "What does this mean for IBM APAC, and what should I do about it today?"
+Turn this article into a 60-second strategic brief: "What does this mean for IBM APAC, and what should I do today?"
 
 ARTICLE
 Title: ${article.title}
@@ -3377,15 +3349,7 @@ ${clientContext}
 ${industryContext}
 ${signalContext}${weekContext}
 
-FIELD DEFINITIONS:
-- keyFacts: 3 facts extracted directly from the article. One sentence each. No interpretation.
-- soWhat: The market-level shift this article signals. Why does this matter RIGHT NOW in APAC? Be specific about timing, geography, or competitive dynamics. Do NOT mention IBM here — this is about what is changing in the market.
-- ibmAngle: Which specific IBM capability is most relevant (watsonx, Red Hat OpenShift, IBM Z, hybrid cloud), and why is NOW the right moment to position it?
-- clientImplication: Answer TWO questions in one field: (1) If watchlist clients were matched above, does this article reveal a broader industry trend the Field CTO should know before their next meeting with that client? (2) What should the ATL aligned to that client do with this information this week? If no clients matched, describe the APAC enterprise type most affected.
-- competitiveWatch: Name any competitor (AWS, Azure, Google, Salesforce, SAP, Oracle, ServiceNow, Accenture, TCS, Alibaba Cloud, Huawei Cloud, Fujitsu) whose position is strengthened or weakened. Return empty string if genuinely not applicable.
-- conversationOpener: A question that demonstrates you have a point of view — not just that you read the headline. Frame as a hypothesis: "I've been thinking that [observation from this article] — is that consistent with what you're seeing?" Peer CTO tone. Not a sales pitch.
-
-Return ONLY valid JSON, no markdown fences:
+Return valid JSON:
 {
     "keyFacts": ["string", "string", "string"],
     "soWhat": "string",
@@ -3536,30 +3500,30 @@ Frame all talking points through ${clientIndustry} challenges and priorities.
 ` : '';
         
         const prompt = `You are preparing a meeting brief for the IBM APAC Field CTO.
-Brief purpose: ${briefPurpose}
+${briefPurpose}
 ${contextBlock}${industryBlock}
 Recent news about ${clientName}:
 ${articleList || 'No recent news found.'}
 
-BRIEF RULES:
-- If LIVE MEETING BRIEF: lead with the most time-sensitive signal; frame talking points as what to say in the room today
-- If ATL ENABLEMENT BRIEF: frame talking points as intelligence the ATL can use in their next client touchpoint or QBR
-- talkingPoints: produce EXACTLY 3 points, each framed as a ${clientIndustry || 'enterprise'} challenge with a specific IBM product angle (watsonx, Red Hat OpenShift, IBM Z, hybrid cloud)
-- riskFlags: specific risks only — reputational issues, known competitor relationships, regulatory exposure, C-suite changes, or deal blockers. Omit array if none.
-- openingQuestion: frame as a hypothesis to test, not an open-ended probe. Style: "I've been thinking that [observation from the news] — is that consistent with what you're seeing?" Peer CTO tone, not a sales pitch.
-- salesAngle: name a specific IBM product AND a specific trigger (regulatory deadline, competitor move, or client news) that makes NOW the right time
-- atlNote: one sentence the ATL aligned to ${clientName} should know — what to watch for or act on this week, even if the Field CTO is not personally meeting the client
-- slackMessage: under 280 characters total
+RULES:
+- LIVE MEETING: Lead with time-sensitive signal, frame as what to say today
+- ATL ENABLEMENT: Frame as intelligence for next client touchpoint/QBR
+- talkingPoints: EXACTLY 3, each = ${clientIndustry || 'enterprise'} challenge + specific IBM product (watsonx, Red Hat OpenShift, IBM Z, hybrid cloud)
+- riskFlags: Specific risks only (reputational, competitive, regulatory, C-suite, deal blockers)
+- openingQuestion: Hypothesis to test. "I've been thinking that [observation] — is that consistent with what you're seeing?" Peer CTO tone
+- salesAngle: Specific IBM product + trigger (deadline, competitor move, client news) for why NOW
+- atlNote: One sentence for ATL — what to watch/act on this week
+- slackMessage: Under 280 chars
 
-Return ONLY valid JSON, no markdown fences:
+Return valid JSON:
 {
-    "situationSummary": "2-3 sentences on ${clientName}'s current situation.",
-    "talkingPoints": ["Exactly 3 points. Each: ${clientIndustry || 'enterprise'} challenge + specific IBM product angle.", "Point 2.", "Point 3."],
-    "riskFlags": ["Specific risk only — reputational, competitive, regulatory, C-suite, or deal blocker. Omit array if none."],
-    "openingQuestion": "Hypothesis-framed. Peer CTO tone. Not a sales pitch.",
-    "salesAngle": "Specific IBM product + specific trigger for why now.",
-    "atlNote": "One sentence for the ATL aligned to ${clientName} — what to watch for or act on this week.",
-    "slackMessage": "*${clientName} — Signal Alert*\\n📊 [1-sentence situation]\\n💡 [top talking point]\\n⚡ [sales angle]\\n💬 Q: [opening question]"
+    "situationSummary": "2-3 sentences on ${clientName}'s situation",
+    "talkingPoints": ["3 points: ${clientIndustry || 'enterprise'} challenge + IBM product", "Point 2", "Point 3"],
+    "riskFlags": ["Specific risks only"],
+    "openingQuestion": "Hypothesis-framed, peer CTO tone",
+    "salesAngle": "IBM product + trigger for why now",
+    "atlNote": "One sentence for ATL",
+    "slackMessage": "*${clientName} — Signal Alert*\\n📊 [situation]\\n💡 [talking point]\\n⚡ [sales angle]\\n💬 Q: [question]"
 }`;
         
         try {
@@ -4175,84 +4139,64 @@ Return ONLY valid JSON, no markdown fences:
             return;
         }
 
-        const prompt = `Write a weekly intelligence email FROM the IBM APAC Field CTO TO the 115 Account Technical Leaders (ATLs) across the 5 APAC markets.
+        const prompt = `Write a weekly intelligence email FROM the IBM APAC Field CTO TO 115 ATLs across 5 APAC markets.
 
-ROLE CONTEXT:
-- You ARE the Field CTO leading 115 ATLs who directly engage 343 enterprise accounts
-- Markets: ANZ (Australia/NZ), ASEAN (SG/MY/TH/ID/PH), GCG (HK/TW/China), ISA (India/South Asia), KOREA
-- Each ATL manages 2-3 clients and works in a "cockpit model" with their Technical Sales Leader (TSL)
-- Strategic goal: Increase IBM's share of client technology spend by earning "Client CTO" posture
-- Dual-wave thesis: AI/Agentic transformation (Wave 1) + Sovereignty/Regulation (Wave 2)
+CONTEXT:
+- You ARE the Field CTO leading 115 ATLs engaging 343 enterprise accounts
+- Markets: ANZ, ASEAN, GCG, ISA, KOREA
+- Each ATL manages 2-3 clients in "cockpit model" with TSL
+- Goal: Earn "Client CTO" posture, increase IBM share
+- Dual-wave: AI/Agentic + Sovereignty/Regulation
 
-VOICE & TONE:
-- Write in first person as the Field CTO addressing your ATL team
-- Be direct, action-oriented, and confident but not arrogant
-- Sound like a senior technical leader, not a corporate communications team
-- Use conversational language — "Here's what I'm seeing..." not "The following observations..."
+VOICE: First person, direct, action-oriented. Senior technical leader, not corporate comms. "Here's what I'm seeing..." not "The following observations..."
 
-FORMAT RULES:
-- Plain text only. No markdown, no bullet symbols, no HTML.
-- Use ALL CAPS for section headers.
-- Use dashes for list items.
-- Keep it scannable — busy ATLs need to grasp the key points in 60 seconds.
+FORMAT: Plain text, ALL CAPS headers, dashes for lists, scannable in 60 seconds.
 ${weekContextBlock}
-ESCALATION & BRIEFING ITEMS (action required):
+ESCALATION & BRIEFING ITEMS:
 ${escalationBlock}
 
-CLIENT SIGNALS BY MARKET (Tier 1 & 2 accounts):
+CLIENT SIGNALS BY MARKET:
 ${marketSignalBlock}
 
 COMPETITIVE LANDSCAPE:
 ${competitiveBlock}
 
-TOP ARTICLES THIS WEEK:
+TOP ARTICLES:
 ${topArticleList || 'No articles available.'}
 
-Produce EXACTLY this structure (plain text, no markdown):
+Structure (plain text):
 
 Subject: IBM APAC Field CTO — Weekly ATL Intelligence Brief | ${date}
 
 WHAT TO LEAD WITH THIS WEEK
-
-[2-3 sentences maximum. State the single IBM message ATLs should lead with this week. Tag it [AI WAVE] or [SOVEREIGNTY WAVE]. Be specific about the call to action.]
+[2-3 sentences. Single IBM message for ATLs. Tag [AI WAVE] or [SOVEREIGNTY WAVE]. Specific call to action.]
 
 ESCALATION ITEMS
-
-[If there are ESCALATE signals: For each one, write the client/market and exactly what the ATL should do. If none, write "No escalation items this week — but stay close to your Tier 1s."]
+[If ESCALATE signals: client/market + what ATL should do. If none: "No escalation items this week — but stay close to your Tier 1s."]
 
 ACTION ITEMS BY MARKET
-
-[For each market with signals, write:]
-
+[For each market with signals:]
 [MARKET NAME]
-- [Client name]: [One sentence on the signal and what the ATL should do THIS WEEK. Be specific.]
-- [Continue for each client signal in that market. Max 3 per market.]
-
-[If a market has no signals, skip it entirely.]
+- [Client]: [Signal + what ATL should do THIS WEEK]
+[Max 3 per market. Skip markets with no signals.]
 
 COMPETITIVE WATCH
-[2-3 sentences on competitive threats or positioning opportunities. Name specific competitors (Microsoft, AWS, Accenture, etc.) and the IBM counter-position. Reference specific IBM solutions (watsonx, Red Hat OpenShift, IBM Z).]
-
+[2-3 sentences on threats/opportunities. Name competitors + IBM counter-position + specific solutions.]
 
 ATL TALKING POINTS
-
-[Exactly 3 conversational one-liners ATLs can use with client CTOs this week. These should sound like what a peer CTO would say, not what a sales rep would pitch. Each should be max 25 words.]
-
-1. [Talking point about AI/Agentic wave]
-2. [Talking point about Sovereignty/Regulation wave]
-3. [Talking point connecting to IBM's strategic positioning]
+[Exactly 3 conversational one-liners for client CTOs. Peer CTO tone, not sales pitch. Max 25 words each.]
+1. [AI/Agentic wave]
+2. [Sovereignty/Regulation wave]
+3. [IBM strategic positioning]
 
 IBM POSITIONING THIS WEEK
-
-[1-2 sentences on which IBM solutions to emphasize and why. Connect to the week's signals.]
+[1-2 sentences on which IBM solutions to emphasize and why.]
 
 CALL TO ACTION
-
-[1-2 specific actions for ALL ATLs to take this week. Be concrete: name the IBM asset to review, the conversation type to have, or the follow-up to schedule. Start with verbs.]
+[1-2 specific actions for ALL ATLs. Name IBM asset, conversation type, or follow-up. Start with verbs.]
 
 TOP READS
-
-[List 3-5 articles with title and URL, one per line. After each, add ONE sentence on why an ATL should care — what conversation does it enable?]`;
+[3-5 articles: title + URL. After each: ONE sentence on why ATL should care.]`;
 
         try {
             // COST OPTIMIZATION: Use unified API helper with token tracking
@@ -6303,30 +6247,22 @@ TODAY'S TOP ARTICLES:
 ${articleSummaries}
 ${trendContext}
 
-Generate EXACTLY 3 executive insights. Each insight must:
+Generate EXACTLY 3 executive insights. Each must:
 1. Synthesize multiple articles into ONE actionable insight
-2. Answer "So what does this mean for IBM APAC?"
-3. Include specific action or positioning recommendation
+2. Answer "So what for IBM APAC?"
+3. Include specific action/positioning recommendation
 
 Return JSON array:
 [
   {
-    "headline": "Sharp, memorable headline (8 words max)",
-    "synthesis": "2-3 sentences synthesizing the insight. What's happening, why it matters for IBM APAC, and what to do about it.",
+    "headline": "Sharp, memorable (8 words max)",
+    "synthesis": "2-3 sentences: what's happening, why it matters for IBM APAC, what to do",
     "signalType": "risk" | "opportunity" | "competitive" | "regulatory",
     "sourceIndices": [1, 3, 5]
   }
 ]
 
-Rules:
-- Each insight must reference at least 2 articles (use their [index] numbers)
-- One insight should be about competitive positioning
-- One insight should be actionable this week
-- Be specific about APAC markets when relevant
-
-CRITICAL: The sourceIndices array must accurately reflect which articles were used for each insight. Only include article indices that directly contributed to that specific insight. Ensure indices correspond to the [index] numbers in the articles list above.
-
-Return ONLY valid JSON array.`;
+Rules: Each insight references 2+ articles (use [index] numbers). One competitive, one actionable this week. Be specific about APAC markets. sourceIndices must accurately map to articles used.`;
 
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
@@ -6779,47 +6715,39 @@ async function renderTodaysSignals(forceRefresh = false) {
         }).filter(Boolean)
     ))];
     
-    const prompt = `You are the strategic intelligence briefer for the IBM APAC Field CTO who leads 115 Account Technical Leaders (ATLs) across 343 enterprise accounts in 5 markets: ANZ, ASEAN, GCG, ISA, and KOREA.
+    const prompt = `You are the strategic intelligence briefer for the IBM APAC Field CTO who leads 115 ATLs across 343 enterprise accounts in 5 markets: ANZ, ASEAN, GCG, ISA, KOREA.
 
 TODAY'S RAW SIGNALS:
 ${signalSummaries}
 
-FIELD CTO CONTEXT:
-- Tier 1 clients (highest priority): ${tier1Clients || 'See watchlist'}
-- Markets with signals today: ${marketsInSignals.length > 0 ? marketsInSignals.join(', ') : 'All markets'}
-- Dual-wave thesis: AI/Agentic transformation + Sovereignty/Regulation pressure
-- Goal: Increase IBM's share of client technology spend by earning "Client CTO" posture
+CONTEXT:
+- Tier 1 clients: ${tier1Clients || 'See watchlist'}
+- Markets with signals: ${marketsInSignals.length > 0 ? marketsInSignals.join(', ') : 'All markets'}
+- Dual-wave thesis: AI/Agentic + Sovereignty/Regulation
+- Goal: Earn "Client CTO" posture
 
-ACTION TYPE DEFINITIONS (use these exact values):
-- "ESCALATE" = Contact TSL/client executive within 48 hours (C-suite change, competitive threat, major deal signal)
-- "BRIEF_ATL" = Prepare talking points for ATL team in affected market (industry trend, regulatory change)
-- "POSITION" = Develop IBM response/counter-positioning (competitor announcement, market shift)
-- "MONITOR" = Track for pattern/escalation (early signal, emerging trend)
+ACTION TYPES:
+- ESCALATE: Contact TSL/client exec within 48h (C-suite change, competitive threat, deal signal)
+- BRIEF_ATL: Prepare talking points for ATL team (industry trend, regulatory change)
+- POSITION: Develop IBM counter-positioning (competitor move, market shift)
+- MONITOR: Track for pattern/escalation (early signal, emerging trend)
 
-CRITICAL: Analyze EACH raw signal above IN ORDER and return a JSON array with one entry per signal in the SAME ORDER. Do not synthesize or combine signals. Each output signal must directly correspond to its input signal.
-
-For each signal, provide a JSON array with EXACTLY this structure:
+Analyze each signal IN ORDER. Return JSON array with one entry per signal in SAME ORDER:
 [
   {
-    "headline": "Action-oriented headline (10 words max, lead with verb)",
-    "context": "2-3 sentences: What happened, who is affected, why it matters for APAC enterprise clients",
-    "wave": "AI" or "SOVEREIGNTY" or "COMPETITIVE",
-    "actionType": "ESCALATE" or "BRIEF_ATL" or "POSITION" or "MONITOR",
-    "action": "Specific action for Field CTO (who to contact, what to prepare, by when)",
-    "affectedMarkets": ["ANZ", "ASEAN", "GCG", "ISA", "KOREA"] — which markets this impacts,
-    "ibmAngle": "Specific IBM solution to position: watsonx, Red Hat OpenShift, IBM Z, Instana, etc.",
-    "talkingPoint": "One sentence the ATL can use with client CTO (conversational, not salesy)",
-    "competitive": "Competitor name if relevant (Microsoft, AWS, Google, Accenture, etc.) or null"
+    "headline": "Action verb + 10 words max",
+    "context": "2-3 sentences: what happened, who affected, why matters for APAC",
+    "wave": "AI" | "SOVEREIGNTY" | "COMPETITIVE",
+    "actionType": "ESCALATE" | "BRIEF_ATL" | "POSITION" | "MONITOR",
+    "action": "Specific action (who, what, when)",
+    "affectedMarkets": ["ANZ", "ASEAN", "GCG", "ISA", "KOREA"],
+    "ibmAngle": "Specific IBM solution: watsonx, Red Hat OpenShift, IBM Z, Instana",
+    "talkingPoint": "Conversational sentence for ATL to use with client CTO",
+    "competitive": "Competitor name or null"
   }
 ]
 
-QUALITY RULES:
-- Headlines must start with action verb (Brief, Alert, Position, Monitor, Prepare)
-- Actions must be specific (name a role, give a timeframe, specify a deliverable)
-- Talking points must sound human, not corporate — something you'd actually say to a CTO peer
-- IBM angles must map to real IBM products/services, not generic capabilities
-
-Return ONLY valid JSON array, no markdown, max 5 signals, ordered by urgency (ESCALATE first).`;
+Return valid JSON array, max 5 signals, ordered by urgency (ESCALATE first).`;
 
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
@@ -7856,34 +7784,25 @@ async function renderDeepReads(forceRefresh = false) {
     
     const prompt = `You are preparing a strategic reading brief for the IBM APAC Field CTO who leads 115 ATLs across 343 enterprise accounts.
 
-These are long-form articles for strategic thinking — content to internalize for CxO conversations, board discussions, and quarterly business reviews.
+Long-form articles for strategic thinking — content for CxO conversations, board discussions, QBRs.
 
 ARTICLES:
 ${articleSummaries}
 
-FIELD CTO CONTEXT:
-- Needs perspectives that elevate conversations from tactical to strategic
-- Must translate technology trends into business impact for CFOs and CEOs
-- Responsible for ATL team development — needs content that builds team capability
-- Dual-wave focus: AI/Agentic transformation + Sovereignty/Regulation pressure
+CONTEXT: Elevate tactical to strategic. Translate tech trends to business impact for CFOs/CEOs. Build ATL team capability. Dual-wave: AI/Agentic + Sovereignty/Regulation.
 
-For each article, provide a JSON array with this structure:
+Return JSON array (max 5 articles):
 [
   {
     "title": "Original article title",
-    "strategicThesis": "The big idea in one powerful sentence — what market shift does this signal? (Think: 'The mainframe moment for AI governance' or 'Sovereignty becomes the new security')",
-    "leadershipImplication": "What this means for technology leaders — the 'so what' for a CTO or CIO making investment decisions",
-    "cxoQuestion": "A provocative question for CxO discussion (e.g., 'What happens to your AI strategy when your cloud provider becomes your competitor?')",
-    "timeHorizon": "6 months" or "12 months" or "2-3 years"
+    "strategicThesis": "Big idea in one powerful sentence — what market shift? (e.g., 'The mainframe moment for AI governance')",
+    "leadershipImplication": "What this means for CTOs/CIOs making investment decisions",
+    "cxoQuestion": "Provocative question for CxO discussion (thought-provoking, not sales-y)",
+    "timeHorizon": "6 months" | "12 months" | "2-3 years"
   }
 ]
 
-QUALITY RULES:
-- Strategic thesis must be memorable and quotable — something worth repeating in a keynote
-- Leadership implication must be concrete and actionable — not generic advice
-- CxO questions must be genuinely thought-provoking, not leading or sales-y
-
-Return ONLY valid JSON array, no markdown. Max 5 articles.`;
+Strategic thesis must be memorable/quotable. Leadership implication must be concrete/actionable.`;
 
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
