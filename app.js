@@ -396,7 +396,7 @@ function getCacheHitRate(section = null) {
 function getAIProviderSettings() {
     const provider = localStorage.getItem('signal_ai_provider') || AI_PROVIDERS.CLAUDE;
     const apiKeys = {
-        claude: localStorage.getItem('signal_api_key') || localStorage.getItem('apiKey') || '', // Backward compatibility
+        claude: localStorage.getItem('signal_claude_api_key') || localStorage.getItem('signal_api_key') || localStorage.getItem('apiKey') || '', // Backward compatibility
         openai: localStorage.getItem('signal_openai_api_key') || '',
         gemini: localStorage.getItem('signal_gemini_api_key') || ''
     };
