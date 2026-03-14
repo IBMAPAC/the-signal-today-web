@@ -6037,6 +6037,9 @@ function renderMarketInsights(forceRefresh = false) {
     
     // Step 1: Exclusive market assignment - each article goes to ONE market only
     if (typeof APAC_MARKET_CONTEXT !== 'undefined') {
+        // Generic terms to exclude from matching (too broad to be useful)
+        const GENERIC_TERMS = ['asia pacific', 'apac', 'asia', 'pacific', 'region', 'regional'];
+        
         todayArticles.forEach(article => {
             const text = `${article.title} ${article.summary || ''}`.toLowerCase();
             
@@ -6046,45 +6049,50 @@ function renderMarketInsights(forceRefresh = false) {
             for (const [market, context] of Object.entries(APAC_MARKET_CONTEXT)) {
                 if (!marketSignals[market]) continue;
                 
-                // Priority 1: Regulators (most specific)
-                const matchedRegulator = context.regulators?.find(r => text.includes(r.toLowerCase()));
-                if (matchedRegulator) {
-                    allMatches.push({
-                        market,
-                        priority: 1,
-                        signal: matchedRegulator.toUpperCase(),
-                        type: 'regulatory'
-                    });
-                }
-                
-                // Priority 1.5: Countries/cities (geographic routing)
-                const matchedCountry = context.countries?.find(c => text.includes(c.toLowerCase()));
+                // Priority 1: Countries/cities (geographic routing - HIGHEST PRIORITY)
+                // Geographic location is the most definitive indicator of market relevance
+                const matchedCountry = context.countries?.find(c => {
+                    const term = c.toLowerCase();
+                    // Exclude generic terms that are too broad
+                    return text.includes(term) && !GENERIC_TERMS.includes(term);
+                });
                 if (matchedCountry) {
                     allMatches.push({
                         market,
-                        priority: 1.5,
+                        priority: 1,
                         signal: matchedCountry,
                         type: 'geographic'
                     });
                 }
                 
-                // Priority 2: Market priorities
+                // Priority 2: Regulators (market-specific, but less definitive than geography)
+                const matchedRegulator = context.regulators?.find(r => text.includes(r.toLowerCase()));
+                if (matchedRegulator) {
+                    allMatches.push({
+                        market,
+                        priority: 2,
+                        signal: matchedRegulator.toUpperCase(),
+                        type: 'regulatory'
+                    });
+                }
+                
+                // Priority 3: Market priorities
                 const matchedPriority = context.priorities?.find(p => text.includes(p.toLowerCase()));
                 if (matchedPriority) {
                     allMatches.push({
                         market,
-                        priority: 2,
+                        priority: 3,
                         signal: matchedPriority,
                         type: 'priority'
                     });
                 }
                 
-                // Priority 3: Watchwords
+                // Priority 4: Watchwords
                 const matchedWatchword = context.watchwords?.find(w => text.includes(w.toLowerCase()));
                 if (matchedWatchword) {
                     allMatches.push({
                         market,
-                        priority: 3,
+                        priority: 4,
                         signal: matchedWatchword,
                         type: 'watchword'
                     });
