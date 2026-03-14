@@ -406,9 +406,18 @@ function getAIProviderSettings() {
 /**
  * Unified AI API caller - supports Claude, OpenAI, and Gemini
  */
+/**
+ * Call AI provider with automatic retry logic and exponential backoff.
+ * Retries on transient failures (overload, timeout, network issues).
+ * 
+ * @param {string} taskType - The type of AI task (e.g., 'SYNTHESIS', 'STRATEGIC_ANALYSIS')
+ * @param {string} prompt - The prompt to send to the AI
+ * @param {number} maxTokens - Maximum tokens for the response
+ * @param {string} apiKey - API key (optional, will use settings if not provided)
+ * @param {string} provider - AI provider (optional, will use settings if not provided)
+ * @returns {Promise<{text: string, usage: {input_tokens: number, output_tokens: number}}>}
+ */
 async function callAI(taskType, prompt, maxTokens, apiKey = null, provider = null) {
-    const startTime = Date.now();
-    
     // Get provider settings
     if (!provider) {
         const settings = getAIProviderSettings();
@@ -427,6 +436,99 @@ async function callAI(taskType, prompt, maxTokens, apiKey = null, provider = nul
     if (!apiKey) {
         throw new Error(`No API key configured for ${provider}`);
     }
+    
+    // Retry configuration
+    const MAX_RETRIES = 3;
+    const INITIAL_DELAY = 1000; // 1 second
+    let lastError;
+    
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            return await callAIInternal(taskType, prompt, maxTokens, apiKey, provider);
+        } catch (error) {
+            lastError = error;
+            
+            // Check if error is retryable
+            const isRetryable = isRetryableError(error, provider);
+            
+            // Don't retry on last attempt or non-retryable errors
+            if (attempt === MAX_RETRIES || !isRetryable) {
+                console.error(`${provider} API call failed after ${attempt} attempt(s) (${taskType}):`, error);
+                throw error;
+            }
+            
+            // Calculate delay with exponential backoff
+            const delay = INITIAL_DELAY * Math.pow(2, attempt - 1);
+            console.warn(`${provider} API call failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms...`, error.message);
+            
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+    
+    // Should never reach here, but just in case
+    throw lastError;
+}
+
+/**
+ * Determines if an error is retryable (transient failure vs permanent error).
+ * @private
+ */
+function isRetryableError(error, provider) {
+    const errorMessage = error.message.toLowerCase();
+    
+    // Retryable error patterns
+    const retryablePatterns = [
+        'overloaded',
+        'timeout',
+        'network',
+        'rate limit',
+        'too many requests',
+        'service unavailable',
+        'temporarily unavailable',
+        'empty response',
+        '429', // Rate limit HTTP code
+        '503', // Service unavailable
+        '504'  // Gateway timeout
+    ];
+    
+    // Check if error message contains any retryable pattern
+    const isRetryable = retryablePatterns.some(pattern => 
+        errorMessage.includes(pattern)
+    );
+    
+    // Non-retryable errors (fail fast)
+    const nonRetryablePatterns = [
+        'invalid api key',
+        'authentication',
+        'unauthorized',
+        'forbidden',
+        'not found',
+        '401', // Unauthorized
+        '403', // Forbidden
+        '404'  // Not found
+    ];
+    
+    const isNonRetryable = nonRetryablePatterns.some(pattern =>
+        errorMessage.includes(pattern)
+    );
+    
+    // If explicitly non-retryable, don't retry
+    if (isNonRetryable) {
+        return false;
+    }
+    
+    // Otherwise, retry if it matches retryable patterns
+    return isRetryable;
+}
+
+/**
+ * Internal function that performs the actual API call without retry logic.
+ * Used by callAI() wrapper which handles retries.
+ * @private
+ */
+async function callAIInternal(taskType, prompt, maxTokens, apiKey, provider) {
+    const startTime = Date.now();
     
     // Get model tier and actual model name
     const modelTier = MODEL_TIERS[taskType] || MODEL_TIERS.SYNTHESIS;

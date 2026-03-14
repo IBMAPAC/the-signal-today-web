@@ -634,8 +634,8 @@ class HybridIntelligenceEngine {
         }
 
         try {
-            // Use Claude for deep semantic analysis
-            const result = await this.analyzeWithClaude(article, clients, existingArticles);
+            // Use AI for deep semantic analysis
+            const result = await this.analyzeWithAI(article, clients, existingArticles);
             
             // Cache the result
             this.analysisCache.set(cacheKey, result);
@@ -655,7 +655,7 @@ class HybridIntelligenceEngine {
      * @param {Array} existingArticles - Previous articles for context
      * @returns {Object} Claude's analysis
      */
-    async analyzeWithClaude(article, clients, existingArticles) {
+    async analyzeWithAI(article, clients, existingArticles) {
         if (!this.apiKey) {
             throw new Error('API key not configured');
         }
@@ -741,64 +741,150 @@ Analyze this article using the rules above.`;
             endpoint = `${endpoint}/${config.model}:generateContent?key=${this.apiKey}`;
         }
         
-        // Make API call
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: config.headers(this.apiKey),
-            body: JSON.stringify(config.formatRequest(config.model, 600, prompt))
-        });
+        // Make API call with retry logic
+        const MAX_RETRIES = 3;
+        const INITIAL_DELAY = 1000; // 1 second
+        let lastError;
+        
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: config.headers(this.apiKey),
+                    body: JSON.stringify(config.formatRequest(config.model, 600, prompt))
+                });
 
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({}));
-            throw new Error(`${this.provider} API error: ${response.status} - ${error.error?.message || error.message || 'Unknown error'}`);
-        }
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(`${this.provider} API error: ${response.status} - ${error.error?.message || error.message || 'Unknown error'}`);
+                }
 
-        const data = await response.json();
-        
-        // Universal error check - catches errors in response body (works for all providers)
-        if (data.error) {
-            const errorMsg = data.error.message || 'Unknown error';
-            const errorCode = data.error.code || 'unknown';
-            throw new Error(`${this.provider} API error: ${errorCode} - ${errorMsg}`);
+                const data = await response.json();
+                
+                // Universal error check - catches errors in response body (works for all providers)
+                if (data.error) {
+                    const errorMsg = data.error.message || 'Unknown error';
+                    const errorCode = data.error.code || 'unknown';
+                    throw new Error(`${this.provider} API error: ${errorCode} - ${errorMsg}`);
+                }
+                
+                let text = config.extractResponse(data);
+                
+                // Clean Gemini response: remove markdown code blocks
+                if (this.provider === 'gemini') {
+                    text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+                }
+                
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                
+                if (!jsonMatch) {
+                    throw new Error(`Could not parse ${this.provider} response`);
+                }
+                
+                // Clean up JSON before parsing
+                let jsonStr = jsonMatch[0];
+                jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
+                jsonStr = jsonStr.replace(/\n/g, ' '); // Remove newlines
+                jsonStr = jsonStr.replace(/\r/g, ''); // Remove carriage returns
+                
+                const analysis = JSON.parse(jsonStr);
+                
+                // Success! Return the result
+                return {
+                    threatLevel: analysis.threatLevel || 0,
+                    opportunityScore: analysis.opportunityScore || 0,
+                    confidence: analysis.confidence || 0.95,
+                    reasoning: analysis.reasoning || '',
+                    actionableInsights: analysis.actionableInsights || [],
+                    affectedClients: analysis.affectedClients || [],
+                    affectedMarkets: analysis.affectedMarkets || [],
+                    competitorActivity: analysis.competitorActivity || '',
+                    relatedArticles: relatedArticles.map(a => a.id)
+                };
+                
+            } catch (error) {
+                lastError = error;
+                
+                // Check if error is retryable
+                const isRetryable = this._isRetryableError(error);
+                
+                // Don't retry on last attempt or non-retryable errors
+                if (attempt === MAX_RETRIES || !isRetryable) {
+                    console.error(`${this.provider} semantic analysis failed after ${attempt} attempt(s):`, error);
+                    throw error;
+                }
+                
+                // Calculate delay with exponential backoff
+                const delay = INITIAL_DELAY * Math.pow(2, attempt - 1);
+                console.warn(`${this.provider} semantic analysis failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms...`, error.message);
+                
+                // Wait before retrying
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
         }
         
-        let text = config.extractResponse(data);
-        
-        // Clean Gemini response: remove markdown code blocks
-        if (this.provider === 'gemini') {
-            text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-        }
-        
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        
-        if (!jsonMatch) {
-            throw new Error(`Could not parse ${this.provider} response`);
-        }
-        
-        // Clean up JSON before parsing
-        let jsonStr = jsonMatch[0];
-        jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
-        jsonStr = jsonStr.replace(/\n/g, ' '); // Remove newlines
-        jsonStr = jsonStr.replace(/\r/g, ''); // Remove carriage returns
-        
-        const analysis = JSON.parse(jsonStr);
-        
-        return {
-            threatLevel: analysis.threatLevel || 0,
-            opportunityScore: analysis.opportunityScore || 0,
-            confidence: analysis.confidence || 0.95,
-            reasoning: analysis.reasoning || '',
-            actionableInsights: analysis.actionableInsights || [],
-            affectedClients: analysis.affectedClients || [],
-            affectedMarkets: analysis.affectedMarkets || [],
-            competitorActivity: analysis.competitorActivity || '',
-            relatedArticles: relatedArticles.map(a => a.id)
-        };
+        // Should never reach here, but just in case
+        throw lastError;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // UTILITY METHODS
     // ══════════════════════════════════════════════════════════════════════════
+    /**
+     * Determines if an error is retryable (transient failure vs permanent error).
+     * @private
+     * @param {Error} error - The error to check
+     * @returns {boolean} True if the error is retryable
+     */
+    _isRetryableError(error) {
+        const errorMessage = error.message.toLowerCase();
+        
+        // Retryable error patterns
+        const retryablePatterns = [
+            'overloaded',
+            'timeout',
+            'network',
+            'rate limit',
+            'too many requests',
+            'service unavailable',
+            'temporarily unavailable',
+            'empty response',
+            'could not parse',
+            '429', // Rate limit HTTP code
+            '503', // Service unavailable
+            '504'  // Gateway timeout
+        ];
+        
+        // Check if error message contains any retryable pattern
+        const isRetryable = retryablePatterns.some(pattern => 
+            errorMessage.includes(pattern)
+        );
+        
+        // Non-retryable errors (fail fast)
+        const nonRetryablePatterns = [
+            'invalid api key',
+            'authentication',
+            'unauthorized',
+            'forbidden',
+            'not found',
+            '401', // Unauthorized
+            '403', // Forbidden
+            '404'  // Not found
+        ];
+        
+        const isNonRetryable = nonRetryablePatterns.some(pattern =>
+            errorMessage.includes(pattern)
+        );
+        
+        // If explicitly non-retryable, don't retry
+        if (isNonRetryable) {
+            return false;
+        }
+        
+        // Otherwise, retry if it matches retryable patterns
+        return isRetryable;
+    }
+
 
     /**
      * Get current statistics
