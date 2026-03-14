@@ -754,6 +754,14 @@ Analyze this article using the rules above.`;
         }
 
         const data = await response.json();
+        
+        // Universal error check - catches errors in response body (works for all providers)
+        if (data.error) {
+            const errorMsg = data.error.message || 'Unknown error';
+            const errorCode = data.error.code || 'unknown';
+            throw new Error(`${this.provider} API error: ${errorCode} - ${errorMsg}`);
+        }
+        
         let text = config.extractResponse(data);
         
         // Clean Gemini response: remove markdown code blocks

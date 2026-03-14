@@ -459,6 +459,12 @@ async function callAI(taskType, prompt, maxTokens, apiKey = null, provider = nul
                 }
                 
                 data = await response.json();
+                
+                // Universal error check - catches errors in response body (defense-in-depth)
+                if (data.error) {
+                    throw new Error(data.error.message || `Claude API error: ${data.error.code || 'unknown'}`);
+                }
+                
                 text = data.content[0]?.text || '';
                 usage = {
                     input_tokens: data.usage?.input_tokens || 0,
@@ -486,6 +492,12 @@ async function callAI(taskType, prompt, maxTokens, apiKey = null, provider = nul
                 }
                 
                 data = await response.json();
+                
+                // Universal error check - catches errors in response body (defense-in-depth)
+                if (data.error) {
+                    throw new Error(data.error.message || `OpenAI API error: ${data.error.code || 'unknown'}`);
+                }
+                
                 text = data.choices[0]?.message?.content || '';
                 usage = {
                     input_tokens: data.usage?.prompt_tokens || 0,
@@ -517,10 +529,21 @@ async function callAI(taskType, prompt, maxTokens, apiKey = null, provider = nul
                 }
                 
                 data = await response.json();
+                
+                // Universal error check - catches errors in response body (critical for Gemini 503 errors)
+                if (data.error) {
+                    throw new Error(data.error.message || `Gemini API error: ${data.error.code || 'unknown'}`);
+                }
+                
                 text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
                 
                 // Clean Gemini response: remove markdown code blocks
                 text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+                
+                // Validate we got actual content
+                if (!text || text.trim() === '') {
+                    throw new Error('Gemini returned empty response - API may be overloaded');
+                }
                 
                 usage = {
                     input_tokens: data.usageMetadata?.promptTokenCount || 0,
