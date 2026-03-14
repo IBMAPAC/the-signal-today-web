@@ -754,11 +754,17 @@ Analyze this article using the rules above.`;
         }
 
         const data = await response.json();
-        const text = config.extractResponse(data);
+        let text = config.extractResponse(data);
+        
+        // Clean Gemini response: remove markdown code blocks
+        if (this.provider === 'gemini') {
+            text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        }
+        
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         
         if (!jsonMatch) {
-            throw new Error('Could not parse Claude response');
+            throw new Error(`Could not parse ${this.provider} response`);
         }
         
         // Clean up JSON before parsing
