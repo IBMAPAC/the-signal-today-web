@@ -31,58 +31,6 @@ class HybridIntelligenceEngine {
             tier3Cost: 0,
             lastReset: new Date().toISOString()
         };
-    }
-    
-    getDefaultProviderConfig() {
-        return {
-            claude: {
-                endpoint: 'https://api.anthropic.com/v1/messages',
-                model: 'claude-sonnet-4-20250514',
-                headers: (apiKey) => ({
-                    'Content-Type': 'application/json',
-                    'x-api-key': apiKey,
-                    'anthropic-version': '2023-06-01',
-                    'anthropic-dangerous-direct-browser-access': 'true'
-                }),
-                formatRequest: (model, maxTokens, prompt) => ({
-                    model,
-                    max_tokens: maxTokens,
-                    messages: [{ role: 'user', content: prompt }]
-                }),
-                extractResponse: (data) => data.content[0].text
-            },
-            openai: {
-                endpoint: 'https://api.openai.com/v1/chat/completions',
-                model: 'gpt-4o',
-                headers: (apiKey) => ({
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
-                }),
-                formatRequest: (model, maxTokens, prompt) => ({
-                    model,
-                    max_tokens: maxTokens,
-                    messages: [{ role: 'user', content: prompt }]
-                }),
-                extractResponse: (data) => data.choices[0]?.message?.content || ''
-            },
-            gemini: {
-                endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
-                model: 'gemini-exp-1206',
-                headers: () => ({
-                    'Content-Type': 'application/json'
-                }),
-                formatRequest: (model, maxTokens, prompt) => ({
-                    contents: [{
-                        parts: [{ text: prompt }]
-                    }],
-                    generationConfig: {
-                        maxOutputTokens: maxTokens
-                    }
-                }),
-                extractResponse: (data) => data.candidates?.[0]?.content?.parts?.[0]?.text || '',
-                useKeyInUrl: true
-            }
-        };
         
         // Tier 1: Keyword patterns (fast filter)
         this.keywordPatterns = {
@@ -135,6 +83,58 @@ class HybridIntelligenceEngine {
             regulatoryChange: /(?:new|proposed|updated|draft).*(?:regulation|law|policy|mandate).*(?:data|privacy|cloud|ai)/i,
             clientActivity: /(?:bank|telco|government|energy).*(?:announces|launches|plans|invests)/i,
             technologyShift: /(?:ai|cloud|quantum|edge).*(?:adoption|transformation|migration|deployment)/i
+        };
+    }
+    
+    getDefaultProviderConfig() {
+        return {
+            claude: {
+                endpoint: 'https://api.anthropic.com/v1/messages',
+                model: 'claude-sonnet-4-20250514',
+                headers: (apiKey) => ({
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                }),
+                formatRequest: (model, maxTokens, prompt) => ({
+                    model,
+                    max_tokens: maxTokens,
+                    messages: [{ role: 'user', content: prompt }]
+                }),
+                extractResponse: (data) => data.content[0].text
+            },
+            openai: {
+                endpoint: 'https://api.openai.com/v1/chat/completions',
+                model: 'gpt-4o',
+                headers: (apiKey) => ({
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                }),
+                formatRequest: (model, maxTokens, prompt) => ({
+                    model,
+                    max_tokens: maxTokens,
+                    messages: [{ role: 'user', content: prompt }]
+                }),
+                extractResponse: (data) => data.choices[0]?.message?.content || ''
+            },
+            gemini: {
+                endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
+                model: 'gemini-exp-1206',
+                headers: () => ({
+                    'Content-Type': 'application/json'
+                }),
+                formatRequest: (model, maxTokens, prompt) => ({
+                    contents: [{
+                        parts: [{ text: prompt }]
+                    }],
+                    generationConfig: {
+                        maxOutputTokens: maxTokens
+                    }
+                }),
+                extractResponse: (data) => data.candidates?.[0]?.content?.parts?.[0]?.text || '',
+                useKeyInUrl: true
+            }
         };
     }
 
