@@ -6910,8 +6910,46 @@ async function renderTodaysSignals(forceRefresh = false) {
             console.log('Signal cache read error:', e);
         }
     }
+    
     const settings = getAIProviderSettings();
     const apiKey = settings.apiKeys[settings.provider];
+    
+    // COST OPTIMIZATION: Smart triggering - check for new high-priority articles
+    if (!forceRefresh && apiKey) {
+        try {
+            const cached = localStorage.getItem(STORAGE_KEYS.TODAYS_SIGNALS);
+            if (cached) {
+                const { signals, timestamp, articlesData } = JSON.parse(cached);
+                const age = Date.now() - timestamp;
+                
+                // Count new high-priority articles since last generation
+                const todayArticles = app.dailyArticles.length > 0 ? app.dailyArticles : app.articles;
+                const newPriorityArticles = todayArticles.filter(a => {
+                    const articleDate = new Date(a.pubDate || a.isoDate).getTime();
+                    if (articleDate <= timestamp) return false;
+                    
+                    // High priority: client matches, competitive signals, or high relevance
+                    return (a.matchedClients && a.matchedClients.length > 0) ||
+                           a.signalType === 'competitor' ||
+                           /aws|azure|google cloud|microsoft|salesforce|servicenow/i.test(a.title) ||
+                           (a.relevanceScore || 0) > 70;
+                });
+                
+                // If cache valid AND fewer than 3 new priority articles, use cache
+                if (age < CACHE_DURATIONS.TODAYS_SIGNALS && newPriorityArticles.length < 3) {
+                    console.log(`Today's Signals: Only ${newPriorityArticles.length} new priority articles, using cache`);
+                    if (countEl) countEl.textContent = signals.length;
+                    if (introEl) introEl.textContent = `${signals.length} actionable signals (cached, ${newPriorityArticles.length} new)`;
+                    list.innerHTML = signals.map((s, i) => renderCachedSignal(s, articlesData?.[i])).join('');
+                    return;
+                }
+                
+                console.log(`Today's Signals: ${newPriorityArticles.length} new priority articles, regenerating`);
+            }
+        } catch (e) {
+            console.log('Signals smart trigger check error:', e);
+        }
+    }
 
     
     // Gather raw signals from cross-refs and high-priority articles
@@ -8050,8 +8088,8 @@ async function renderDeepReads(forceRefresh = false) {
             if (cached) {
                 const { insights, articlesData, timestamp } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
-                // Show cached if less than 24 hours old (strategic content has longer shelf life)
-                if (age < 24 * 60 * 60 * 1000 && insights && insights.length > 0) {
+                // Show cached if less than 18 hours old (strategic content has longer shelf life)
+                if (age < 18 * 60 * 60 * 1000 && insights && insights.length > 0) {
                     trackCacheAccess('deep-reads', true); // Cache HIT
                     countEl.textContent = insights.length;
                     list.innerHTML = insights.map((insight, idx) =>
@@ -8089,6 +8127,37 @@ async function renderDeepReads(forceRefresh = false) {
     candidates = candidates.slice(0, 8);
     
     countEl.textContent = Math.min(candidates.length, 5);
+    
+    // COST OPTIMIZATION: Smart triggering - check for new strategic articles
+    if (!forceRefresh && apiKey) {
+        try {
+            const cached = localStorage.getItem(STORAGE_KEYS.DEEP_READS);
+            if (cached) {
+                const { insights, timestamp, articlesData } = JSON.parse(cached);
+                const age = Date.now() - timestamp;
+                
+                // Count new strategic articles since last generation
+                const newStrategicArticles = candidates.filter(a => {
+                    const articleDate = new Date(a.pubDate || a.isoDate).getTime();
+                    return articleDate > timestamp;
+                });
+                
+                // If cache valid AND fewer than 2 new strategic articles, use cache
+                if (age < 18 * 60 * 60 * 1000 && newStrategicArticles.length < 2) {
+                    console.log(`Deep Reads: Only ${newStrategicArticles.length} new strategic articles, using cache`);
+                    trackCacheAccess('deep-reads', true); // Cache HIT (smart trigger)
+                    list.innerHTML = insights.map((insight, idx) =>
+                        renderCachedDeepRead(insight, articlesData?.[idx])
+                    ).join('');
+                    return;
+                }
+                
+                console.log(`Deep Reads: ${newStrategicArticles.length} new strategic articles, regenerating`);
+            }
+        } catch (e) {
+            console.log('Deep reads smart trigger check error:', e);
+        }
+    }
     
     if (candidates.length === 0) {
         list.innerHTML = '<p class="card-description">No strategic content this week. Click Refresh to fetch latest articles.</p>';
