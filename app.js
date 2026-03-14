@@ -1210,7 +1210,8 @@ class SignalApp {
             this.categorizeArticles();
             
             // Generate AI digest if API key available (skip in quick mode)
-            const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+            const settings = getAIProviderSettings();
+            const apiKey = settings.apiKeys[settings.provider];
             if (apiKey && !quickMode) {
                 // Phase 7: compute article fingerprint to detect new articles since last digest
                 const fingerprint = this.computeArticleFingerprint(this.dailyArticles);
@@ -3441,7 +3442,8 @@ ${articleList}`;
         this.updateReadingTime();
         
         // Show/hide Deep Read button based on API key availability
-        const hasApiKey = !!localStorage.getItem(STORAGE_KEYS.API_KEY);
+        const settings = getAIProviderSettings();
+        const hasApiKey = !!settings.apiKeys[settings.provider];
         const deepReadBtn = document.getElementById('deep-read-btn');
         if (deepReadBtn) deepReadBtn.classList.toggle('hidden', !hasApiKey);
         
@@ -3467,7 +3469,8 @@ ${articleList}`;
             return;
         }
         
-        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+        const settings = getAIProviderSettings();
+        const apiKey = settings.apiKeys[settings.provider];
         if (!apiKey) {
             alert('Please add your API key in Settings to use this feature.');
             return;
@@ -3600,7 +3603,8 @@ Return valid JSON:
     }
 
     async generateMeetingBrief(clientName) {
-        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+        const settings = getAIProviderSettings();
+        const apiKey = settings.apiKeys[settings.provider];
         const bodyEl = document.getElementById('meeting-brief-body');
         if (!bodyEl) return;
 
@@ -4151,7 +4155,8 @@ Return valid JSON:
     }
 
     async generateGTMDigest() {
-        const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+        const settings = getAIProviderSettings();
+        const apiKey = settings.apiKeys[settings.provider];
         const bodyEl = document.getElementById('gtm-digest-body');
         const copyBtn = document.getElementById('copy-gtm-btn');
         if (!bodyEl) return;
@@ -5782,8 +5787,9 @@ async function openBriefATL(clientName) {
     }
     
     // Check for API key
-    const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
-    
+    const settings = getAIProviderSettings();
+    const apiKey = settings.apiKeys[settings.provider];
+
     if (!apiKey) {
         // No AI - generate simple brief
         const articleList = clientArticles.slice(0, 5).map(a => 
@@ -6024,8 +6030,9 @@ function renderMarketInsights(forceRefresh = false) {
     }
     
     // Check for API key
-    const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
-    
+    const settings = getAIProviderSettings();
+    const apiKey = settings.apiKeys[settings.provider];
+
     if (!apiKey) {
         // Without API: Show article list with sources
         const briefs = activeMarkets.map(({ market, signals, hasSignals }) => ({
@@ -6452,7 +6459,8 @@ async function renderExecutiveSummary(forceRefresh = false) {
     
     trackCacheAccess('executive-summary', false); // Cache MISS
     
-    const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+    const settings = getAIProviderSettings();
+    const apiKey = settings.apiKeys[settings.provider];
     const todayArticles = app.dailyArticles.length > 0 ? app.dailyArticles : app.articles.slice(0, 30);
     
     if (todayArticles.length === 0) {
@@ -6875,8 +6883,9 @@ async function renderTodaysSignals(forceRefresh = false) {
             console.log('Signal cache read error:', e);
         }
     }
-    
-    const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+    const settings = getAIProviderSettings();
+    const apiKey = settings.apiKeys[settings.provider];
+
     
     // Gather raw signals from cross-refs and high-priority articles
     const rawSignals = [];
@@ -8031,7 +8040,8 @@ async function renderDeepReads(forceRefresh = false) {
     
     trackCacheAccess('deep-reads', false); // Cache MISS
     
-    const apiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
+    const settings = getAIProviderSettings();
+    const apiKey = settings.apiKeys[settings.provider];
     
     // Select deep read candidates: strategic sources, analyst content, thought leadership
     // RULE: Pulls from weeklyArticles (7-14 day lookback) for strategic, longer-form content
