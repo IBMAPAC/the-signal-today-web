@@ -518,6 +518,10 @@ async function callAI(taskType, prompt, maxTokens, apiKey = null, provider = nul
                 
                 data = await response.json();
                 text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                
+                // Clean Gemini response: remove markdown code blocks
+                text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+                
                 usage = {
                     input_tokens: data.usageMetadata?.promptTokenCount || 0,
                     output_tokens: data.usageMetadata?.candidatesTokenCount || 0
