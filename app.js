@@ -418,6 +418,12 @@ async function callAI(taskType, prompt, maxTokens, apiKey = null, provider = nul
         }
     }
     
+    // Validate provider
+    const validProviders = Object.values(AI_PROVIDERS);
+    if (!validProviders.includes(provider)) {
+        throw new Error(`Invalid AI provider: "${provider}". Must be one of: ${validProviders.join(', ')}`);
+    }
+    
     if (!apiKey) {
         throw new Error(`No API key configured for ${provider}`);
     }
@@ -553,8 +559,20 @@ async function callAI(taskType, prompt, maxTokens, apiKey = null, provider = nul
 }
 
 /**
- * Legacy function for backward compatibility
- * @deprecated Use callAI() instead
+ * Legacy function for backward compatibility with Claude-only implementation.
+ *
+ * @deprecated Since v2.0 - Use callAI() instead with AI_PROVIDERS.CLAUDE
+ * @param {string} taskType - The type of AI task (e.g., 'SYNTHESIS', 'STRATEGIC_ANALYSIS')
+ * @param {string} prompt - The prompt to send to Claude
+ * @param {number} maxTokens - Maximum tokens for the response
+ * @param {string} apiKey - Claude API key
+ * @returns {Promise<{text: string, usage: {input_tokens: number, output_tokens: number}}>}
+ * @example
+ * // Old way (deprecated)
+ * const result = await callClaudeAPI('SYNTHESIS', prompt, 800, apiKey);
+ *
+ * // New way (recommended)
+ * const result = await callAI('SYNTHESIS', prompt, 800, apiKey, AI_PROVIDERS.CLAUDE);
  */
 async function callClaudeAPI(taskType, prompt, maxTokens, apiKey) {
     return callAI(taskType, prompt, maxTokens, apiKey, AI_PROVIDERS.CLAUDE);
@@ -4954,7 +4972,9 @@ function saveSettings() {
     // Re-render to apply any context changes
     if (app.articles.length > 0) {
         app.renderDigest();
-        updateIntelligenceStats();
+        if (typeof updateIntelligenceStats === 'function') {
+            updateIntelligenceStats();
+        }
     }
     
     console.log('✅ Settings saved');
