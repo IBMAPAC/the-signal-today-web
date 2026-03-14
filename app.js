@@ -254,8 +254,8 @@ const PROVIDER_MODELS = {
         SONNET: 'gpt-4o'       // Strategic/Quality tier
     },
     gemini: {
-        HAIKU: 'gemini-2.0-flash-exp',  // Fast/Cheap tier
-        SONNET: 'gemini-exp-1206'       // Strategic/Quality tier
+        HAIKU: 'gemini-2.5-flash',  // Fast/Cheap tier
+        SONNET: 'gemini-2.5-pro'    // Strategic/Quality tier
     }
 };
 
@@ -277,8 +277,8 @@ const MODEL_PRICING = {
     'gpt-4o-mini': { input: 0.15, output: 0.60 },
     
     // Gemini models (current market rates as of 2026)
-    'gemini-exp-1206': { input: 0.00, output: 0.00 },  // Free during preview
-    'gemini-2.0-flash-exp': { input: 0.00, output: 0.00 }  // Free during preview
+    'gemini-2.5-pro': { input: 1.25, output: 5.00 },   // Latest quality model
+    'gemini-2.5-flash': { input: 0.075, output: 0.30 }  // Latest fast model
 };
 
 // Model selection based on task complexity (tier-based)
@@ -5008,7 +5008,7 @@ function toggleProviderAPIKeys() {
         const hints = {
             claude: 'Using Claude Sonnet 4 for strategic analysis, Haiku 3.5 for fast tasks',
             openai: 'Using GPT-4o for strategic analysis, GPT-4o-mini for fast tasks',
-            gemini: 'Using Gemini Exp 1206 for strategic analysis, Gemini 2.0 Flash for fast tasks (Free during preview)'
+            gemini: 'Using Gemini 2.5 Pro for strategic analysis, Gemini 2.5 Flash for fast tasks'
         };
         providerHint.textContent = hints[provider] || hints.claude;
     }

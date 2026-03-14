@@ -120,7 +120,7 @@ class HybridIntelligenceEngine {
             },
             gemini: {
                 endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
-                model: 'gemini-exp-1206',
+                model: 'gemini-2.5-pro',
                 headers: () => ({
                     'Content-Type': 'application/json'
                 }),
