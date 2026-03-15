@@ -254,8 +254,8 @@ const PROVIDER_MODELS = {
         SONNET: 'gpt-4o'       // Strategic/Quality tier
     },
     gemini: {
-        HAIKU: 'gemini-2.5-flash',  // Fast/Cheap tier
-        SONNET: 'gemini-2.5-pro'    // Strategic/Quality tier
+        HAIKU: 'gemini-1.5-flash',  // Fast/Cheap tier
+        SONNET: 'gemini-1.5-pro'    // Strategic/Quality tier
     }
 };
 
@@ -625,10 +625,10 @@ async function callAIInternal(taskType, prompt, maxTokens, apiKey, provider) {
                         },
                         // Lower safety thresholds for news summarization (cybersecurity content)
                         safetySettings: [
-                            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-                            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-                            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-                            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+                            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+                            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+                            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+                            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
                         ]
                     })
                 });
