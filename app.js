@@ -8290,8 +8290,8 @@ async function renderDeepReads(forceRefresh = false) {
     // With API key: generate strategic synthesis
     list.innerHTML = '<p class="card-description">Synthesizing strategic insights...</p>';
     
-    const articleSummaries = candidates.slice(0, 5).map((a, i) => 
-        `[${i + 1}] "${a.title}" (${a.source})\nSummary: ${a.summary?.substring(0, 200) || 'No summary'}`
+    const articleSummaries = candidates.slice(0, 5).map((a, i) =>
+        `[${i + 1}] "${a.title}" (${a.source})\nContent: ${a.content?.substring(0, 2000) || a.summary?.substring(0, 2000) || 'No content available'}`
     ).join('\n\n');
     
     const prompt = `You are preparing a strategic reading brief for the IBM APAC Field CTO who leads 115 ATLs across 343 enterprise accounts.
@@ -8303,18 +8303,33 @@ ${articleSummaries}
 
 CONTEXT: Elevate tactical to strategic. Translate tech trends to business impact for CFOs/CEOs. Build ATL team capability. Dual-wave: AI/Agentic + Sovereignty/Regulation.
 
+ANALYSIS FRAMEWORK:
+1. Extract technical specifications (numbers, metrics, capabilities) - be specific
+2. Identify the problem being solved (constraints, limitations, challenges mentioned in article)
+3. Explain the solution approach (how it works, what's novel)
+4. Connect to business impact (cost, speed, capability, risk)
+
+CRITICAL EXTRACTION RULES:
+- Capture ALL quantitative metrics (X% faster, Y tokens, Z parameters, throughput numbers)
+- Identify technical constraints explicitly mentioned (e.g., context explosion, thinking tax, goal drift)
+- Extract specific capabilities (context window size, parameter counts, performance benchmarks)
+- Note problem-solution pairs stated in the article
+- Include architectural innovations (active vs total parameters, memory management approaches)
+
 Return JSON array (max 5 articles):
 [
   {
     "title": "Original article title",
-    "strategicThesis": "Big idea in one powerful sentence — what market shift? (e.g., 'The mainframe moment for AI governance')",
+    "strategicThesis": "Big idea in one powerful sentence capturing the core innovation and its market impact",
+    "technicalBreakthrough": "Key technical specs/metrics that enable the breakthrough (e.g., '15x token efficiency, 1M context window, 12B active parameters')",
+    "problemSolved": "What constraint or limitation does this overcome? (e.g., 'Eliminates goal drift in multi-agent workflows by maintaining full state in 1M token context')",
     "leadershipImplication": "What this means for CTOs/CIOs making investment decisions",
     "cxoQuestion": "Provocative question for CxO discussion (thought-provoking, not sales-y)",
     "timeHorizon": "6 months or 12 months or 2-3 years"
   }
 ]
 
-Strategic thesis must be memorable/quotable. Leadership implication must be concrete/actionable.`;
+Strategic thesis must be memorable/quotable. Technical breakthrough must include specific numbers/metrics from article. Problem solved must reference actual constraints mentioned. Leadership implication must be concrete/actionable.`;
 
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
@@ -8371,6 +8386,8 @@ function renderSynthesizedDeepRead(insight, article) {
             <div class="deep-read-item-title">${escapeHtml(insight.title)}</div>
             <div class="deep-read-strategic">
                 <div class="deep-read-thesis"><strong>💡 Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
+                ${insight.technicalBreakthrough ? `<div class="deep-read-technical"><strong>🔬 Technical Breakthrough:</strong> ${escapeHtml(insight.technicalBreakthrough)}</div>` : ''}
+                ${insight.problemSolved ? `<div class="deep-read-problem"><strong>⚡ Problem Solved:</strong> ${escapeHtml(insight.problemSolved)}</div>` : ''}
                 <div class="deep-read-implication"><strong>📊 Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication || '')}</div>
                 <div class="deep-read-question"><strong>🎯 CxO Question:</strong> "${escapeHtml(insight.cxoQuestion || '')}"</div>
             </div>
@@ -8394,6 +8411,8 @@ function renderCachedDeepRead(insight, articleData) {
             ${insight.strategicThesis ? `
             <div class="deep-read-strategic">
                 <div class="deep-read-thesis"><strong>💡 Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
+                ${insight.technicalBreakthrough ? `<div class="deep-read-technical"><strong>🔬 Technical Breakthrough:</strong> ${escapeHtml(insight.technicalBreakthrough)}</div>` : ''}
+                ${insight.problemSolved ? `<div class="deep-read-problem"><strong>⚡ Problem Solved:</strong> ${escapeHtml(insight.problemSolved)}</div>` : ''}
                 <div class="deep-read-implication"><strong>📊 Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication || '')}</div>
                 <div class="deep-read-question"><strong>🎯 CxO Question:</strong> "${escapeHtml(insight.cxoQuestion || '')}"</div>
             </div>

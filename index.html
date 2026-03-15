@@ -53,11 +53,12 @@
 
             <div id="digest-content" class="digest-content hidden">
                 
-                <!-- PRIORITY 0: ACTION REQUIRED - Urgent items surfaced at top (NOT collapsible) -->
+                <!-- PRIORITY 0: ACTION REQUIRED - Urgent items surfaced at top (collapsible, expanded by default) -->
                 <section id="action-required-section" class="card action-required-card hidden">
-                    <div class="card-header">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('action-required')">
                         <h2>🚨 Action Required</h2>
                         <span id="action-required-count" class="badge badge-red">0</span>
+                        <span class="chevron">▼</span>
                     </div>
                     <div id="action-required-content" class="card-body">
                         <div id="action-required-list"></div>
