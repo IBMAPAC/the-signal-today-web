@@ -129,8 +129,7 @@ class HybridIntelligenceEngine {
                         parts: [{ text: prompt }]
                     }],
                     generationConfig: {
-                        maxOutputTokens: maxTokens,
-                        responseMimeType: "application/json" // Force strict JSON output
+                        maxOutputTokens: maxTokens
                     },
                     // Lower safety thresholds for news summarization (cybersecurity content)
                     safetySettings: [
