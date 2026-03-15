@@ -254,8 +254,8 @@ const PROVIDER_MODELS = {
         SONNET: 'gpt-4o'       // Strategic/Quality tier
     },
     gemini: {
-        HAIKU: 'gemini-1.5-flash-002',  // Fast/Cheap tier
-        SONNET: 'gemini-1.5-pro-002'    // Strategic/Quality tier
+        HAIKU: 'gemini-2.5-flash',  // Fast/Cheap tier
+        SONNET: 'gemini-2.5-pro'    // Strategic/Quality tier
     }
 };
 
