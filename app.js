@@ -253,10 +253,7 @@ const PROVIDER_MODELS = {
         HAIKU: 'gpt-4o-mini',  // Fast/Cheap tier
         SONNET: 'gpt-4o'       // Strategic/Quality tier
     },
-    gemini: {
-        HAIKU: 'gemini-2.5-flash',  // Fast/Cheap tier
-        SONNET: 'gemini-2.5-pro'    // Strategic/Quality tier
-    }
+    gemini: 'gemini-2.5-flash'  // Single model for all tiers
 };
 
 // Provider API endpoints
@@ -532,7 +529,9 @@ async function callAIInternal(taskType, prompt, maxTokens, apiKey, provider) {
     
     // Get model tier and actual model name
     const modelTier = MODEL_TIERS[taskType] || MODEL_TIERS.SYNTHESIS;
-    const model = PROVIDER_MODELS[provider][modelTier];
+    const model = typeof PROVIDER_MODELS[provider] === 'string'
+        ? PROVIDER_MODELS[provider]  // Gemini uses single model
+        : PROVIDER_MODELS[provider][modelTier];  // Claude/OpenAI use tier system
     const pricing = MODEL_PRICING[model];
     
     try {
@@ -608,22 +607,28 @@ async function callAIInternal(taskType, prompt, maxTokens, apiKey, provider) {
                 break;
                 
             case AI_PROVIDERS.GEMINI:
-                // Gemini uses a different URL structure with model in path
                 const geminiUrl = `${PROVIDER_ENDPOINTS.gemini}/${model}:generateContent?key=${apiKey}`;
+                
+                const geminiPayload = {
+                    contents: [{
+                        role: "user",
+                        parts: [{ text: prompt }]
+                    }],
+                    generationConfig: {
+                        maxOutputTokens: maxTokens  // Native limit is fine now
+                    }
+                };
+                
+                if (systemPrompt) {
+                    geminiPayload.systemInstruction = { parts: [{ text: systemPrompt }] };
+                }
+
                 response = await fetch(geminiUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        contents: [{
-                            role: "user",
-                            parts: [{ text: prompt }]
-                        }],
-                        generationConfig: {
-                            maxOutputTokens: maxTokens
-                        }
-                    })
+                    body: JSON.stringify(geminiPayload)
                 });
                 
                 if (!response.ok) {

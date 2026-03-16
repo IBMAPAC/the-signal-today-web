@@ -120,7 +120,7 @@ class HybridIntelligenceEngine {
             },
             gemini: {
                 endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
-                model: 'gemini-2.5-pro',
+                model: 'gemini-2.5-flash',
                 headers: () => ({
                     'Content-Type': 'application/json'
                 }),
@@ -130,10 +130,10 @@ class HybridIntelligenceEngine {
                         parts: [{ text: prompt }]
                     }],
                     generationConfig: {
-                        maxOutputTokens: maxTokens
+                        maxOutputTokens: maxTokens  // Clean token mapping
                     }
                 }),
-                extractResponse: (data) => data.candidates?.[0]?.content?.parts?.[0]?.text || '',
+                extractResponse: (data) => data.candidates[0].content.parts[0].text,
                 useKeyInUrl: true
             }
         };
