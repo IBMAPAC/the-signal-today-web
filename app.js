@@ -7402,8 +7402,8 @@ Return ONLY valid JSON:
 
         const response = await callAI('CLASSIFICATION', prompt, 300);
         
-        // Parse AI response
-        const result = JSON.parse(response.trim());
+        // Parse AI response (extract text from response object)
+        const result = JSON.parse(response.text.trim());
         
         // Validate response
         const validMarkets = ['ANZ', 'ASEAN', 'GCG', 'ISA', 'KOREA', 'MULTIPLE'];
