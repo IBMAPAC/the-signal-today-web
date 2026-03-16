@@ -126,18 +126,12 @@ class HybridIntelligenceEngine {
                 }),
                 formatRequest: (model, maxTokens, prompt) => ({
                     contents: [{
+                        role: "user",
                         parts: [{ text: prompt }]
                     }],
                     generationConfig: {
                         maxOutputTokens: maxTokens
-                    },
-                    // Lower safety thresholds for news summarization (cybersecurity content)
-                    safetySettings: [
-                        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-                        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-                        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-                        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }
-                    ]
+                    }
                 }),
                 extractResponse: (data) => data.candidates?.[0]?.content?.parts?.[0]?.text || '',
                 useKeyInUrl: true
