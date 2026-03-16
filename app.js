@@ -7400,7 +7400,7 @@ ANALYSIS RULES:
 Return ONLY valid JSON:
 {"market": "GCG", "confidence": 0.95, "reasoning": "Event held in Hong Kong"}`;
 
-        const response = await callAI(prompt, 'CLASSIFICATION', 300);
+        const response = await callAI('CLASSIFICATION', prompt, 300);
         
         // Parse AI response
         const result = JSON.parse(response.trim());
