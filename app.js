@@ -253,7 +253,7 @@ const PROVIDER_MODELS = {
         HAIKU: 'gpt-4o-mini',  // Fast/Cheap tier
         SONNET: 'gpt-4o'       // Strategic/Quality tier
     },
-    gemini: 'gemini-2.5-flash'  // Single model for all tiers
+    gemini: 'gemini-2.5-flash-lite'  // Single model for all tiers
 };
 
 // Provider API endpoints
