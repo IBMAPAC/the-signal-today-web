@@ -117,23 +117,6 @@ class HybridIntelligenceEngine {
                     messages: [{ role: 'user', content: prompt }]
                 }),
                 extractResponse: (data) => data.choices[0]?.message?.content || ''
-            },
-            gemini: {
-                endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
-                model: 'gemini-2.5-pro',
-                headers: () => ({
-                    'Content-Type': 'application/json'
-                }),
-                formatRequest: (model, maxTokens, prompt) => ({
-                    contents: [{
-                        parts: [{ text: prompt }]
-                    }],
-                    generationConfig: {
-                        maxOutputTokens: maxTokens
-                    }
-                }),
-                extractResponse: (data) => data.candidates?.[0]?.content?.parts?.[0]?.text || '',
-                useKeyInUrl: true
             }
         };
     }
@@ -735,7 +718,7 @@ Analyze this article using the rules above.`;
             throw new Error(`Unsupported provider: ${this.provider}`);
         }
         
-        // Build endpoint URL (Gemini needs API key in URL)
+        // Build endpoint URL
         let endpoint = config.endpoint;
         if (config.useKeyInUrl) {
             endpoint = `${endpoint}/${config.model}:generateContent?key=${this.apiKey}`;
@@ -770,10 +753,8 @@ Analyze this article using the rules above.`;
                 
                 let text = config.extractResponse(data);
                 
-                // Clean Gemini response: remove markdown code blocks
-                if (this.provider === 'gemini') {
-                    text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-                }
+                // Clean response: remove markdown code blocks if present
+                text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
                 
                 const jsonMatch = text.match(/\{[\s\S]*\}/);
                 

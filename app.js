@@ -239,8 +239,7 @@ const CACHE_DURATIONS = {
 // AI Provider Configuration
 const AI_PROVIDERS = {
     CLAUDE: 'claude',
-    OPENAI: 'openai',
-    GEMINI: 'gemini'
+    OPENAI: 'openai'
 };
 
 // Provider-specific model mappings
@@ -252,18 +251,13 @@ const PROVIDER_MODELS = {
     openai: {
         HAIKU: 'gpt-4o-mini',  // Fast/Cheap tier
         SONNET: 'gpt-4o'       // Strategic/Quality tier
-    },
-    gemini: {
-        HAIKU: 'gemini-2.5-flash',  // Fast/Cheap tier
-        SONNET: 'gemini-2.5-pro'    // Strategic/Quality tier
     }
 };
 
 // Provider API endpoints
 const PROVIDER_ENDPOINTS = {
     claude: 'https://api.anthropic.com/v1/messages',
-    openai: 'https://api.openai.com/v1/chat/completions',
-    gemini: 'https://generativelanguage.googleapis.com/v1beta/models'
+    openai: 'https://api.openai.com/v1/chat/completions'
 };
 
 // Comprehensive pricing for all providers (per million tokens)
@@ -274,11 +268,7 @@ const MODEL_PRICING = {
     
     // OpenAI models (current market rates as of 2026)
     'gpt-4o': { input: 2.50, output: 10.00 },
-    'gpt-4o-mini': { input: 0.15, output: 0.60 },
-    
-    // Gemini models (current market rates as of 2026)
-    'gemini-2.5-pro': { input: 1.25, output: 5.00 },   // Latest quality model
-    'gemini-2.5-flash': { input: 0.075, output: 0.30 }  // Latest fast model
+    'gpt-4o-mini': { input: 0.15, output: 0.60 }
 };
 
 // Model selection based on task complexity (tier-based)
@@ -394,17 +384,24 @@ function getCacheHitRate(section = null) {
  * Get current AI provider and API keys from settings
  */
 function getAIProviderSettings() {
-    const provider = localStorage.getItem('signal_ai_provider') || AI_PROVIDERS.CLAUDE;
+    let provider = localStorage.getItem('signal_ai_provider') || AI_PROVIDERS.CLAUDE;
+    
+    // Migration: Auto-switch Gemini users to Claude
+    if (provider === 'gemini') {
+        console.log('🔄 Migrating from Gemini to Claude...');
+        provider = AI_PROVIDERS.CLAUDE;
+        localStorage.setItem('signal_ai_provider', AI_PROVIDERS.CLAUDE);
+    }
+    
     const apiKeys = {
         claude: localStorage.getItem('signal_claude_api_key') || localStorage.getItem('signal_api_key') || localStorage.getItem('apiKey') || '', // Backward compatibility
-        openai: localStorage.getItem('signal_openai_api_key') || '',
-        gemini: localStorage.getItem('signal_gemini_api_key') || ''
+        openai: localStorage.getItem('signal_openai_api_key') || ''
     };
     return { provider, apiKeys };
 }
 
 /**
- * Unified AI API caller - supports Claude, OpenAI, and Gemini
+ * Unified AI API caller - supports Claude and OpenAI
  */
 /**
  * Call AI provider with automatic retry logic and exponential backoff.
@@ -607,51 +604,6 @@ async function callAIInternal(taskType, prompt, maxTokens, apiKey, provider) {
                 };
                 break;
                 
-            case AI_PROVIDERS.GEMINI:
-                // Gemini uses a different URL structure with model in path
-                const geminiUrl = `${PROVIDER_ENDPOINTS.gemini}/${model}:generateContent?key=${apiKey}`;
-                response = await fetch(geminiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{ text: prompt }]
-                        }],
-                        generationConfig: {
-                            maxOutputTokens: maxTokens
-                        }
-                    })
-                });
-                
-                if (!response.ok) {
-                    const error = await response.json().catch(() => ({}));
-                    throw new Error(error.error?.message || `Gemini API error: ${response.status}`);
-                }
-                
-                data = await response.json();
-                
-                // Universal error check - catches errors in response body (critical for Gemini 503 errors)
-                if (data.error) {
-                    throw new Error(data.error.message || `Gemini API error: ${data.error.code || 'unknown'}`);
-                }
-                
-                text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                
-                // Clean Gemini response: remove markdown code blocks
-                text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-                
-                // Validate we got actual content
-                if (!text || text.trim() === '') {
-                    throw new Error('Gemini returned empty response - API may be overloaded');
-                }
-                
-                usage = {
-                    input_tokens: data.usageMetadata?.promptTokenCount || 0,
-                    output_tokens: data.usageMetadata?.candidatesTokenCount || 0
-                };
-                break;
                 
             default:
                 throw new Error(`Unsupported AI provider: ${provider}`);
@@ -4573,11 +4525,6 @@ TOP READS
             openaiKeyEl.value = localStorage.getItem('signal_openai_api_key') || '';
         }
         
-        const geminiKeyEl = document.getElementById('gemini-api-key');
-        if (geminiKeyEl) {
-            geminiKeyEl.value = localStorage.getItem('signal_gemini_api_key') || '';
-        }
-        
         // Show/hide appropriate API key fields
         toggleProviderAPIKeys();
         
@@ -4672,9 +4619,6 @@ TOP READS
             } else if (model.includes('gpt')) {
                 provider = 'OpenAI';
                 modelName = model.includes('mini') ? '⚡ GPT-4o-mini' : '🧠 GPT-4o';
-            } else if (model.includes('gemini')) {
-                provider = 'Gemini';
-                modelName = model.includes('flash') ? '⚡ Flash' : '🧠 Exp';
             }
             
             return `
@@ -5048,16 +4992,6 @@ function saveSettings() {
         }
     }
     
-    const geminiKeyEl = document.getElementById('gemini-api-key');
-    if (geminiKeyEl) {
-        const geminiKey = geminiKeyEl.value.trim();
-        if (geminiKey) {
-            localStorage.setItem('signal_gemini_api_key', geminiKey);
-        } else {
-            localStorage.removeItem('signal_gemini_api_key');
-        }
-    }
-    
     // Reinitialize intelligence engine with new provider
     const settings = getAIProviderSettings();
     const apiKey = settings.apiKeys[settings.provider];
@@ -5124,7 +5058,6 @@ function toggleProviderAPIKeys() {
     // Hide all provider API key groups
     document.getElementById('claude-api-key-group')?.classList.add('hidden');
     document.getElementById('openai-api-key-group')?.classList.add('hidden');
-    document.getElementById('gemini-api-key-group')?.classList.add('hidden');
     
     // Show the selected provider's API key group
     const selectedGroup = document.getElementById(`${provider}-api-key-group`);
@@ -5136,8 +5069,7 @@ function toggleProviderAPIKeys() {
     if (providerHint) {
         const hints = {
             claude: 'Using Claude Sonnet 4 for strategic analysis, Haiku 3.5 for fast tasks',
-            openai: 'Using GPT-4o for strategic analysis, GPT-4o-mini for fast tasks',
-            gemini: 'Using Gemini 2.5 Pro for strategic analysis, Gemini 2.5 Flash for fast tasks'
+            openai: 'Using GPT-4o for strategic analysis, GPT-4o-mini for fast tasks'
         };
         providerHint.textContent = hints[provider] || hints.claude;
     }
