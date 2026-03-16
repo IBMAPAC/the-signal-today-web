@@ -296,7 +296,6 @@
                             <select id="ai-provider" onchange="toggleProviderAPIKeys()">
                                 <option value="claude">Claude (Anthropic)</option>
                                 <option value="openai">OpenAI</option>
-                                <option value="gemini">Google Gemini</option>
                             </select>
                             <p class="form-hint" id="provider-hint">Using Claude Sonnet 4 for strategic analysis, Haiku 3.5 for fast tasks</p>
                         </div>
@@ -313,13 +312,6 @@
                             <label for="openai-api-key">OpenAI API Key</label>
                             <input type="password" id="openai-api-key" placeholder="sk-proj-...">
                             <p class="form-hint">Get from <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a> - Using GPT-4o for strategic analysis, GPT-4o-mini for fast tasks</p>
-                        </div>
-                        
-                        <!-- Gemini API Key -->
-                        <div class="form-group provider-api-key hidden" id="gemini-api-key-group">
-                            <label for="gemini-api-key">Gemini API Key</label>
-                            <input type="password" id="gemini-api-key" placeholder="AIza...">
-                            <p class="form-hint">Get from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a> - Using Gemini Exp 1206 for strategic analysis, Gemini 2.0 Flash for fast tasks</p>
                         </div>
                         
                         <div class="form-group">
