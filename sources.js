@@ -1,11 +1,11 @@
 // =============================================
 // The Signal Today - Optimized Sources Configuration
-// Version 3.1 - 48 Working Feeds Only
+// Version 3.3 - 76 Working Feeds
 // =============================================
 
 const DEFAULT_SOURCES = [
     // ============================================
-    // 🤖 AI & AGENTIC (7 sources)
+    // 🤖 AI & AGENTIC (10 sources)
     // ============================================
     {
         name: "Import AI",
@@ -13,7 +13,7 @@ const DEFAULT_SOURCES = [
         category: "AI & Agentic",
         priority: 1,
         credibilityScore: 0.90,
-        digestType: "both",
+        digestType: "daily",
         enabled: true
     },
     {
@@ -70,9 +70,36 @@ const DEFAULT_SOURCES = [
         digestType: "weekly",
         enabled: true
     },
+    {
+        name: "RTInsights MLOps",
+        url: "https://rtinsights.com/tag/mlops/feed",
+        category: "AI & Agentic",
+        priority: 2,
+        credibilityScore: 0.80,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "Dataconomy",
+        url: "https://dataconomy.com/feed",
+        category: "AI & Agentic",
+        priority: 2,
+        credibilityScore: 0.82,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "ClearML Blog",
+        url: "https://clear.ml/feed",
+        category: "AI & Agentic",
+        priority: 2,
+        credibilityScore: 0.78,
+        digestType: "weekly",
+        enabled: true
+    },
 
     // ============================================
-    // 🛡️ CYBERSECURITY & SOVEREIGNTY (4 sources)
+    // 🛡️ CYBERSECURITY & SOVEREIGNTY (9 sources)
     // ============================================
     {
         name: "NIST Cybersecurity",
@@ -105,14 +132,32 @@ const DEFAULT_SOURCES = [
         name: "Computer Weekly Security",
         url: "https://www.computerweekly.com/rss/IT-security.xml",
         category: "Cybersecurity & Sovereignty",
-        priority: 2,
+        priority: 1,
         credibilityScore: 0.85,
         digestType: "both",
         enabled: true
     },
+    {
+        name: "CRN Security",
+        url: "https://www.crn.com/news/security/rss.xml",
+        category: "Cybersecurity & Sovereignty",
+        priority: 1,
+        credibilityScore: 0.80,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "Cyber Security Hub",
+        url: "https://www.cshub.com/rss-feeds",
+        category: "Cybersecurity & Sovereignty",
+        priority: 2,
+        credibilityScore: 0.78,
+        digestType: "daily",
+        enabled: true
+    },
 
     // ============================================
-    // 🌏 APAC REGIONAL (23 sources)
+    // 🌏 APAC REGIONAL (35 sources)
     // ============================================
     {
         name: "Rest of World",
@@ -145,9 +190,9 @@ const DEFAULT_SOURCES = [
         name: "The Ken",
         url: "https://the-ken.com/feed/",
         category: "APAC Regional",
-        priority: 1,
+        priority: 2,
         credibilityScore: 0.88,
-        digestType: "both",
+        digestType: "weekly",
         enabled: true
     },
     {
@@ -226,7 +271,7 @@ const DEFAULT_SOURCES = [
         name: "ChinaTalk",
         url: "https://chinatalk.substack.com/feed",
         category: "APAC Regional",
-        priority: 1,
+        priority: 2,
         credibilityScore: 0.88,
         digestType: "weekly",
         enabled: true
@@ -235,7 +280,7 @@ const DEFAULT_SOURCES = [
         name: "DigiChina Stanford",
         url: "https://digichina.stanford.edu/feed/",
         category: "APAC Regional",
-        priority: 1,
+        priority: 2,
         credibilityScore: 0.92,
         digestType: "weekly",
         enabled: true
@@ -253,9 +298,9 @@ const DEFAULT_SOURCES = [
         name: "Asia Times",
         url: "https://asiatimes.com/feed/",
         category: "APAC Regional",
-        priority: 1,
+        priority: 2,
         credibilityScore: 0.82,
-        digestType: "daily",
+        digestType: "weekly",
         enabled: true
     },
     // --- ANZ ---
@@ -324,9 +369,103 @@ const DEFAULT_SOURCES = [
         digestType: "daily",
         enabled: true
     },
+    {
+        name: "ET CIO India",
+        url: "https://cio.economictimes.indiatimes.com/rss",
+        category: "APAC Regional",
+        priority: 1,
+        credibilityScore: 0.82,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "YourStory",
+        url: "https://yourstory.com/feed",
+        category: "APAC Regional",
+        priority: 2,
+        credibilityScore: 0.80,
+        digestType: "daily",
+        enabled: true
+    },
+    // --- Southeast Asia ---
+    {
+        name: "e27",
+        url: "https://e27.co/news/rss",
+        category: "APAC Regional",
+        priority: 1,
+        credibilityScore: 0.82,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "KrASIA",
+        url: "https://console.kr-asia.com/feed",
+        category: "APAC Regional",
+        priority: 1,
+        credibilityScore: 0.82,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "ASEAN News Today",
+        url: "https://aseannewstoday.com/feed/",
+        category: "APAC Regional",
+        priority: 2,
+        credibilityScore: 0.78,
+        digestType: "daily",
+        enabled: true
+    },
+    // --- Oceania ---
+    {
+        name: "IT Brief New Zealand",
+        url: "https://itbrief.co.nz/feed",
+        category: "APAC Regional",
+        priority: 2,
+        credibilityScore: 0.80,
+        digestType: "daily",
+        enabled: true
+    },
+    // --- China ---
+    {
+        name: "ChinaTechNews",
+        url: "https://www.chinatechnews.com/feed",
+        category: "APAC Regional",
+        priority: 2,
+        credibilityScore: 0.78,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "SCMP China Technology",
+        url: "https://www.scmp.com/topics/china-technology/rss",
+        category: "APAC Regional",
+        priority: 1,
+        credibilityScore: 0.88,
+        digestType: "daily",
+        enabled: true
+    },
+    // --- Korea (Additional) ---
+    {
+        name: "Korea Tech Today",
+        url: "https://koreatechtoday.com/feed",
+        category: "APAC Regional",
+        priority: 2,
+        credibilityScore: 0.78,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "Korea IT Times",
+        url: "https://www.koreaittimes.com/rss/S1N1.xml",
+        category: "APAC Regional",
+        priority: 2,
+        credibilityScore: 0.78,
+        digestType: "daily",
+        enabled: true
+    },
 
     // ============================================
-    // 🏢 ENTERPRISE TECH (8 sources)
+    // 🏢 ENTERPRISE TECH (15 sources)
     // ============================================
     {
         name: "Forrester",
@@ -400,9 +539,72 @@ const DEFAULT_SOURCES = [
         digestType: "daily",
         enabled: true
     },
+    {
+        name: "CIO.com",
+        url: "https://www.cio.com/index.rss",
+        category: "Enterprise Tech",
+        priority: 1,
+        credibilityScore: 0.88,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "InfoWorld",
+        url: "https://www.infoworld.com/index.rss",
+        category: "Enterprise Tech",
+        priority: 1,
+        credibilityScore: 0.85,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "CloudTech",
+        url: "https://cloudcomputing-news.net/feed",
+        category: "Enterprise Tech",
+        priority: 2,
+        credibilityScore: 0.80,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "TechRepublic Cloud",
+        url: "https://www.techrepublic.com/rssfeeds/topic/cloud/",
+        category: "Enterprise Tech",
+        priority: 2,
+        credibilityScore: 0.82,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "TechRepublic DevOps",
+        url: "https://www.techrepublic.com/rssfeeds/topic/devops/",
+        category: "Enterprise Tech",
+        priority: 2,
+        credibilityScore: 0.82,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "TechRepublic Articles",
+        url: "https://www.techrepublic.com/rssfeeds/articles/",
+        category: "Enterprise Tech",
+        priority: 2,
+        credibilityScore: 0.80,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "Computer Weekly All",
+        url: "https://www.computerweekly.com/rss/All-Computer-Weekly-content.xml",
+        category: "Enterprise Tech",
+        priority: 2,
+        credibilityScore: 0.85,
+        digestType: "daily",
+        enabled: true
+    },
 
     // ============================================
-    // ⚔️ COMPETITIVE LANDSCAPE (6 sources)
+    // ⚔️ COMPETITIVE LANDSCAPE (8 sources)
     // ============================================
     {
         name: "AWS Blog",
@@ -459,9 +661,18 @@ const DEFAULT_SOURCES = [
         digestType: "daily",
         enabled: true
     },
+    {
+        name: "AWS Insider",
+        url: "https://awsinsider.net/rss-feeds/awsinsider-net.aspx",
+        category: "Competitive Landscape",
+        priority: 2,
+        credibilityScore: 0.78,
+        digestType: "daily",
+        enabled: true
+    },
 
     // ============================================
-    // 🏗️ ARCHITECTURE & PLATFORM (5 sources)
+    // 🏗️ ARCHITECTURE & PLATFORM (8 sources)
     // ============================================
     {
         name: "InfoQ",
@@ -494,7 +705,7 @@ const DEFAULT_SOURCES = [
         name: "CNCF Blog",
         url: "https://www.cncf.io/blog/feed/",
         category: "Architecture & Platform",
-        priority: 2,
+        priority: 1,
         credibilityScore: 0.85,
         digestType: "weekly",
         enabled: true
@@ -503,14 +714,23 @@ const DEFAULT_SOURCES = [
         name: "Platform Engineering",
         url: "https://platformengineering.org/blog/rss.xml",
         category: "Architecture & Platform",
-        priority: 2,
+        priority: 1,
         credibilityScore: 0.85,
         digestType: "both",
         enabled: true
     },
+    {
+        name: "DevOps.com",
+        url: "https://devops.com/feed/",
+        category: "Architecture & Platform",
+        priority: 2,
+        credibilityScore: 0.80,
+        digestType: "weekly",
+        enabled: true
+    },
 
     // ============================================
-    // 📊 STRATEGIC ANALYSIS (2 sources)
+    // 📊 STRATEGIC ANALYSIS (5 sources)
     // ============================================
     {
         name: "Stratechery",
@@ -527,6 +747,33 @@ const DEFAULT_SOURCES = [
         category: "Strategic Analysis",
         priority: 1,
         credibilityScore: 0.95,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "Deloitte Tech Trends",
+        url: "https://www2.deloitte.com/us/en/pages/technology/articles/tech-trends.html.rss",
+        category: "Strategic Analysis",
+        priority: 2,
+        credibilityScore: 0.85,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "Capgemini Insights",
+        url: "https://www.capgemini.com/feed/",
+        category: "Strategic Analysis",
+        priority: 2,
+        credibilityScore: 0.85,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "Wavestone",
+        url: "https://www.wavestone.com/en/feed/",
+        category: "Strategic Analysis",
+        priority: 2,
+        credibilityScore: 0.85,
         digestType: "weekly",
         enabled: true
     },

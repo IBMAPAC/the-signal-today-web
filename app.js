@@ -239,7 +239,8 @@ const CACHE_DURATIONS = {
 // AI Provider Configuration
 const AI_PROVIDERS = {
     CLAUDE: 'claude',
-    OPENAI: 'openai'
+    OPENAI: 'openai',
+    GEMINI: 'gemini'
 };
 
 // Provider-specific model mappings
@@ -251,13 +252,18 @@ const PROVIDER_MODELS = {
     openai: {
         HAIKU: 'gpt-4o-mini',  // Fast/Cheap tier
         SONNET: 'gpt-4o'       // Strategic/Quality tier
+    },
+    gemini: {
+        HAIKU: 'gemini-2.5-flash',  // Fast/Cheap tier
+        SONNET: 'gemini-2.5-pro'    // Strategic/Quality tier
     }
 };
 
 // Provider API endpoints
 const PROVIDER_ENDPOINTS = {
     claude: 'https://api.anthropic.com/v1/messages',
-    openai: 'https://api.openai.com/v1/chat/completions'
+    openai: 'https://api.openai.com/v1/chat/completions',
+    gemini: 'https://generativelanguage.googleapis.com/v1beta/models'
 };
 
 // Comprehensive pricing for all providers (per million tokens)
@@ -268,7 +274,11 @@ const MODEL_PRICING = {
     
     // OpenAI models (current market rates as of 2026)
     'gpt-4o': { input: 2.50, output: 10.00 },
-    'gpt-4o-mini': { input: 0.15, output: 0.60 }
+    'gpt-4o-mini': { input: 0.15, output: 0.60 },
+    
+    // Gemini models (current market rates as of 2026)
+    'gemini-2.5-pro': { input: 1.25, output: 5.00 },   // Latest quality model
+    'gemini-2.5-flash': { input: 0.075, output: 0.30 }  // Latest fast model
 };
 
 // Model selection based on task complexity (tier-based)
@@ -387,13 +397,14 @@ function getAIProviderSettings() {
     const provider = localStorage.getItem('signal_ai_provider') || AI_PROVIDERS.CLAUDE;
     const apiKeys = {
         claude: localStorage.getItem('signal_claude_api_key') || localStorage.getItem('signal_api_key') || localStorage.getItem('apiKey') || '', // Backward compatibility
-        openai: localStorage.getItem('signal_openai_api_key') || ''
+        openai: localStorage.getItem('signal_openai_api_key') || '',
+        gemini: localStorage.getItem('signal_gemini_api_key') || ''
     };
     return { provider, apiKeys };
 }
 
 /**
- * Unified AI API caller - supports Claude and OpenAI
+ * Unified AI API caller - supports Claude, OpenAI, and Gemini
  */
 /**
  * Call AI provider with automatic retry logic and exponential backoff.
@@ -593,6 +604,52 @@ async function callAIInternal(taskType, prompt, maxTokens, apiKey, provider) {
                 usage = {
                     input_tokens: data.usage?.prompt_tokens || 0,
                     output_tokens: data.usage?.completion_tokens || 0
+                };
+                break;
+                
+            case AI_PROVIDERS.GEMINI:
+                // Gemini uses a different URL structure with model in path
+                const geminiUrl = `${PROVIDER_ENDPOINTS.gemini}/${model}:generateContent?key=${apiKey}`;
+                response = await fetch(geminiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: prompt }]
+                        }],
+                        generationConfig: {
+                            maxOutputTokens: maxTokens
+                        }
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.error?.message || `Gemini API error: ${response.status}`);
+                }
+                
+                data = await response.json();
+                
+                // Universal error check - catches errors in response body (critical for Gemini 503 errors)
+                if (data.error) {
+                    throw new Error(data.error.message || `Gemini API error: ${data.error.code || 'unknown'}`);
+                }
+                
+                text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                
+                // Clean Gemini response: remove markdown code blocks
+                text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+                
+                // Validate we got actual content
+                if (!text || text.trim() === '') {
+                    throw new Error('Gemini returned empty response - API may be overloaded');
+                }
+                
+                usage = {
+                    input_tokens: data.usageMetadata?.promptTokenCount || 0,
+                    output_tokens: data.usageMetadata?.candidatesTokenCount || 0
                 };
                 break;
                 
@@ -4516,6 +4573,10 @@ TOP READS
             openaiKeyEl.value = localStorage.getItem('signal_openai_api_key') || '';
         }
         
+        const geminiKeyEl = document.getElementById('gemini-api-key');
+        if (geminiKeyEl) {
+            geminiKeyEl.value = localStorage.getItem('signal_gemini_api_key') || '';
+        }
         
         // Show/hide appropriate API key fields
         toggleProviderAPIKeys();
@@ -4611,6 +4672,9 @@ TOP READS
             } else if (model.includes('gpt')) {
                 provider = 'OpenAI';
                 modelName = model.includes('mini') ? '⚡ GPT-4o-mini' : '🧠 GPT-4o';
+            } else if (model.includes('gemini')) {
+                provider = 'Gemini';
+                modelName = model.includes('flash') ? '⚡ Flash' : '🧠 Exp';
             }
             
             return `
@@ -4984,6 +5048,15 @@ function saveSettings() {
         }
     }
     
+    const geminiKeyEl = document.getElementById('gemini-api-key');
+    if (geminiKeyEl) {
+        const geminiKey = geminiKeyEl.value.trim();
+        if (geminiKey) {
+            localStorage.setItem('signal_gemini_api_key', geminiKey);
+        } else {
+            localStorage.removeItem('signal_gemini_api_key');
+        }
+    }
     
     // Reinitialize intelligence engine with new provider
     const settings = getAIProviderSettings();
@@ -5051,6 +5124,7 @@ function toggleProviderAPIKeys() {
     // Hide all provider API key groups
     document.getElementById('claude-api-key-group')?.classList.add('hidden');
     document.getElementById('openai-api-key-group')?.classList.add('hidden');
+    document.getElementById('gemini-api-key-group')?.classList.add('hidden');
     
     // Show the selected provider's API key group
     const selectedGroup = document.getElementById(`${provider}-api-key-group`);
@@ -5062,7 +5136,8 @@ function toggleProviderAPIKeys() {
     if (providerHint) {
         const hints = {
             claude: 'Using Claude Sonnet 4 for strategic analysis, Haiku 3.5 for fast tasks',
-            openai: 'Using GPT-4o for strategic analysis, GPT-4o-mini for fast tasks'
+            openai: 'Using GPT-4o for strategic analysis, GPT-4o-mini for fast tasks',
+            gemini: 'Using Gemini 2.5 Pro for strategic analysis, Gemini 2.5 Flash for fast tasks'
         };
         providerHint.textContent = hints[provider] || hints.claude;
     }
@@ -5923,7 +5998,7 @@ function copyBriefATL() {
 // Shows industry signals grouped by market for quick Slack sharing
 // ==========================================
 
-async function renderMarketInsights(forceRefresh = false) {
+function renderMarketInsights(forceRefresh = false) {
     const list = document.getElementById('market-insights-list');
     if (!list) return;
     
@@ -5961,42 +6036,83 @@ async function renderMarketInsights(forceRefresh = false) {
     const todayArticles = app.dailyArticles.length > 0 ? app.dailyArticles : app.articles.slice(0, 30);
     
     // Step 1: Exclusive market assignment - each article goes to ONE market only
-    // Use hybrid approach: keyword matching + AI validation for ambiguous cases
-    
-    // Process articles with hybrid market detection
-    const marketAssignmentPromises = todayArticles.map(async (article) => {
-        const text = `${article.title} ${article.summary || ''}`;
+    if (typeof APAC_MARKET_CONTEXT !== 'undefined') {
+        // Generic terms to exclude from matching (too broad to be useful)
+        const GENERIC_TERMS = ['asia pacific', 'apac', 'asia', 'pacific', 'region', 'regional'];
         
-        // Use hybrid detection (keywords + AI for ambiguous cases)
-        const detectedMarkets = await detectMarketsHybrid(article);
-        
-        if (detectedMarkets.length > 0) {
-            // Take the first (best) market match
-            const assignedMarket = detectedMarkets[0];
+        todayArticles.forEach(article => {
+            const text = `${article.title} ${article.summary || ''}`.toLowerCase();
             
-            if (marketSignals[assignedMarket]) {
-                return {
-                    market: assignedMarket,
-                    article,
-                    type: 'content',
-                    signal: 'AI-detected',
-                    priority: 1
-                };
+            // Collect ALL matches from ALL markets with their priorities
+            const allMatches = [];
+            
+            for (const [market, context] of Object.entries(APAC_MARKET_CONTEXT)) {
+                if (!marketSignals[market]) continue;
+                
+                // Priority 1: Countries/cities (geographic routing - HIGHEST PRIORITY)
+                // Geographic location is the most definitive indicator of market relevance
+                const matchedCountry = context.countries?.find(c => {
+                    const term = c.toLowerCase();
+                    // Exclude generic terms that are too broad
+                    return text.includes(term) && !GENERIC_TERMS.includes(term);
+                });
+                if (matchedCountry) {
+                    allMatches.push({
+                        market,
+                        priority: 1,
+                        signal: matchedCountry,
+                        type: 'geographic'
+                    });
+                }
+                
+                // Priority 2: Regulators (market-specific, but less definitive than geography)
+                const matchedRegulator = context.regulators?.find(r => text.includes(r.toLowerCase()));
+                if (matchedRegulator) {
+                    allMatches.push({
+                        market,
+                        priority: 2,
+                        signal: matchedRegulator.toUpperCase(),
+                        type: 'regulatory'
+                    });
+                }
+                
+                // Priority 3: Market priorities
+                const matchedPriority = context.priorities?.find(p => text.includes(p.toLowerCase()));
+                if (matchedPriority) {
+                    allMatches.push({
+                        market,
+                        priority: 3,
+                        signal: matchedPriority,
+                        type: 'priority'
+                    });
+                }
+                
+                // Priority 4: Watchwords
+                const matchedWatchword = context.watchwords?.find(w => text.includes(w.toLowerCase()));
+                if (matchedWatchword) {
+                    allMatches.push({
+                        market,
+                        priority: 4,
+                        signal: matchedWatchword,
+                        type: 'watchword'
+                    });
+                }
             }
-        }
-        
-        return null;
-    });
-    
-    // Wait for all market assignments to complete
-    const assignments = await Promise.all(marketAssignmentPromises);
-    
-    // Add assignments to marketSignals
-    assignments.forEach(assignment => {
-        if (assignment) {
-            marketSignals[assignment.market].push(assignment);
-        }
-    });
+            
+            // Sort by priority (lowest number = highest priority) and take the best match
+            if (allMatches.length > 0) {
+                allMatches.sort((a, b) => a.priority - b.priority);
+                const bestMatch = allMatches[0];
+                
+                marketSignals[bestMatch.market].push({
+                    type: bestMatch.type,
+                    signal: bestMatch.signal,
+                    article,
+                    priority: bestMatch.priority
+                });
+            }
+        });
+    }
     
     // Step 2: Add client-specific signals (only if not already assigned)
     todayArticles.forEach(article => {
@@ -7303,7 +7419,7 @@ function detectMarketsFromContent(text) {
     // ANZ - Australia, New Zealand
     const anzKeywords = [
         'australia', 'australian', 'sydney', 'melbourne', 'brisbane', 'perth', 'canberra', 'adelaide',
-        'apra', 'accc', 'oaic', 'asx',  // Removed 'asic' - too ambiguous (chip vs regulator)
+        'apra', 'asic', 'accc', 'oaic', 'asx',
         'new zealand', 'auckland', 'wellington', 'rbnz',
         'commonwealth bank', 'westpac', 'anz bank', 'nab bank', 'macquarie',
         'telstra', 'optus', 'woolworths', 'coles', 'qantas'
@@ -7359,112 +7475,6 @@ function detectMarketsFromContent(text) {
     if (hasAny(koreaKeywords)) markets.push('KOREA');
     
     return markets;
-}
-
-/**
- * AI-powered market assignment with context awareness
- * Uses semantic understanding to resolve ambiguous cases
- */
-async function assignMarketWithAI(article) {
-    try {
-        const prompt = `Analyze this article and determine which APAC market it's most relevant to.
-
-ARTICLE:
-Title: ${article.title}
-Summary: ${article.summary || article.description || ''}
-
-MARKETS & CONTEXT:
-- ANZ: Australia, New Zealand
-  * Regulators: APRA, ACCC, OAIC, ASX, RBNZ
-  * Note: "ASIC" as regulator (not chip technology)
-  
-- ASEAN: Singapore, Malaysia, Indonesia, Thailand, Philippines, Vietnam
-  * Regional organizations, Southeast Asian focus
-  
-- GCG: Hong Kong, Taiwan, China (Greater China)
-  * Mainland China, Hong Kong SAR, Taiwan
-  
-- ISA: India, Sri Lanka, Bangladesh, South Asia
-  * Indian subcontinent focus
-  
-- KOREA: South Korea
-  * Korean peninsula, Seoul-based
-
-ANALYSIS RULES:
-1. Geographic location mentioned = HIGHEST priority
-2. Consider context (e.g., "ASIC" as chip tech vs Australian regulator)
-3. If article discusses multiple markets, choose PRIMARY focus
-4. If truly pan-regional with no clear focus, return "MULTIPLE"
-5. Look for: event locations, company headquarters, regulatory jurisdiction
-
-Return ONLY valid JSON:
-{"market": "GCG", "confidence": 0.95, "reasoning": "Event held in Hong Kong"}`;
-
-        const response = await callAI('CLASSIFICATION', prompt, 300);
-        
-        // Parse AI response (extract text from response object)
-        const result = JSON.parse(response.text.trim());
-        
-        // Validate response
-        const validMarkets = ['ANZ', 'ASEAN', 'GCG', 'ISA', 'KOREA', 'MULTIPLE'];
-        if (!validMarkets.includes(result.market)) {
-            console.warn('AI returned invalid market:', result.market);
-            return null;
-        }
-        
-        // Log AI decision for monitoring
-        console.log(`AI Market Assignment: ${article.title.substring(0, 50)}... → ${result.market} (${result.confidence})`);
-        
-        return result;
-        
-    } catch (error) {
-        console.error('AI market assignment failed:', error);
-        return null;
-    }
-}
-
-/**
- * Detect ambiguous terms that require AI validation
- */
-function hasAmbiguousTerms(text) {
-    const lowerText = text.toLowerCase();
-    const ambiguousTerms = [
-        'asia pacific', 'apac', 'asia', 'regional', 'region',
-        'asic',  // Could be chip or regulator
-        'pan-asian', 'cross-border', 'multinational'
-    ];
-    return ambiguousTerms.some(term => lowerText.includes(term));
-}
-
-/**
- * Hybrid market assignment: Fast keyword matching + AI validation for ambiguous cases
- */
-async function detectMarketsHybrid(article) {
-    const text = `${article.title} ${article.summary || article.description || ''}`;
-    
-    // Step 1: Fast keyword-based detection
-    const keywordMarkets = detectMarketsFromContent(text);
-    
-    // Step 2: Check if AI validation is needed
-    const needsAI = keywordMarkets.length === 0 ||  // No matches
-                    keywordMarkets.length > 1 ||     // Multiple matches
-                    hasAmbiguousTerms(text);         // Ambiguous terms present
-    
-    if (!needsAI) {
-        // Clear single match - return immediately
-        return keywordMarkets;
-    }
-    
-    // Step 3: Use AI for ambiguous cases
-    const aiResult = await assignMarketWithAI(article);
-    
-    if (aiResult && aiResult.market !== 'MULTIPLE' && aiResult.confidence >= 0.7) {
-        // AI has high confidence - use its decision
-        return [aiResult.market];
-    }
-    
-    // Step 4: Fallback to keyword matches if AI fails or low confidence
-    return keywordMarkets;
 }
 
 function renderSignalFeed() {
