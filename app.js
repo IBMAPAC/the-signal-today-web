@@ -8720,23 +8720,57 @@ Strategic thesis must be memorable/quotable. Technical breakthrough must include
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
         const { text } = await callAI('STRATEGIC_ANALYSIS', prompt, 900, apiKey);
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
         
-        if (jsonMatch) {
-            const synthesized = JSON.parse(jsonMatch[0]);
-            
-            // Cache the synthesized insights with article data
-            cacheDeepReads(synthesized, candidates.slice(0, 5));
-            
-            list.innerHTML = synthesized.map((insight, idx) => {
-                const article = candidates[idx];
-                if (!article) return '';
-                
-                return renderSynthesizedDeepRead(insight, article);
-            }).join('');
-        } else {
+        // Clean response: remove markdown code blocks if present
+        let cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        
+        // Try to extract JSON array
+        let jsonMatch = cleanedText.match(/\[[\s\S]*\]/);
+        
+        if (!jsonMatch) {
+            console.error('Deep Reads: No JSON array found in response');
+            console.error('Response (first 500 chars):', cleanedText.substring(0, 500));
             throw new Error('No valid JSON in response');
         }
+        
+        // Clean up JSON before parsing
+        let jsonStr = jsonMatch[0];
+        
+        // Remove trailing commas before closing brackets
+        jsonStr = jsonStr.replace(/,(\s*[\]}])/g, '$1');
+        
+        // Remove any text after the last closing bracket
+        const lastBracket = jsonStr.lastIndexOf(']');
+        if (lastBracket >= 0 && lastBracket < jsonStr.length - 1) {
+            jsonStr = jsonStr.substring(0, lastBracket + 1);
+        }
+        
+        let synthesized;
+        try {
+            synthesized = JSON.parse(jsonStr);
+        } catch (parseError) {
+            console.error('Deep Reads JSON parse error:', parseError.message);
+            console.error('Problematic JSON substring:', jsonStr.substring(Math.max(0, 280), 320));
+            console.error('Full JSON (first 500 chars):', jsonStr.substring(0, 500));
+            throw new Error(`JSON parse failed: ${parseError.message}`);
+        }
+        
+        // Validate it's an array
+        if (!Array.isArray(synthesized)) {
+            console.warn('Deep Reads: Response is not an array, wrapping in array');
+            synthesized = [synthesized];
+        }
+        
+        // Cache the synthesized insights with article data
+        cacheDeepReads(synthesized, candidates.slice(0, 5));
+        
+        list.innerHTML = synthesized.map((insight, idx) => {
+            const article = candidates[idx];
+            if (!article) return '';
+            
+            return renderSynthesizedDeepRead(insight, article);
+        }).join('');
+        
     } catch (err) {
         console.error('Deep read synthesis error:', err);
         list.innerHTML = candidates.slice(0, 5).map(article => renderBasicDeepRead(article)).join('');
