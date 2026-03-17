@@ -2441,21 +2441,42 @@ class SignalApp {
         return bestMatch;
     }
 
-    detectAllClients(text) {
-        // Return all matched client names for an article.
+    detectAllClients(text, useContextValidation = true) {
+        // ENHANCED: Return all matched client names with context validation
+        // Phase 2 improvement: Uses exclusion patterns and context scoring
         // Works with both structured objects {name, tier, aliases} and legacy strings.
         // Uses word boundary matching to avoid false positives
         // e.g., "SK" shouldn't match "risk", "ANZ" shouldn't match "organization"
+        
         const matches = [];
         const textLower = text.toLowerCase();
         
+        // Client-specific exclusion patterns (Phase 2 enhancement)
+        const CLIENT_EXCLUSIONS = {
+            'anz': ['organization', 'anzac', 'bonanza', 'stanza', 'extravaganza'],
+            'sk': ['risk', 'ask', 'task', 'desk', 'mask', 'skate', 'brisk', 'whisk', 'dusk'],
+            'dbs': ['jobs', 'mobs', 'verbs', 'absorbs', 'disturbs'],
+            'cba': ['cuba', 'combat', 'acrobat', 'scuba'],
+            'axa': ['taxa', 'coaxial', 'relaxation', 'taxation'],
+            'aia': ['gaia', 'playa'],
+            'ocbc': ['abc', 'cbc']
+        };
+        
         for (const clientEntry of this.clients) {
             const clientName = typeof clientEntry === 'string' ? clientEntry : clientEntry.name;
+            const clientNameLower = clientName.toLowerCase();
             const aliases = (typeof clientEntry === 'object' && clientEntry.aliases) ? clientEntry.aliases : [];
+            
+            // Check exclusions first (Phase 2 enhancement)
+            const exclusions = CLIENT_EXCLUSIONS[clientNameLower] || [];
+            if (exclusions.some(excl => textLower.includes(excl))) {
+                continue; // Skip this client - exclusion pattern matched
+            }
             
             // Check main name and all aliases
             const namesToCheck = [clientName, ...aliases];
             let isMatch = false;
+            let matchedName = null;
             
             for (const name of namesToCheck) {
                 const nameLower = name.toLowerCase();
@@ -2465,6 +2486,7 @@ class SignalApp {
                     const regex = new RegExp(`\\b${this.escapeRegex(nameLower)}\\b`, 'i');
                     if (regex.test(textLower)) {
                         isMatch = true;
+                        matchedName = name;
                         break;
                     }
                 } else {
@@ -2472,12 +2494,22 @@ class SignalApp {
                     const regex = new RegExp(`\\b${this.escapeRegex(nameLower)}`, 'i');
                     if (regex.test(textLower)) {
                         isMatch = true;
+                        matchedName = name;
                         break;
                     }
                 }
             }
             
-            if (isMatch && !matches.includes(clientName)) {
+            // Phase 2: Context validation for matched clients
+            if (isMatch && useContextValidation) {
+                const confidence = this.validateClientContext(textLower, clientEntry, matchedName);
+                
+                // Only include if confidence threshold met
+                if (confidence >= 0.6 && !matches.includes(clientName)) {
+                    matches.push(clientName);
+                }
+            } else if (isMatch && !matches.includes(clientName)) {
+                // Legacy mode: no context validation
                 matches.push(clientName);
             }
         }
@@ -2485,14 +2517,147 @@ class SignalApp {
         return matches;
     }
     
+    validateClientContext(text, client, matchedName) {
+        // Phase 2: Context validation for client matches
+        // Returns confidence score 0.0-1.0
+        let score = 0.7; // Base score for keyword match
+        
+        const clientObj = typeof client === 'object' ? client : { name: client };
+        
+        // Boost 1: Industry context (+0.15)
+        if (clientObj.industry) {
+            const industryKeywords = {
+                'Financial Services': ['bank', 'banking', 'financial', 'payment', 'insurance', 'fintech', 'lending', 'credit', 'wealth'],
+                'Telecommunications': ['telecom', 'telecommunications', 'mobile', '5g', '4g', 'network', 'broadband', 'carrier', 'wireless'],
+                'Government': ['government', 'ministry', 'agency', 'public sector', 'municipal', 'federal', 'state', 'national'],
+                'Retail': ['retail', 'ecommerce', 'shopping', 'consumer', 'store', 'merchant', 'supermarket'],
+                'Energy': ['energy', 'power', 'utility', 'electricity', 'gas', 'renewable', 'solar', 'wind'],
+                'Manufacturing': ['manufacturing', 'factory', 'production', 'industrial', 'assembly', 'automotive'],
+                'Healthcare': ['healthcare', 'hospital', 'medical', 'pharma', 'health', 'clinical'],
+                'Technology': ['technology', 'software', 'digital', 'tech', 'cloud', 'saas', 'platform'],
+                'Transportation & Logistics': ['transport', 'logistics', 'shipping', 'freight', 'delivery', 'airline']
+            };
+            
+            const keywords = industryKeywords[clientObj.industry] || [];
+            if (keywords.some(kw => text.includes(kw))) {
+                score += 0.15;
+            }
+        }
+        
+        // Boost 2: Market/geographic context (+0.1)
+        if (clientObj.market) {
+            const marketKeywords = {
+                'ANZ': ['australia', 'australian', 'new zealand', 'sydney', 'melbourne', 'auckland'],
+                'ASEAN': ['singapore', 'singaporean', 'malaysia', 'malaysian', 'indonesia', 'indonesian', 'thailand', 'thai'],
+                'GCG': ['hong kong', 'china', 'chinese', 'taiwan', 'taiwanese', 'beijing', 'shanghai'],
+                'ISA': ['india', 'indian', 'mumbai', 'delhi', 'bangalore', 'sri lanka'],
+                'KOREA': ['korea', 'korean', 'seoul', 'south korea']
+            };
+            
+            const keywords = marketKeywords[clientObj.market] || [];
+            if (keywords.some(kw => text.includes(kw))) {
+                score += 0.1;
+            }
+        }
+        
+        // Boost 3: Country context (+0.05)
+        if (clientObj.country) {
+            const countryLower = clientObj.country.toLowerCase();
+            if (text.includes(countryLower)) {
+                score += 0.05;
+            }
+        }
+        
+        // Penalty: If matched name is very short (<=2 chars) and no context, reduce confidence
+        if (matchedName && matchedName.length <= 2 && score < 0.8) {
+            score -= 0.1;
+        }
+        
+        return Math.min(score, 0.95);
+    }
+    
+    validateThemeContext(text, theme, matchedKeywords) {
+        // Phase 3: Context validation for cross-reference themes
+        // Returns confidence score 0.0-1.0
+        
+        // Base score from keyword matches
+        let score = Math.min(matchedKeywords.length * 0.2, 0.6);
+        
+        // Theme-specific context patterns
+        const themeContexts = {
+            'AI Governance': {
+                required: ['regulation', 'policy', 'compliance', 'framework', 'ethics', 'governance', 'oversight', 'law', 'act', 'directive'],
+                boost: 0.2
+            },
+            'Cloud Competition': {
+                required: ['market share', 'pricing', 'competition', 'vs', 'versus', 'compete', 'rival', 'battle', 'war', 'dominance'],
+                boost: 0.2
+            },
+            'Data Sovereignty': {
+                required: ['localization', 'residency', 'cross-border', 'jurisdiction', 'sovereignty', 'compliance', 'regulation', 'law'],
+                boost: 0.2
+            },
+            'Agentic AI': {
+                required: ['autonomous', 'agent', 'agentic', 'automation', 'workflow', 'orchestration', 'multi-agent', 'framework'],
+                boost: 0.15
+            },
+            'Generative AI': {
+                required: ['generate', 'generation', 'model', 'training', 'inference', 'prompt', 'llm', 'transformer'],
+                boost: 0.15
+            },
+            'Cybersecurity': {
+                required: ['attack', 'breach', 'vulnerability', 'threat', 'security', 'hack', 'malware', 'ransomware', 'exploit'],
+                boost: 0.2
+            },
+            'Digital Banking': {
+                required: ['bank', 'banking', 'financial', 'fintech', 'payment', 'transaction', 'account', 'customer'],
+                boost: 0.15
+            },
+            'Enterprise AI Adoption': {
+                required: ['enterprise', 'adoption', 'implementation', 'deployment', 'transformation', 'strategy', 'business'],
+                boost: 0.15
+            }
+        };
+        
+        const context = themeContexts[theme];
+        if (context) {
+            // Check for required context keywords
+            const contextMatches = context.required.filter(ctx => text.includes(ctx));
+            if (contextMatches.length > 0) {
+                score += Math.min(contextMatches.length * 0.1, context.boost);
+            } else {
+                // No context found - reduce confidence significantly
+                score *= 0.5;
+            }
+        }
+        
+        // Additional validation: Check if article is primarily about this theme
+        // If multiple theme keywords present, it's more likely to be genuinely about the theme
+        if (matchedKeywords.length >= 2) {
+            score += 0.1;
+        }
+        
+        // Penalty: If only generic keywords matched without specific context
+        const genericKeywords = ['ai', 'cloud', 'data', 'digital', 'cyber'];
+        const onlyGeneric = matchedKeywords.every(kw =>
+            genericKeywords.some(gen => kw.includes(gen))
+        );
+        if (onlyGeneric && score < 0.7) {
+            score *= 0.7;
+        }
+        
+        return Math.min(score, 0.95);
+    }
+    
     escapeRegex(string) {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     detectCrossReferences(articles) {
+        // Phase 3: Enhanced with context validation
         // Use the expanded themes from sources.js
-        const themes = typeof CROSS_REFERENCE_THEMES !== 'undefined' 
-            ? CROSS_REFERENCE_THEMES 
+        const themes = typeof CROSS_REFERENCE_THEMES !== 'undefined'
+            ? CROSS_REFERENCE_THEMES
             : {
                 'AI Governance': ['ai governance', 'ai regulation', 'ai act', 'ai safety', 'responsible ai', 'ai ethics'],
                 'Cloud Competition': ['azure', 'aws', 'google cloud', 'cloud pricing', 'multi-cloud', 'hybrid cloud'],
@@ -2507,26 +2672,60 @@ class SignalApp {
         const topicGroups = [];
         
         for (const [theme, keywords] of Object.entries(themes)) {
-            const matchingArticles = articles.filter(a => {
-                const text = `${a.title} ${a.summary}`.toLowerCase();
-                return keywords.some(kw => text.includes(kw));
-            });
+            const matchingArticles = [];
             
-            const uniqueSources = [...new Set(matchingArticles.map(m => m.sourceName))];
+            // Phase 3: Context-validated matching
+            for (const article of articles) {
+                const text = `${article.title} ${article.summary}`.toLowerCase();
+                
+                // Tier 1: Keyword matching
+                const keywordMatches = keywords.filter(kw => text.includes(kw));
+                if (keywordMatches.length === 0) continue;
+                
+                // Tier 2: Context validation
+                const confidence = this.validateThemeContext(text, theme, keywordMatches);
+                
+                // Only include if confidence threshold met
+                if (confidence >= 0.7) {
+                    matchingArticles.push({
+                        article: article,
+                        confidence: confidence,
+                        matchedKeywords: keywordMatches
+                    });
+                }
+            }
             
+            const uniqueSources = [...new Set(matchingArticles.map(m => m.article.sourceName))];
+            
+            // Require at least 2 sources AND average confidence > 0.75
             if (uniqueSources.length >= 2) {
-                topicGroups.push({
-                    theme: theme,
-                    keywords: keywords,
-                    sourceCount: uniqueSources.length,
-                    sources: uniqueSources.slice(0, 4),
-                    articles: matchingArticles.slice(0, 5),
-                    articleIds: matchingArticles.map(m => m.id)
-                });
+                const avgConfidence = matchingArticles.reduce((sum, m) => sum + m.confidence, 0) / matchingArticles.length;
+                
+                if (avgConfidence >= 0.75) {
+                    // Sort by confidence
+                    const sortedArticles = matchingArticles.sort((a, b) => b.confidence - a.confidence);
+                    
+                    topicGroups.push({
+                        theme: theme,
+                        keywords: keywords,
+                        sourceCount: uniqueSources.length,
+                        sources: uniqueSources.slice(0, 4),
+                        articles: sortedArticles.slice(0, 5).map(m => m.article),
+                        articleIds: sortedArticles.map(m => m.article.id),
+                        avgConfidence: avgConfidence,
+                        topConfidence: sortedArticles[0]?.confidence || 0
+                    });
+                }
             }
         }
         
-        const sorted = topicGroups.sort((a, b) => b.sourceCount - a.sourceCount);
+        // Sort by source count, then by confidence
+        const sorted = topicGroups.sort((a, b) => {
+            if (b.sourceCount !== a.sourceCount) {
+                return b.sourceCount - a.sourceCount;
+            }
+            return b.avgConfidence - a.avgConfidence;
+        });
         
         // Trend tracking: store daily signal counts for up to 14 days
         try {
@@ -5983,22 +6182,64 @@ function renderMarketInsights(forceRefresh = false) {
                 
                 // Priority 1: Countries/cities (geographic routing - HIGHEST PRIORITY)
                 // Geographic location is the most definitive indicator of market relevance
+                // ENHANCED: Boost priority for specific geographic mentions
                 const matchedCountry = context.countries?.find(c => {
                     const term = c.toLowerCase();
                     // Exclude generic terms that are too broad
                     return text.includes(term) && !GENERIC_TERMS.includes(term);
                 });
                 if (matchedCountry) {
+                    // Calculate priority boost based on specificity
+                    let priorityScore = 1.0;
+                    
+                    // Boost for highly specific locations (cities, not just countries)
+                    const specificLocations = ['hong kong', 'singapore', 'sydney', 'melbourne',
+                                              'mumbai', 'delhi', 'seoul', 'taipei', 'shanghai'];
+                    if (specificLocations.includes(matchedCountry.toLowerCase())) {
+                        priorityScore = 0.5; // Higher priority (lower number)
+                    }
+                    
+                    // Additional boost if location appears in title (more relevant)
+                    if (article.title.toLowerCase().includes(matchedCountry.toLowerCase())) {
+                        priorityScore -= 0.2;
+                    }
+                    
                     allMatches.push({
                         market,
-                        priority: 1,
+                        priority: Math.max(priorityScore, 0.3), // Minimum 0.3 to stay highest priority
                         signal: matchedCountry,
                         type: 'geographic'
                     });
                 }
                 
                 // Priority 2: Regulators (market-specific, but less definitive than geography)
-                const matchedRegulator = context.regulators?.find(r => text.includes(r.toLowerCase()));
+                // ENHANCED: Add exclusion patterns for ambiguous terms like ASIC
+                const matchedRegulator = context.regulators?.find(r => {
+                    const regLower = r.toLowerCase();
+                    if (!text.includes(regLower)) return false;
+                    
+                    // ASIC disambiguation: exclude if technology/chip context present
+                    if (regLower === 'asic') {
+                        const techExclusions = ['chip', 'semiconductor', 'circuit', 'fabrication',
+                                               'tsmc', 'nvidia', 'manufacturing', 'foundry', 'wafer',
+                                               'asic design', 'asic miner', 'bitcoin asic'];
+                        if (techExclusions.some(excl => text.includes(excl))) {
+                            return false; // This is about chips, not the Australian regulator
+                        }
+                        
+                        // Validate it's the regulator by checking for regulatory context
+                        const regContext = ['commission', 'guidance', 'enforcement', 'compliance',
+                                          'australian securities', 'regulator', 'regulatory'];
+                        const hasRegContext = regContext.some(ctx => text.includes(ctx));
+                        const hasAustraliaContext = text.includes('australia') || text.includes('australian');
+                        
+                        // Only match if regulatory context OR Australia mentioned
+                        return hasRegContext || hasAustraliaContext;
+                    }
+                    
+                    return true;
+                });
+                
                 if (matchedRegulator) {
                     allMatches.push({
                         market,
@@ -6214,7 +6455,14 @@ Rules:
 - Reference specific companies/regulators mentioned in the articles
 - Focus ONLY on each market's specific implications (do NOT cross-reference other markets)
 - Include ONE actionable takeaway per market
-- VALIDATE: If an article discusses a different region than the target market (e.g., Hong Kong event in ANZ brief, Europe news in ASEAN brief), exclude it from synthesis or note the misclassification
+- CRITICAL VALIDATION: Verify geographic accuracy before synthesis:
+  * Hong Kong, Taiwan, China, Macau → GCG market ONLY
+  * Australia, New Zealand → ANZ market ONLY
+  * Singapore, Malaysia, Indonesia, Thailand, Philippines, Vietnam → ASEAN market ONLY
+  * India, Sri Lanka, Bangladesh, Pakistan → ISA market ONLY
+  * South Korea → KOREA market ONLY
+- If an article's primary location doesn't match the target market, EXCLUDE it entirely from that market's synthesis
+- ASIC disambiguation: "ASIC" in chip/semiconductor context = technology news (not ANZ regulator)
 - Geographic scope: ANZ (Australia/New Zealand), ASEAN (Singapore/Malaysia/Indonesia/Thailand/Philippines/Vietnam), GCG (Hong Kong/Taiwan/China), ISA (India/Sri Lanka/Bangladesh), KOREA (South Korea)
 
 Return ONLY a JSON object with this structure:
