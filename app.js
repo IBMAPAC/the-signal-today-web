@@ -5316,61 +5316,77 @@ async function clearCacheData() {
                     'Your settings and API keys will be preserved.\n\n' +
                     'Continue?';
     
-    if (confirm(message)) {
+    if (!confirm(message)) {
+        return;
+    }
+    
+    try {
+        // Keys to preserve (settings and API keys)
+        const keysToKeep = [
+            'apiKey',
+            'claudeApiKey',
+            'sources',
+            'theme',
+            'preferences',
+            'selectedMarket',
+            'selectedClient',
+            'userRole',
+            'userName'
+        ];
+        
+        // Save values to preserve
+        const preserved = {};
+        keysToKeep.forEach(key => {
+            const value = localStorage.getItem(key);
+            if (value !== null) {
+                preserved[key] = value;
+            }
+        });
+        
+        // Clear localStorage
+        localStorage.clear();
+        console.log('✅ localStorage cleared');
+        
+        // Restore preserved values
+        Object.keys(preserved).forEach(key => {
+            localStorage.setItem(key, preserved[key]);
+        });
+        console.log('✅ Settings and API keys restored');
+        
+        // Clear sessionStorage
+        sessionStorage.clear();
+        console.log('✅ sessionStorage cleared');
+        
+        // Clear IndexedDB (SignalDB) - wrap in Promise for proper async handling
         try {
-            // Keys to preserve (settings and API keys)
-            const keysToKeep = [
-                'apiKey',
-                'claudeApiKey',
-                'sources',
-                'theme',
-                'preferences',
-                'selectedMarket',
-                'selectedClient',
-                'userRole',
-                'userName'
-            ];
-            
-            // Save values to preserve
-            const preserved = {};
-            keysToKeep.forEach(key => {
-                const value = localStorage.getItem(key);
-                if (value !== null) {
-                    preserved[key] = value;
-                }
-            });
-            
-            // Clear localStorage
-            localStorage.clear();
-            console.log('✅ localStorage cleared');
-            
-            // Restore preserved values
-            Object.keys(preserved).forEach(key => {
-                localStorage.setItem(key, preserved[key]);
-            });
-            console.log('✅ Settings and API keys restored');
-            
-            // Clear sessionStorage
-            sessionStorage.clear();
-            console.log('✅ sessionStorage cleared');
-            
-            // Clear IndexedDB (SignalDB)
             const dbDeleted = indexedDB.deleteDatabase('signal-today-db');
+            
             dbDeleted.onsuccess = () => {
                 console.log('✅ IndexedDB cleared');
                 alert('✅ Cache cleared successfully!\n\nYour settings and API keys have been preserved.\n\nThe page will now reload.');
-                location.reload();
+                setTimeout(() => location.reload(), 500);
             };
-            dbDeleted.onerror = () => {
-                console.warn('⚠️ IndexedDB could not be cleared');
-                alert('✅ Most cache cleared.\n\nFor complete reset, use "Clear All Data" or clear Safari Website Data.');
-                location.reload();
+            
+            dbDeleted.onerror = (e) => {
+                console.warn('⚠️ IndexedDB could not be cleared:', e);
+                alert('✅ Most cache cleared.\n\nIndexedDB deletion failed, but localStorage and sessionStorage were cleared.\n\nThe page will now reload.');
+                setTimeout(() => location.reload(), 500);
             };
-        } catch (e) {
-            console.error('❌ Error clearing cache:', e);
-            alert('⚠️ Error clearing cache.\n\nPlease try "Clear All Data" or:\nSettings → Safari → Advanced → Website Data → Remove this site');
-            location.reload();
+            
+            dbDeleted.onblocked = () => {
+                console.warn('⚠️ IndexedDB deletion blocked (database still in use)');
+                alert('✅ Cache cleared!\n\nNote: IndexedDB is still in use. Close all other tabs with this app open, then try again.\n\nThe page will now reload.');
+                setTimeout(() => location.reload(), 500);
+            };
+        } catch (dbError) {
+            console.error('❌ Error deleting IndexedDB:', dbError);
+            alert('✅ localStorage and sessionStorage cleared.\n\nIndexedDB could not be deleted. The page will now reload.');
+            setTimeout(() => location.reload(), 500);
         }
+    } catch (e) {
+        console.error('❌ Error clearing cache:', e);
+        alert('⚠️ Error clearing cache.\n\nPlease try "Clear All Data" or:\nSettings → Safari → Advanced → Website Data → Remove this site');
+        setTimeout(() => location.reload(), 500);
     }
 }
 
@@ -5386,33 +5402,49 @@ async function clearAllData() {
                     '⚠️ THIS CANNOT BE UNDONE ⚠️\n\n' +
                     'Continue?';
     
-    if (confirm(message)) {
+    if (!confirm(message)) {
+        return;
+    }
+    
+    try {
+        // Clear localStorage
+        localStorage.clear();
+        console.log('✅ localStorage cleared');
+        
+        // Clear sessionStorage
+        sessionStorage.clear();
+        console.log('✅ sessionStorage cleared');
+        
+        // Clear IndexedDB (SignalDB) - wrap in try-catch for proper error handling
         try {
-            // Clear localStorage
-            localStorage.clear();
-            console.log('✅ localStorage cleared');
-            
-            // Clear sessionStorage
-            sessionStorage.clear();
-            console.log('✅ sessionStorage cleared');
-            
-            // Clear IndexedDB (SignalDB)
             const dbDeleted = indexedDB.deleteDatabase('signal-today-db');
+            
             dbDeleted.onsuccess = () => {
                 console.log('✅ IndexedDB cleared');
                 alert('✅ All data cleared successfully!\n\nThe page will now reload with default settings.');
-                location.reload();
+                setTimeout(() => location.reload(), 500);
             };
-            dbDeleted.onerror = () => {
-                console.warn('⚠️ IndexedDB could not be cleared');
-                alert('✅ Most data cleared.\n\nFor complete reset, also clear Safari Website Data:\nSettings → Safari → Advanced → Website Data');
-                location.reload();
+            
+            dbDeleted.onerror = (e) => {
+                console.warn('⚠️ IndexedDB could not be cleared:', e);
+                alert('✅ Most data cleared.\n\nIndexedDB deletion failed, but localStorage and sessionStorage were cleared.\n\nThe page will now reload.');
+                setTimeout(() => location.reload(), 500);
             };
-        } catch (e) {
-            console.error('❌ Error clearing data:', e);
-            alert('⚠️ Error clearing data.\n\nPlease try:\nSettings → Safari → Advanced → Website Data → Remove this site');
-            location.reload();
+            
+            dbDeleted.onblocked = () => {
+                console.warn('⚠️ IndexedDB deletion blocked (database still in use)');
+                alert('✅ Data cleared!\n\nNote: IndexedDB is still in use. Close all other tabs with this app open, then try again.\n\nThe page will now reload.');
+                setTimeout(() => location.reload(), 500);
+            };
+        } catch (dbError) {
+            console.error('❌ Error deleting IndexedDB:', dbError);
+            alert('✅ localStorage and sessionStorage cleared.\n\nIndexedDB could not be deleted. For complete reset, clear Safari Website Data:\nSettings → Safari → Advanced → Website Data\n\nThe page will now reload.');
+            setTimeout(() => location.reload(), 500);
         }
+    } catch (e) {
+        console.error('❌ Error clearing data:', e);
+        alert('⚠️ Error clearing data.\n\nPlease try:\nSettings → Safari → Advanced → Website Data → Remove this site');
+        setTimeout(() => location.reload(), 500);
     }
 }
 
