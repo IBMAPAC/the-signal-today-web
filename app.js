@@ -102,6 +102,15 @@ class SignalDB {
         };
     }
 
+    // Close the database connection
+    close() {
+        if (this._db) {
+            this._db.close();
+            this._db = null;
+            console.log('SignalDB: database connection closed');
+        }
+    }
+
     // ── Articles ──────────────────────────────────────────────────────────────
 
     // Save (upsert) an array of articles. Strips scoreBreakdown to save space.
@@ -5357,8 +5366,18 @@ async function clearCacheData() {
         sessionStorage.clear();
         console.log('✅ sessionStorage cleared');
         
-        // Clear IndexedDB (SignalDB) - wrap in Promise to properly await completion
+        // Clear IndexedDB (SignalDB) - close connection first, then delete
         try {
+            // Close the database connection if it exists
+            if (app && app.db && app.db._db) {
+                app.db.close();
+                console.log('✅ Database connection closed');
+            }
+            
+            // Wait a moment for connection to fully close
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Now delete the database
             await new Promise((resolve, reject) => {
                 const dbDeleted = indexedDB.deleteDatabase('signal-today-db');
                 
@@ -5374,7 +5393,7 @@ async function clearCacheData() {
                 
                 dbDeleted.onblocked = () => {
                     console.warn('⚠️ IndexedDB deletion blocked (database still in use)');
-                    reject(new Error('IndexedDB deletion blocked'));
+                    reject(new Error('IndexedDB deletion blocked - close all other tabs with this app'));
                 };
             });
             
@@ -5419,8 +5438,18 @@ async function clearAllData() {
         sessionStorage.clear();
         console.log('✅ sessionStorage cleared');
         
-        // Clear IndexedDB (SignalDB) - wrap in Promise to properly await completion
+        // Clear IndexedDB (SignalDB) - close connection first, then delete
         try {
+            // Close the database connection if it exists
+            if (app && app.db && app.db._db) {
+                app.db.close();
+                console.log('✅ Database connection closed');
+            }
+            
+            // Wait a moment for connection to fully close
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            // Now delete the database
             await new Promise((resolve, reject) => {
                 const dbDeleted = indexedDB.deleteDatabase('signal-today-db');
                 
@@ -5436,7 +5465,7 @@ async function clearAllData() {
                 
                 dbDeleted.onblocked = () => {
                     console.warn('⚠️ IndexedDB deletion blocked (database still in use)');
-                    reject(new Error('IndexedDB deletion blocked'));
+                    reject(new Error('IndexedDB deletion blocked - close all other tabs with this app'));
                 };
             });
             
