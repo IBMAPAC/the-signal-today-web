@@ -692,13 +692,39 @@ SCORING RULES:
 - Regulatory change = 80+ threat
 - Competitor problem = 70+ opportunity
 
+CRITICAL CLIENT MATCHING RULES:
+1. ONLY suggest clients whose INDUSTRY matches the article topic
+   - Banking article → ONLY banking clients (DBS, Commonwealth Bank, etc.)
+   - Telecom article → ONLY telecom clients (Telstra, Singtel, etc.)
+   - Manufacturing article → ONLY manufacturing clients
+   - Retail article → ONLY retail clients (Woolworths, Coles, etc.)
+   
+2. ONLY suggest clients whose MARKET/GEOGRAPHY matches the article location
+   - Thailand/ASEAN article → ONLY ASEAN clients
+   - Australia article → ONLY ANZ clients
+   - India article → ONLY ISA clients
+   - DO NOT suggest ANZ clients for ASEAN events
+   - DO NOT suggest ASEAN clients for ANZ events
+
+3. If NO clients match BOTH industry AND geography:
+   - Set affectedClients: []
+   - Set actionableInsights: ["MONITOR: General industry trend, no direct client impact"]
+   - Lower opportunityScore to 30-50 range
+
+4. Action items MUST be specific:
+   - Include client name if relevant
+   - Include specific IBM solution/capability
+   - Include timeframe (immediate, this week, monitor)
+   - BAD: "Explore partnerships" (too vague)
+   - GOOD: "Contact DBS about IBM Cloud for Banking migration by Friday"
+
 OUTPUT FORMAT (JSON only):
 {
   "threatLevel": 0-100,
   "opportunityScore": 0-100,
   "confidence": 0.95,
-  "reasoning": "brief with names",
-  "actionableInsights": ["action1","action2"],
+  "reasoning": "brief with names and WHY they're affected",
+  "actionableInsights": ["specific action with client/solution/timeframe"],
   "affectedClients": [],
   "affectedMarkets": [],
   "competitorActivity": "brief"
@@ -710,7 +736,7 @@ ${truncatedSummary}${contextBlock}
 
 TOP CLIENTS: ${clientList || 'None'}
 
-Analyze this article using the rules above.`;
+Analyze this article using the rules above. Remember: ONLY suggest clients that match BOTH industry AND geography.`;
 
         // Get provider configuration
         const config = this.providerConfig[this.provider];
