@@ -7377,10 +7377,30 @@ ACTION TYPES:
 - POSITION: Develop IBM counter-positioning (competitor move, market shift)
 - MONITOR: Track for pattern/escalation (early signal, emerging trend)
 
-VALIDATION RULES:
-- Only synthesize signals relevant to APAC markets listed above
-- If a signal discusses events outside APAC (e.g., Europe, Americas), mark actionType as MONITOR and note geographic limitation in context
-- Prioritize signals with clear APAC client/market impact
+CRITICAL GEOGRAPHIC VALIDATION RULES:
+1. ONLY suggest actions for clients whose PRIMARY market matches the event location:
+   - Europe events → Do NOT suggest ANZ/ASEAN/GCG/ISA/KOREA clients
+   - Americas events → Do NOT suggest APAC clients
+   - ANZ events → ONLY suggest Australian/New Zealand clients (e.g., Telstra, ANZ Bank, Westpac)
+   - ASEAN events → ONLY suggest Singapore/Malaysia/Indonesia/Thailand/Philippines/Vietnam clients (e.g., DBS, Starhub, PLDT)
+   - GCG events → ONLY suggest Hong Kong/Taiwan/China clients
+   - ISA events → ONLY suggest India/Sri Lanka/Bangladesh clients
+   - KOREA events → ONLY suggest South Korean clients
+
+2. Client-Location Validation Examples:
+   ✅ CORRECT: "KubeCon Europe" → Suggest European clients OR mark as MONITOR for APAC
+   ❌ WRONG: "KubeCon Europe" → Do NOT suggest Ergon Energy (Queensland, Australia)
+   ✅ CORRECT: "Kuala Lumpur Summit" → Suggest Starhub (Singapore), PLDT (Philippines)
+   ❌ WRONG: "Kuala Lumpur Summit" → Do NOT suggest Queensland Transport (Australia)
+   ✅ CORRECT: "Sydney Conference" → Suggest Telstra, ANZ Bank, Westpac
+   ❌ WRONG: "Sydney Conference" → Do NOT suggest DBS (Singapore)
+
+3. If event location doesn't match any client markets:
+   - Set actionType to MONITOR
+   - Note "Event outside client markets" in context
+   - Do NOT fabricate client connections
+
+4. Prioritize signals with clear APAC client/market impact where geography aligns
 
 Analyze each signal IN ORDER. Return JSON array with one entry per signal in SAME ORDER:
 [
