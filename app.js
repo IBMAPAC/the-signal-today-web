@@ -5307,10 +5307,112 @@ function resetSources() {
     }
 }
 
-function clearAllData() {
-    if (confirm('Clear all data? This cannot be undone.')) {
-        localStorage.clear();
-        location.reload();
+async function clearCacheData() {
+    const message = '🗑️ Clear Cache Data?\n\n' +
+                    'This will remove:\n' +
+                    '• All cached digests and summaries\n' +
+                    '• All articles (7-day history)\n' +
+                    '• All read tracking\n\n' +
+                    'Your settings and API keys will be preserved.\n\n' +
+                    'Continue?';
+    
+    if (confirm(message)) {
+        try {
+            // Keys to preserve (settings and API keys)
+            const keysToKeep = [
+                'apiKey',
+                'claudeApiKey',
+                'sources',
+                'theme',
+                'preferences',
+                'selectedMarket',
+                'selectedClient',
+                'userRole',
+                'userName'
+            ];
+            
+            // Save values to preserve
+            const preserved = {};
+            keysToKeep.forEach(key => {
+                const value = localStorage.getItem(key);
+                if (value !== null) {
+                    preserved[key] = value;
+                }
+            });
+            
+            // Clear localStorage
+            localStorage.clear();
+            console.log('✅ localStorage cleared');
+            
+            // Restore preserved values
+            Object.keys(preserved).forEach(key => {
+                localStorage.setItem(key, preserved[key]);
+            });
+            console.log('✅ Settings and API keys restored');
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            console.log('✅ sessionStorage cleared');
+            
+            // Clear IndexedDB (SignalDB)
+            const dbDeleted = indexedDB.deleteDatabase('signal-today-db');
+            dbDeleted.onsuccess = () => {
+                console.log('✅ IndexedDB cleared');
+                alert('✅ Cache cleared successfully!\n\nYour settings and API keys have been preserved.\n\nThe page will now reload.');
+                location.reload();
+            };
+            dbDeleted.onerror = () => {
+                console.warn('⚠️ IndexedDB could not be cleared');
+                alert('✅ Most cache cleared.\n\nFor complete reset, use "Clear All Data" or clear Safari Website Data.');
+                location.reload();
+            };
+        } catch (e) {
+            console.error('❌ Error clearing cache:', e);
+            alert('⚠️ Error clearing cache.\n\nPlease try "Clear All Data" or:\nSettings → Safari → Advanced → Website Data → Remove this site');
+            location.reload();
+        }
+    }
+}
+
+async function clearAllData() {
+    const message = '⚠️ Clear ALL Data?\n\n' +
+                    'This will PERMANENTLY delete:\n' +
+                    '• All cached digests and summaries\n' +
+                    '• All articles (7-day history)\n' +
+                    '• All settings and preferences\n' +
+                    '• All read tracking\n' +
+                    '• API keys (Claude & OpenAI)\n' +
+                    '• Custom RSS sources\n\n' +
+                    '⚠️ THIS CANNOT BE UNDONE ⚠️\n\n' +
+                    'Continue?';
+    
+    if (confirm(message)) {
+        try {
+            // Clear localStorage
+            localStorage.clear();
+            console.log('✅ localStorage cleared');
+            
+            // Clear sessionStorage
+            sessionStorage.clear();
+            console.log('✅ sessionStorage cleared');
+            
+            // Clear IndexedDB (SignalDB)
+            const dbDeleted = indexedDB.deleteDatabase('signal-today-db');
+            dbDeleted.onsuccess = () => {
+                console.log('✅ IndexedDB cleared');
+                alert('✅ All data cleared successfully!\n\nThe page will now reload with default settings.');
+                location.reload();
+            };
+            dbDeleted.onerror = () => {
+                console.warn('⚠️ IndexedDB could not be cleared');
+                alert('✅ Most data cleared.\n\nFor complete reset, also clear Safari Website Data:\nSettings → Safari → Advanced → Website Data');
+                location.reload();
+            };
+        } catch (e) {
+            console.error('❌ Error clearing data:', e);
+            alert('⚠️ Error clearing data.\n\nPlease try:\nSettings → Safari → Advanced → Website Data → Remove this site');
+            location.reload();
+        }
     }
 }
 
