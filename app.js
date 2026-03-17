@@ -5357,30 +5357,34 @@ async function clearCacheData() {
         sessionStorage.clear();
         console.log('✅ sessionStorage cleared');
         
-        // Clear IndexedDB (SignalDB) - wrap in Promise for proper async handling
+        // Clear IndexedDB (SignalDB) - wrap in Promise to properly await completion
         try {
-            const dbDeleted = indexedDB.deleteDatabase('signal-today-db');
+            await new Promise((resolve, reject) => {
+                const dbDeleted = indexedDB.deleteDatabase('signal-today-db');
+                
+                dbDeleted.onsuccess = () => {
+                    console.log('✅ IndexedDB cleared');
+                    resolve();
+                };
+                
+                dbDeleted.onerror = (e) => {
+                    console.warn('⚠️ IndexedDB could not be cleared:', e);
+                    reject(new Error('IndexedDB deletion failed'));
+                };
+                
+                dbDeleted.onblocked = () => {
+                    console.warn('⚠️ IndexedDB deletion blocked (database still in use)');
+                    reject(new Error('IndexedDB deletion blocked'));
+                };
+            });
             
-            dbDeleted.onsuccess = () => {
-                console.log('✅ IndexedDB cleared');
-                alert('✅ Cache cleared successfully!\n\nYour settings and API keys have been preserved.\n\nThe page will now reload.');
-                setTimeout(() => location.reload(), 500);
-            };
+            // Success - show alert and reload
+            alert('✅ Cache cleared successfully!\n\nYour settings and API keys have been preserved.\n\nThe page will now reload.');
+            setTimeout(() => location.reload(), 500);
             
-            dbDeleted.onerror = (e) => {
-                console.warn('⚠️ IndexedDB could not be cleared:', e);
-                alert('✅ Most cache cleared.\n\nIndexedDB deletion failed, but localStorage and sessionStorage were cleared.\n\nThe page will now reload.');
-                setTimeout(() => location.reload(), 500);
-            };
-            
-            dbDeleted.onblocked = () => {
-                console.warn('⚠️ IndexedDB deletion blocked (database still in use)');
-                alert('✅ Cache cleared!\n\nNote: IndexedDB is still in use. Close all other tabs with this app open, then try again.\n\nThe page will now reload.');
-                setTimeout(() => location.reload(), 500);
-            };
         } catch (dbError) {
             console.error('❌ Error deleting IndexedDB:', dbError);
-            alert('✅ localStorage and sessionStorage cleared.\n\nIndexedDB could not be deleted. The page will now reload.');
+            alert('✅ localStorage and sessionStorage cleared.\n\nIndexedDB could not be deleted: ' + dbError.message + '\n\nThe page will now reload.');
             setTimeout(() => location.reload(), 500);
         }
     } catch (e) {
@@ -5415,30 +5419,34 @@ async function clearAllData() {
         sessionStorage.clear();
         console.log('✅ sessionStorage cleared');
         
-        // Clear IndexedDB (SignalDB) - wrap in try-catch for proper error handling
+        // Clear IndexedDB (SignalDB) - wrap in Promise to properly await completion
         try {
-            const dbDeleted = indexedDB.deleteDatabase('signal-today-db');
+            await new Promise((resolve, reject) => {
+                const dbDeleted = indexedDB.deleteDatabase('signal-today-db');
+                
+                dbDeleted.onsuccess = () => {
+                    console.log('✅ IndexedDB cleared');
+                    resolve();
+                };
+                
+                dbDeleted.onerror = (e) => {
+                    console.warn('⚠️ IndexedDB could not be cleared:', e);
+                    reject(new Error('IndexedDB deletion failed'));
+                };
+                
+                dbDeleted.onblocked = () => {
+                    console.warn('⚠️ IndexedDB deletion blocked (database still in use)');
+                    reject(new Error('IndexedDB deletion blocked'));
+                };
+            });
             
-            dbDeleted.onsuccess = () => {
-                console.log('✅ IndexedDB cleared');
-                alert('✅ All data cleared successfully!\n\nThe page will now reload with default settings.');
-                setTimeout(() => location.reload(), 500);
-            };
+            // Success - show alert and reload
+            alert('✅ All data cleared successfully!\n\nThe page will now reload with default settings.');
+            setTimeout(() => location.reload(), 500);
             
-            dbDeleted.onerror = (e) => {
-                console.warn('⚠️ IndexedDB could not be cleared:', e);
-                alert('✅ Most data cleared.\n\nIndexedDB deletion failed, but localStorage and sessionStorage were cleared.\n\nThe page will now reload.');
-                setTimeout(() => location.reload(), 500);
-            };
-            
-            dbDeleted.onblocked = () => {
-                console.warn('⚠️ IndexedDB deletion blocked (database still in use)');
-                alert('✅ Data cleared!\n\nNote: IndexedDB is still in use. Close all other tabs with this app open, then try again.\n\nThe page will now reload.');
-                setTimeout(() => location.reload(), 500);
-            };
         } catch (dbError) {
             console.error('❌ Error deleting IndexedDB:', dbError);
-            alert('✅ localStorage and sessionStorage cleared.\n\nIndexedDB could not be deleted. For complete reset, clear Safari Website Data:\nSettings → Safari → Advanced → Website Data\n\nThe page will now reload.');
+            alert('✅ localStorage and sessionStorage cleared.\n\nIndexedDB could not be deleted: ' + dbError.message + '\n\nFor complete reset, clear Safari Website Data:\nSettings → Safari → Advanced → Website Data\n\nThe page will now reload.');
             setTimeout(() => location.reload(), 500);
         }
     } catch (e) {
