@@ -756,19 +756,44 @@ Analyze this article using the rules above.`;
                 // Clean response: remove markdown code blocks if present
                 text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
                 
-                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                // Try to extract JSON (object or array)
+                let jsonMatch = text.match(/\{[\s\S]*\}/) || text.match(/\[[\s\S]*\]/);
                 
                 if (!jsonMatch) {
-                    throw new Error(`Could not parse ${this.provider} response`);
+                    console.error(`${this.provider} response parsing failed. Raw response:`, text.substring(0, 500));
+                    throw new Error(`Could not parse ${this.provider} response - no valid JSON found`);
                 }
                 
                 // Clean up JSON before parsing
                 let jsonStr = jsonMatch[0];
-                jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
-                jsonStr = jsonStr.replace(/\n/g, ' '); // Remove newlines
-                jsonStr = jsonStr.replace(/\r/g, ''); // Remove carriage returns
                 
-                const analysis = JSON.parse(jsonStr);
+                // Remove trailing commas before closing brackets
+                jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+                
+                // Remove newlines and carriage returns for cleaner parsing
+                jsonStr = jsonStr.replace(/\n/g, ' ').replace(/\r/g, '');
+                
+                // Remove any text after the last closing bracket
+                const lastBracket = Math.max(jsonStr.lastIndexOf('}'), jsonStr.lastIndexOf(']'));
+                if (lastBracket >= 0 && lastBracket < jsonStr.length - 1) {
+                    jsonStr = jsonStr.substring(0, lastBracket + 1);
+                }
+                
+                let analysis;
+                try {
+                    analysis = JSON.parse(jsonStr);
+                } catch (parseError) {
+                    console.error(`${this.provider} JSON parse error at position ${parseError.message}`);
+                    console.error('Problematic JSON substring:', jsonStr.substring(Math.max(0, 280), 320));
+                    console.error('Full JSON (first 500 chars):', jsonStr.substring(0, 500));
+                    throw new Error(`JSON parse failed: ${parseError.message}`);
+                }
+                
+                // Handle array response (some models might return array instead of object)
+                if (Array.isArray(analysis)) {
+                    console.warn(`${this.provider} returned array instead of object, using first element`);
+                    analysis = analysis[0] || {};
+                }
                 
                 // Success! Return the result
                 return {
