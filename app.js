@@ -5332,9 +5332,24 @@ async function clearCacheData() {
     try {
         // Keys to preserve (settings and API keys)
         const keysToKeep = [
+            // API Keys
+            'signal_api_key',
+            'signal_claude_api_key',
+            'signal_openai_api_key',
+            'signal_ai_provider',
+            
+            // Core Settings
+            'signal_sources',
+            'signal_industries',
+            'signal_clients',
+            'signal_settings',
+            
+            // User Feedback & Learning
+            'signal_article_ratings',
+            'signal_score_drift',
+            
+            // Legacy keys (backward compatibility)
             'apiKey',
-            'claudeApiKey',
-            'sources',
             'theme',
             'preferences',
             'selectedMarket',
