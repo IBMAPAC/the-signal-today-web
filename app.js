@@ -510,7 +510,13 @@ function isRetryableError(error, provider) {
         'unauthorized',
         'forbidden',
         'not found',
+        'insufficient_quota',
+        'quota_exceeded',
+        'billing_hard_limit_reached',
+        'insufficient funds',
+        'payment required',
         '401', // Unauthorized
+        '402', // Payment Required
         '403', // Forbidden
         '404'  // Not found
     ];
@@ -563,14 +569,37 @@ async function callAIInternal(taskType, prompt, maxTokens, apiKey, provider) {
                 
                 if (!response.ok) {
                     const error = await response.json();
-                    throw new Error(error.error?.message || `Claude API error: ${response.status}`);
+                    const errorMsg = error.error?.message || `Claude API error: ${response.status}`;
+                    const errorType = error.error?.type || '';
+                    
+                    // Check for billing/quota errors
+                    if (response.status === 402 ||
+                        errorType.includes('insufficient_quota') ||
+                        errorType.includes('billing') ||
+                        errorMsg.toLowerCase().includes('quota') ||
+                        errorMsg.toLowerCase().includes('credit')) {
+                        throw new Error(`BILLING_ERROR: ${errorMsg}`);
+                    }
+                    
+                    throw new Error(errorMsg);
                 }
                 
                 data = await response.json();
                 
                 // Universal error check - catches errors in response body (defense-in-depth)
                 if (data.error) {
-                    throw new Error(data.error.message || `Claude API error: ${data.error.code || 'unknown'}`);
+                    const errorMsg = data.error.message || `Claude API error: ${data.error.code || 'unknown'}`;
+                    const errorType = data.error.type || '';
+                    
+                    // Check for billing/quota errors
+                    if (errorType.includes('insufficient_quota') ||
+                        errorType.includes('billing') ||
+                        errorMsg.toLowerCase().includes('quota') ||
+                        errorMsg.toLowerCase().includes('credit')) {
+                        throw new Error(`BILLING_ERROR: ${errorMsg}`);
+                    }
+                    
+                    throw new Error(errorMsg);
                 }
                 
                 text = data.content[0]?.text || '';
@@ -596,14 +625,39 @@ async function callAIInternal(taskType, prompt, maxTokens, apiKey, provider) {
                 
                 if (!response.ok) {
                     const error = await response.json();
-                    throw new Error(error.error?.message || `OpenAI API error: ${response.status}`);
+                    const errorMsg = error.error?.message || `OpenAI API error: ${response.status}`;
+                    const errorCode = error.error?.code || '';
+                    
+                    // Check for billing/quota errors
+                    if (response.status === 402 ||
+                        errorCode.includes('insufficient_quota') ||
+                        errorCode.includes('billing') ||
+                        errorMsg.toLowerCase().includes('quota') ||
+                        errorMsg.toLowerCase().includes('credit') ||
+                        errorMsg.toLowerCase().includes('insufficient funds')) {
+                        throw new Error(`BILLING_ERROR: ${errorMsg}`);
+                    }
+                    
+                    throw new Error(errorMsg);
                 }
                 
                 data = await response.json();
                 
                 // Universal error check - catches errors in response body (defense-in-depth)
                 if (data.error) {
-                    throw new Error(data.error.message || `OpenAI API error: ${data.error.code || 'unknown'}`);
+                    const errorMsg = data.error.message || `OpenAI API error: ${data.error.code || 'unknown'}`;
+                    const errorCode = data.error.code || '';
+                    
+                    // Check for billing/quota errors
+                    if (errorCode.includes('insufficient_quota') ||
+                        errorCode.includes('billing') ||
+                        errorMsg.toLowerCase().includes('quota') ||
+                        errorMsg.toLowerCase().includes('credit') ||
+                        errorMsg.toLowerCase().includes('insufficient funds')) {
+                        throw new Error(`BILLING_ERROR: ${errorMsg}`);
+                    }
+                    
+                    throw new Error(errorMsg);
                 }
                 
                 text = data.choices[0]?.message?.content || '';
@@ -1254,8 +1308,30 @@ class SignalApp {
     }
 
     showError(message) {
-        document.getElementById('error').classList.remove('hidden');
-        document.getElementById('error-message').textContent = message;
+        // Check if this is a billing/quota error
+        const isBillingError = message.includes('BILLING_ERROR:');
+        
+        if (isBillingError) {
+            // Extract the actual error message (remove BILLING_ERROR: prefix)
+            const actualError = message.replace('BILLING_ERROR:', '').trim();
+            
+            // Display user-friendly billing error message
+            const billingMessage = `⚠️ AI Provider Credit Exhausted\n\n` +
+                `Your AI provider account has run out of credits or reached its quota limit.\n\n` +
+                `Please:\n` +
+                `• Check your provider's billing dashboard\n` +
+                `• Add credits to your account\n` +
+                `• Verify your API key is active\n\n` +
+                `Technical details: ${actualError}`;
+            
+            document.getElementById('error').classList.remove('hidden');
+            document.getElementById('error-message').textContent = billingMessage;
+        } else {
+            // Display regular error message
+            document.getElementById('error').classList.remove('hidden');
+            document.getElementById('error-message').textContent = message;
+        }
+        
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('empty-state').classList.add('hidden');
     }
