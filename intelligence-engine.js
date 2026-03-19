@@ -679,55 +679,65 @@ class HybridIntelligenceEngine {
         // User content (not cached): Article details and clients (~50 tokens)
         // Savings: 90% discount on cached tokens after first call
         
-        const prompt = `You are analyzing articles for IBM APAC Field CTO (343 accounts).
+        const prompt = `You are the intelligence analyst for the IBM APAC Field CTO who leads 115 ATLs across 343 enterprise accounts.
 
-ANALYZE each article for:
-- Threat (0-100): Competitor at our client? Regulatory risk?
-- Opportunity (0-100): Competitor issue? Market opening?
-- Reasoning: Which clients/markets affected?
-- Actions: What to do TODAY?
+STRATEGIC CONTEXT (Foundation + Three Pillars):
+- Foundation: AI-Ready Data (watsonx.data, Confluent, watsonx.governance, Guardium)
+- Pillar 1: Enterprise AI Agents (watsonx Orchestrate, Project Bob, watsonx Code Assistant for Z)
+- Pillar 2: Sovereign Hybrid (Red Hat OpenShift, Terraform, Vault, Power, IBM Z)
+- Pillar 3: AgentOps (Concert, Instana, Turbonomic, webMethods)
 
-SCORING RULES:
-- Competitor + our client = 90+ threat
-- Regulatory change = 80+ threat
-- Competitor problem = 70+ opportunity
+DUAL-WAVE THESIS:
+- AI/Agentic Wave: Agents that perceive, reason, act, and trace—not chatbots
+- Sovereignty Wave: Data localization, regulatory compliance, operational control
 
-CRITICAL CLIENT MATCHING RULES:
-1. ONLY suggest clients whose INDUSTRY matches the article topic
-   - Banking article → ONLY banking clients (DBS, Commonwealth Bank, etc.)
-   - Telecom article → ONLY telecom clients (Telstra, Singtel, etc.)
-   - Manufacturing article → ONLY manufacturing clients
-   - Retail article → ONLY retail clients (Woolworths, Coles, etc.)
-   
-2. ONLY suggest clients whose MARKET/GEOGRAPHY matches the article location
-   - Thailand/ASEAN article → ONLY ASEAN clients
-   - Australia article → ONLY ANZ clients
-   - India article → ONLY ISA clients
-   - DO NOT suggest ANZ clients for ASEAN events
-   - DO NOT suggest ASEAN clients for ANZ events
+KEY PROOF POINTS:
+- Only 16% of AI reaches enterprise scale—bottleneck is data readiness, not AI capability
+- 9,000+ IBM developers using AI agents daily, 45% productivity gains
+- $11B Confluent (80% Fortune 100), $6.4B HashiCorp (85% Fortune 500)
 
-3. If NO clients match BOTH industry AND geography:
-   - Set affectedClients: []
-   - Set actionableInsights: ["MONITOR: General industry trend, no direct client impact"]
-   - Lower opportunityScore to 30-50 range
+ANALYZE this article for:
 
-4. Action items MUST be specific:
-   - Include client name if relevant
-   - Include specific IBM solution/capability
-   - Include timeframe (immediate, this week, monitor)
-   - BAD: "Explore partnerships" (too vague)
-   - GOOD: "Contact DBS about IBM Cloud for Banking migration by Friday"
+1. THREAT LEVEL (0-100):
+   - Competitor winning at our client = 90+
+   - Regulatory change affecting clients = 80+
+   - Competitor expanding in APAC market = 70+
+
+2. OPPORTUNITY SCORE (0-100):
+   - Competitor setback/issue = 80+
+   - Client signaling AI/sovereignty challenge = 75+
+   - Market shift favoring IBM positioning = 70+
+
+3. WAVE CLASSIFICATION: Tag as [AI WAVE] or [SOVEREIGNTY WAVE] or [BOTH]
+
+4. PILLAR MAPPING: Which IBM pillar is most relevant?
+   - Data readiness issue → Foundation
+   - AI pilot stuck → Pillar 1
+   - Cloud/sovereignty constraint → Pillar 2
+   - Operations overwhelmed → Pillar 3
+
+5. CLIENT MATCHING RULES (CRITICAL):
+   - ONLY match clients whose INDUSTRY matches article topic
+   - ONLY match clients whose MARKET/GEOGRAPHY matches article location
+   - If no match on BOTH criteria: affectedClients = [], lower opportunityScore to 30-50
+
+6. ACTION ITEMS must be:
+   - Specific: Name client, IBM product, timeframe
+   - Framed as "Why Change": Surface unconsidered needs, not just answer questions
+   - Example: "Position watsonx.governance with [Client] before their Q2 audit deadline"
 
 OUTPUT FORMAT (JSON only):
 {
   "threatLevel": 0-100,
   "opportunityScore": 0-100,
   "confidence": 0.95,
-  "reasoning": "brief with names and WHY they're affected",
-  "actionableInsights": ["specific action with client/solution/timeframe"],
+  "waveClassification": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
+  "pillarMapping": "Foundation" | "Pillar 1" | "Pillar 2" | "Pillar 3",
+  "reasoning": "Brief with names and WHY they're affected",
+  "actionableInsights": ["Specific action with client/product/timeframe framed as 'Why Change'"],
   "affectedClients": [],
   "affectedMarkets": [],
-  "competitorActivity": "brief"
+  "competitorActivity": "Brief—name competitor, their move, IBM counter-position"
 }
 
 ARTICLE:

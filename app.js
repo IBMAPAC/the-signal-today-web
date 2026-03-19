@@ -3800,7 +3800,7 @@ ${articleList}`;
             ? `\nThis week's context: ${this.settings.thisWeekContext}` : '';
 
         const prompt = `You are the intelligence analyst for the IBM APAC Field CTO.
-Turn this article into a 60-second strategic brief: "What does this mean for IBM APAC, and what should I do today?"
+Turn this article into a 60-second strategic brief answering: "What does this mean for IBM APAC, and what should we do TODAY?"
 
 ARTICLE
 Title: ${article.title}
@@ -3810,10 +3810,47 @@ ${clientContext}
 ${industryContext}
 ${signalContext}${weekContext}
 
-Return valid JSON:
+STRATEGIC FRAMEWORK:
+- Foundation: AI-Ready Data (watsonx.data, Confluent, watsonx.governance, Guardium)
+- Pillar 1: Enterprise AI Agents (watsonx Orchestrate, Project Bob, watsonx Code Assistant for Z)
+- Pillar 2: Sovereign Hybrid (Red Hat OpenShift, Terraform, Vault, Power, IBM Z)
+- Pillar 3: AgentOps (Concert, Instana, Turbonomic, webMethods)
+
+KEY INSIGHT: Only 16% of AI reaches enterprise scale. The bottleneck is data readiness, not AI capability. This is the "unconsidered need" we surface.
+
+FIELD DEFINITIONS:
+
+- keyFacts: 3 facts extracted directly. One sentence each. No interpretation.
+
+- soWhat: The market shift this signals. Why it matters NOW in APAC. Be specific about timing, geography, or competitive dynamics. Frame as "unconsidered need" if applicable. Do NOT mention IBM here.
+
+- pillarMapping: Which IBM pillar is most relevant? (Foundation / Pillar 1 / Pillar 2 / Pillar 3)
+
+- waveClassification: Tag as [AI WAVE] or [SOVEREIGNTY WAVE] or [BOTH]
+
+- ibmAngle: Based on pillarMapping, name the SPECIFIC IBM product and why NOW is the right moment:
+  * Foundation → watsonx.data, Confluent, watsonx.governance, Guardium
+  * Pillar 1 → watsonx Orchestrate, Project Bob, watsonx Code Assistant for Z
+  * Pillar 2 → Red Hat OpenShift, Terraform, Vault, Power, IBM Z
+  * Pillar 3 → Concert, Instana, Turbonomic, webMethods
+
+- clientImplication: Two parts:
+  1. For matched clients: What broader trend does this reveal for their next meeting?
+  2. What should the ATL aligned to that client do THIS WEEK?
+  If no clients matched: Describe the APAC enterprise type most affected.
+
+- competitiveWatch: Name competitor (AWS, Azure, Google, Salesforce, SAP, Oracle, ServiceNow, Accenture, Alibaba Cloud, Huawei Cloud) whose position strengthens or weakens. Include IBM counter-position. Empty string if not applicable.
+
+- conversationOpener: Frame as HYPOTHESIS to test with a peer CTO:
+  "I've been thinking that [observation from article]—is that consistent with what you're seeing?"
+  Peer CTO tone. Not a sales pitch. Not an open-ended probe.
+
+Return ONLY valid JSON:
 {
     "keyFacts": ["string", "string", "string"],
     "soWhat": "string",
+    "pillarMapping": "Foundation" | "Pillar 1" | "Pillar 2" | "Pillar 3",
+    "waveClassification": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
     "ibmAngle": "string",
     "clientImplication": "string",
     "competitiveWatch": "string",
@@ -3822,7 +3859,7 @@ Return valid JSON:
         
         try {
             // COST OPTIMIZATION: Use unified API helper with token tracking
-            const { text } = await callAI('STRATEGIC_ANALYSIS', prompt, 600, apiKey);
+            const { text } = await callAI('STRATEGIC_ANALYSIS', prompt, 800, apiKey);
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             
             if (jsonMatch) {
@@ -3838,6 +3875,16 @@ Return valid JSON:
                         <div class="deep-read-label">⚡ So What</div>
                         <div class="deep-read-text">${this.escapeHtml(result.soWhat || '')}</div>
                     </div>
+                    ${result.pillarMapping ? `
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">🏛️ Strategic Pillar</div>
+                        <div class="deep-read-text"><strong>${this.escapeHtml(result.pillarMapping)}</strong></div>
+                    </div>` : ''}
+                    ${result.waveClassification ? `
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">🌊 Wave Classification</div>
+                        <div class="deep-read-text"><strong>${this.escapeHtml(result.waveClassification)}</strong></div>
+                    </div>` : ''}
                     <div class="deep-read-section">
                         <div class="deep-read-label">🔵 IBM Angle</div>
                         <div class="deep-read-text">${this.escapeHtml(result.ibmAngle || '')}</div>
@@ -3962,30 +4009,65 @@ Frame all talking points through ${clientIndustry} challenges and priorities.
 ` : '';
         
         const prompt = `You are preparing a meeting brief for the IBM APAC Field CTO.
-${briefPurpose}
+Goal: Position ATL as "Client CTO"—a trusted strategic advisor, not a vendor.
+
+Brief Purpose: ${briefPurpose}
+Client: ${clientName}
+${clientIndustry ? `Market: ${clientObj.market || 'APAC'}
+Industry: ${clientIndustry}` : ''}
 ${contextBlock}${industryBlock}
 Recent news about ${clientName}:
 ${articleList || 'No recent news found.'}
 
-RULES:
-- LIVE MEETING: Lead with time-sensitive signal, frame as what to say today
-- ATL ENABLEMENT: Frame as intelligence for next client touchpoint/QBR
-- talkingPoints: EXACTLY 3, each = ${clientIndustry || 'enterprise'} challenge + specific IBM product (watsonx, Red Hat OpenShift, IBM Z, hybrid cloud)
-- riskFlags: Specific risks only (reputational, competitive, regulatory, C-suite, deal blockers)
-- openingQuestion: Hypothesis to test. "I've been thinking that [observation] — is that consistent with what you're seeing?" Peer CTO tone
-- salesAngle: Specific IBM product + trigger (deadline, competitor move, client news) for why NOW
-- atlNote: One sentence for ATL — what to watch/act on this week
-- slackMessage: Under 280 chars
+STRATEGIC FRAMEWORK:
+- Foundation: AI-Ready Data — "Only 16% of AI reaches scale; data is the bottleneck"
+- Pillar 1: Enterprise AI Agents — "Perceive, reason, act, trace—not chatbots"
+- Pillar 2: Sovereign Hybrid — "AI comes to your data"
+- Pillar 3: AgentOps — "End-to-end governance where agents run"
 
-Return valid JSON:
+PATTERN SELECTION (choose ONE based on signals):
+- Data/AI readiness issues → Foundation
+- AI pilots stuck, chatbots not working → Pillar 1
+- Sovereignty/cloud constraints → Pillar 2
+- Operations overload → Pillar 3
+
+BRIEF STRUCTURE:
+
+1. situationSummary: 2-3 sentences. Lead with client's most pressing challenge based on signals. Frame using "Why Change" language—surface unconsidered needs.
+
+2. leadPillar: Which pillar to lead with based on client signals.
+
+3. talkingPoints: EXACTLY 3 points, each structured as:
+   - ${clientIndustry || 'enterprise'} challenge + specific IBM product from leadPillar + why NOW
+   - Must sound like peer CTO conversation, not vendor pitch
+
+4. proofPoint: ONE relevant proof point:
+   - "9,000+ IBM developers using AI agents daily, 45% productivity gains"
+   - "$11B Confluent—80% of Fortune 100 use Kafka for real-time data"
+   - "Only 16% of AI reaches enterprise scale—data readiness is the bottleneck"
+
+5. riskFlags: Specific risks only—reputational, competitive, regulatory, C-suite changes. Omit if none.
+
+6. openingQuestion: Frame as HYPOTHESIS:
+   "I've been thinking that [observation]—is that consistent with what you're seeing?"
+   Peer CTO tone. Tests a point of view, doesn't probe.
+
+7. atlNote: One sentence for the ATL—what to watch for or act on this week.
+
+8. slackMessage: Under 280 characters. Format:
+   *${clientName}—Signal Alert*
+   📊 [situation] 💡 [talking point] ⚡ [IBM angle] 💬 Q: [opener]
+
+Return ONLY valid JSON:
 {
-    "situationSummary": "2-3 sentences on ${clientName}'s situation",
-    "talkingPoints": ["3 points: ${clientIndustry || 'enterprise'} challenge + IBM product", "Point 2", "Point 3"],
+    "situationSummary": "2-3 sentences, 'Why Change' framing",
+    "leadPillar": "Foundation | Pillar 1 | Pillar 2 | Pillar 3",
+    "talkingPoints": ["3 points, each: challenge + product + why now"],
+    "proofPoint": "One memorable stat",
     "riskFlags": ["Specific risks only"],
     "openingQuestion": "Hypothesis-framed, peer CTO tone",
-    "salesAngle": "IBM product + trigger for why now",
-    "atlNote": "One sentence for ATL",
-    "slackMessage": "*${clientName} — Signal Alert*\\n📊 [situation]\\n💡 [talking point]\\n⚡ [sales angle]\\n💬 Q: [question]"
+    "atlNote": "One sentence for ATL action",
+    "slackMessage": "Under 280 chars"
 }`;
         
         try {
@@ -4008,10 +4090,15 @@ Return valid JSON:
                         <div class="meeting-brief-label">📊 Situation</div>
                         <div class="meeting-brief-text">${this.escapeHtml(brief.situationSummary || '')}</div>
                     </div>
-                    ${brief.salesAngle ? `
+                    ${brief.leadPillar ? `
                     <div class="meeting-brief-section">
-                        <div class="meeting-brief-label">⚡ Sales Angle</div>
-                        <div class="meeting-brief-text meeting-brief-sales-angle">${this.escapeHtml(brief.salesAngle)}</div>
+                        <div class="meeting-brief-label">🎯 Lead Pillar</div>
+                        <div class="meeting-brief-text"><strong>${this.escapeHtml(brief.leadPillar)}</strong></div>
+                    </div>` : ''}
+                    ${brief.proofPoint ? `
+                    <div class="meeting-brief-section">
+                        <div class="meeting-brief-label">📊 Proof Point</div>
+                        <div class="meeting-brief-text meeting-brief-proof-point">${this.escapeHtml(brief.proofPoint)}</div>
                     </div>` : ''}
                     ${brief.atlNote ? `
                     <div class="meeting-brief-section">
@@ -6626,39 +6713,52 @@ async function generateMarketSynthesis(activeMarkets, apiKey, listEl) {
 ${articleSummaries}`;
         }).join('\n\n---\n\n');
         
-        const batchedPrompt = `You are briefing IBM APAC leaders on market intelligence across multiple markets.
+        const batchedPrompt = `You are briefing IBM APAC leaders on market intelligence.
 
 TODAY'S SIGNALS BY MARKET:
 ${marketPrompts}
 
-For EACH market listed above, write ONE synthesized paragraph (3-4 sentences) that:
-1. Opens with the key theme for that market this week
-2. Connects 2-3 of the articles into a coherent narrative
-3. Ends with a specific IBM positioning or action point for that market
+MARKET CONTEXT:
+- ANZ: APRA/ASIC oversight, strong sovereignty focus, mature financial sector
+- ASEAN: MAS leadership in AI governance, data localization momentum, digital economy growth
+- GCG: HKMA/SFC compliance, cross-border data complexity, China+1 dynamics
+- ISA: RBI/SEBI/IRDAI frameworks, Digital India acceleration, manufacturing transformation
+- KOREA: FSC oversight, semiconductor leadership, chaebols driving enterprise AI
 
-Rules:
-- Sound like a senior technical leader, not a news aggregator
-- Reference specific companies/regulators mentioned in the articles
-- Focus ONLY on each market's specific implications (do NOT cross-reference other markets)
-- Include ONE actionable takeaway per market
+STRATEGIC FRAMEWORK:
+- Foundation: AI-Ready Data — "Agents are only as good as the data"
+- Pillar 1: Enterprise AI Agents — "Perceive, reason, act, trace"
+- Pillar 2: Sovereign Hybrid — "AI comes to your data"
+- Pillar 3: AgentOps — "Governance where agents run"
+
+For EACH market, write ONE synthesized paragraph (3-4 sentences):
+1. Open with the key theme affecting that market this week
+2. Connect 2-3 articles into a coherent narrative
+3. Recommend which IBM pillar to lead with in that market
+4. End with specific IBM positioning or action
+
+RULES:
+- Sound like a senior technical leader, not news aggregator
+- Reference specific regulators/companies from articles
+- Focus ONLY on each market's implications
+- Include ONE actionable ATL takeaway per market
 - CRITICAL VALIDATION: Verify geographic accuracy before synthesis:
   * Hong Kong, Taiwan, China, Macau → GCG market ONLY
   * Australia, New Zealand → ANZ market ONLY
   * Singapore, Malaysia, Indonesia, Thailand, Philippines, Vietnam → ASEAN market ONLY
   * India, Sri Lanka, Bangladesh, Pakistan → ISA market ONLY
   * South Korea → KOREA market ONLY
-- If an article's primary location doesn't match the target market, EXCLUDE it entirely from that market's synthesis
-- ASIC disambiguation: "ASIC" in chip/semiconductor context = technology news (not ANZ regulator)
-- Geographic scope: ANZ (Australia/New Zealand), ASEAN (Singapore/Malaysia/Indonesia/Thailand/Philippines/Vietnam), GCG (Hong Kong/Taiwan/China), ISA (India/Sri Lanka/Bangladesh), KOREA (South Korea)
+- If article location doesn't match target market, EXCLUDE it entirely
 
-Return ONLY a JSON object with this structure:
+Return JSON:
 {
   "markets": {
-    "ANZ": { "synthesis": "...", "keyMessage": "..." },
-    "ASEAN": { "synthesis": "...", "keyMessage": "..." },
-    "GCG": { "synthesis": "...", "keyMessage": "..." },
-    "ISA": { "synthesis": "...", "keyMessage": "..." },
-    "KOREA": { "synthesis": "...", "keyMessage": "..." }
+    "ANZ": {
+      "synthesis": "...",
+      "leadPillar": "Foundation | Pillar 1 | Pillar 2 | Pillar 3",
+      "keyMessage": "..."
+    }
+    // ... other markets
   }
 }
 
@@ -6666,7 +6766,7 @@ Only include markets that were provided in the input above.`;
 
         try {
             // COST OPTIMIZATION: Use unified API helper with token tracking
-            const { text } = await callAI('SYNTHESIS', batchedPrompt, 800, apiKey);
+            const { text } = await callAI('SYNTHESIS', batchedPrompt, 1000, apiKey);
             const jsonMatch = text.match(/\{[\s\S]*\}/);
             
             if (jsonMatch) {
@@ -6680,6 +6780,7 @@ Only include markets that were provided in the input above.`;
                         const brief = {
                             market,
                             synthesis: marketResult.synthesis,
+                            leadPillar: marketResult.leadPillar,
                             keyMessage: marketResult.keyMessage,
                             sources: signals.map(s => ({
                                 title: s.article.title,
@@ -6779,6 +6880,7 @@ function renderMarketBriefCard(brief) {
                 ${hasSignals ? `<button class="market-brief-copy" onclick="copyMarketBrief(this, '${brief.market}')" title="Copy to clipboard">📋</button>` : ''}
             </div>
             <div class="market-brief-synthesis">${escapeHtml(brief.synthesis || '')}</div>
+            ${brief.leadPillar ? `<div class="market-brief-lead-pillar">🎯 <strong>Lead Pillar:</strong> ${escapeHtml(brief.leadPillar)}</div>` : ''}
             ${brief.keyMessage ? `<div class="market-brief-key-message">💡 <strong>Key Message:</strong> ${escapeHtml(brief.keyMessage)}</div>` : ''}
             ${hasSignals ? `
             <div class="market-brief-sources">
@@ -7032,32 +7134,46 @@ async function renderExecutiveSummary(forceRefresh = false) {
         ? `\nWEEKLY TRENDS:\n${weeklyTrends.map(t => `- ${t.theme}: ${t.direction} (${t.change})`).join('\n')}`
         : '';
     
-    const prompt = `You are the intelligence analyst for the IBM APAC Field CTO who leads 115 ATLs across 343 accounts in 5 markets (ANZ, ASEAN, GCG, ISA, Korea).
+    const prompt = `You are the intelligence analyst for the IBM APAC Field CTO who leads 115 ATLs across 343 accounts.
 
 TODAY'S TOP ARTICLES:
 ${articleSummaries}
 ${trendContext}
 
-Generate EXACTLY 3 executive insights. Each must:
-1. Synthesize multiple articles into ONE actionable insight
-2. Answer "So what for IBM APAC?"
-3. Include specific action/positioning recommendation
+MISSION: Generate EXACTLY 3 executive insights for the "Client CTO" role.
+
+Each insight must:
+1. SYNTHESIZE multiple articles into ONE actionable insight
+2. Answer "So what does this mean for IBM APAC?"
+3. Tag as [AI WAVE] or [SOVEREIGNTY WAVE]
+4. Map to IBM pillar (Foundation / Pillar 1 / Pillar 2 / Pillar 3)
+5. Include specific action or positioning recommendation
+
+FRAMEWORK REMINDERS:
+- Only 16% of AI reaches enterprise scale—data readiness is the bottleneck
+- IBM addresses BOTH waves: AI transformation AND sovereignty
+- Position ATLs as "Client CTOs"—strategic advisors, not vendors
 
 Return JSON array:
 [
   {
     "headline": "Sharp, memorable (8 words max)",
     "synthesis": "2-3 sentences: what's happening, why it matters for IBM APAC, what to do",
-    "signalType": "risk or opportunity or competitive or regulatory",
+    "wave": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
+    "pillar": "Foundation | Pillar 1 | Pillar 2 | Pillar 3",
     "sourceIndices": [1, 3, 5]
   }
 ]
 
-Rules: Each insight references 2+ articles (use [index] numbers). One competitive, one actionable this week. Be specific about APAC markets. sourceIndices must accurately map to articles used.`;
+RULES:
+- Each insight must reference at least 2 articles
+- ONE insight should address competitive positioning
+- ONE insight should be actionable THIS WEEK
+- Be specific about APAC markets when relevant`;
 
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
-        const { text } = await callAI('SYNTHESIS', prompt, 600, apiKey);
+        const { text } = await callAI('SYNTHESIS', prompt, 1000, apiKey);
         const jsonMatch = text.match(/\[[\s\S]*\]/);
         
         if (jsonMatch) {
@@ -7319,9 +7435,13 @@ function renderExecutiveInsight(insight) {
     
     const typeClass = insight.signalType || 'general';
     
-    const sourcesHtml = (insight.sources || []).map(s => 
+    const sourcesHtml = (insight.sources || []).map(s =>
         `<a href="${s.url || '#'}" target="_blank" class="exec-source-link">${escapeHtml(s.title)}</a> <span class="exec-source-name">(${escapeHtml(s.source || 'Source')})</span>`
     ).join('<br>');
+    
+    // Wave and Pillar badges
+    const waveBadge = insight.wave ? `<span class="insight-badge wave-badge">${escapeHtml(insight.wave)}</span>` : '';
+    const pillarBadge = insight.pillar ? `<span class="insight-badge pillar-badge">${escapeHtml(insight.pillar)}</span>` : '';
     
     return `
         <div class="executive-insight ${typeClass}">
@@ -7329,6 +7449,7 @@ function renderExecutiveInsight(insight) {
                 <span class="executive-insight-type">${typeEmoji}</span>
                 <span class="executive-insight-headline">${escapeHtml(insight.headline)}</span>
             </div>
+            ${waveBadge || pillarBadge ? `<div class="executive-insight-badges">${waveBadge}${pillarBadge}</div>` : ''}
             <div class="executive-insight-synthesis">${escapeHtml(insight.synthesis)}</div>
             <div class="executive-insight-sources">
                 <span class="executive-sources-label">Sources:</span>
