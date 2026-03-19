@@ -8823,7 +8823,7 @@ CRITICAL EXTRACTION RULES:
 - Note problem-solution pairs stated in the article
 - Include architectural innovations (active vs total parameters, memory management approaches)
 
-Return JSON array (max 5 articles):
+Return ONLY a valid JSON array (max 5 articles). Do not include any text before or after the JSON:
 [
   {
     "title": "Original article title",
@@ -8832,11 +8832,11 @@ Return JSON array (max 5 articles):
     "problemSolved": "What constraint or limitation does this overcome? (e.g., 'Eliminates goal drift in multi-agent workflows by maintaining full state in 1M token context')",
     "leadershipImplication": "What this means for CTOs/CIOs making investment decisions",
     "cxoQuestion": "Provocative question for CxO discussion (thought-provoking, not sales-y)",
-    "timeHorizon": "6 months or 12 months or 2-3 years"
+    "timeHorizon": "6 months" | "12 months" | "2-3 years"
   }
 ]
 
-Strategic thesis must be memorable/quotable. Technical breakthrough must include specific numbers/metrics from article. Problem solved must reference actual constraints mentioned. Leadership implication must be concrete/actionable.`;
+IMPORTANT: Return ONLY the JSON array. No explanatory text, no markdown code blocks, no additional commentary. Start with [ and end with ].`;
 
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
