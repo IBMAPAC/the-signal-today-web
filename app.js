@@ -7011,7 +7011,7 @@ async function generateMarketSynthesis(activeMarkets, apiKey, listEl) {
         const marketPrompts = marketsToGenerate.map(({ market, signals }) => {
             const articleSummaries = signals.map((s, i) => {
                 const a = s.article;
-                return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nType: ${s.type}, Signal: ${s.signal}\nSummary: ${(a.summary || '').substring(0, 75)}`;
+                return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nType: ${s.type}, Signal: ${s.signal}\nSummary: ${(a.summary || '').substring(0, 50)}`;
             }).join('\n\n');
             
             return `## ${market} MARKET
@@ -9150,8 +9150,8 @@ IMPORTANT: Return ONLY the JSON array. No explanatory text, no markdown code blo
         // Clean response: remove markdown code blocks if present
         let cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
         
-        // Try to extract JSON (array or object)
-        let jsonMatch = cleanedText.match(/\[[\s\S]*\]/) || cleanedText.match(/\{[\s\S]*\}/);
+        // Try to extract JSON (array or object) using non-greedy regex
+        let jsonMatch = cleanedText.match(/\[[\s\S]*?\]/) || cleanedText.match(/\{[\s\S]*?\}/);
         
         if (!jsonMatch) {
             console.error('Deep Reads: No JSON found in response');
