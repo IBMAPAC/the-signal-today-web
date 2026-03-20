@@ -3168,8 +3168,11 @@ Return ONLY valid JSON, no markdown fences:
             // COST OPTIMIZATION: Use unified API helper with token tracking
             const { text } = await callAI('MULTI_SOURCE_ANALYSIS', deltaPrompt, 1500, apiKey);
             
+            // Clean response: remove markdown code blocks if present
+            let cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+            
             // Try to extract JSON more carefully
-            let jsonMatch = text.match(/\{[\s\S]*\}/);
+            let jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
             if (!jsonMatch) {
                 throw new Error('No JSON found in response');
             }
@@ -3179,6 +3182,26 @@ Return ONLY valid JSON, no markdown fences:
             // Clean up common JSON issues from Claude
             // Remove trailing commas before closing brackets/braces
             jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+            
+            // Find the balanced closing brace by counting braces
+            let braceCount = 0;
+            let endIndex = -1;
+            for (let i = 0; i < jsonStr.length; i++) {
+                if (jsonStr[i] === '{') braceCount++;
+                if (jsonStr[i] === '}') {
+                    braceCount--;
+                    if (braceCount === 0) {
+                        endIndex = i;
+                        break;
+                    }
+                }
+            }
+            
+            // Truncate to balanced JSON if there's trailing content
+            if (endIndex > 0 && endIndex < jsonStr.length - 1) {
+                console.log(`Delta merge: Truncating ${jsonStr.length - endIndex - 1} chars of trailing content`);
+                jsonStr = jsonStr.substring(0, endIndex + 1);
+            }
             
             try {
                 const updated = JSON.parse(jsonStr);
@@ -9150,8 +9173,8 @@ IMPORTANT: Return ONLY the JSON array. No explanatory text, no markdown code blo
         // Clean response: remove markdown code blocks if present
         let cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
         
-        // Try to extract JSON (array or object) using non-greedy regex
-        let jsonMatch = cleanedText.match(/\[[\s\S]*?\]/) || cleanedText.match(/\{[\s\S]*?\}/);
+        // Try to extract JSON (array first, then object as fallback)
+        let jsonMatch = cleanedText.match(/\[[\s\S]*\]/) || cleanedText.match(/\{[\s\S]*\}/);
         
         if (!jsonMatch) {
             console.error('Deep Reads: No JSON found in response');
@@ -9165,10 +9188,28 @@ IMPORTANT: Return ONLY the JSON array. No explanatory text, no markdown code blo
         // Remove trailing commas before closing brackets
         jsonStr = jsonStr.replace(/,(\s*[\]}])/g, '$1');
         
-        // Remove any text after the last closing bracket
-        const lastBracket = jsonStr.lastIndexOf(']');
-        if (lastBracket >= 0 && lastBracket < jsonStr.length - 1) {
-            jsonStr = jsonStr.substring(0, lastBracket + 1);
+        // Count brackets to find balanced closing bracket
+        const isArray = jsonStr[0] === '[';
+        const openChar = isArray ? '[' : '{';
+        const closeChar = isArray ? ']' : '}';
+        let bracketCount = 0;
+        let endIndex = -1;
+        
+        for (let i = 0; i < jsonStr.length; i++) {
+            if (jsonStr[i] === openChar) bracketCount++;
+            if (jsonStr[i] === closeChar) {
+                bracketCount--;
+                if (bracketCount === 0) {
+                    endIndex = i;
+                    break;
+                }
+            }
+        }
+        
+        // Truncate to balanced JSON if there's trailing content
+        if (endIndex > 0 && endIndex < jsonStr.length - 1) {
+            console.log(`Deep Reads: Truncating ${jsonStr.length - endIndex - 1} chars of trailing content`);
+            jsonStr = jsonStr.substring(0, endIndex + 1);
         }
         
         let synthesized;
