@@ -426,17 +426,25 @@ function getAIProviderSettings() {
 class AIRequestQueue {
     constructor() {
         // Rate limits per provider (tokens per minute)
-        // Note: Uses most restrictive model limit per provider for safety
+        // Note: Adjusted based on user's actual tier limits
         this.RATE_LIMITS = {
-            [AI_PROVIDERS.CLAUDE]: 7000,  // Buffer below 8,000 hard limit (claude-sonnet-4)
-            [AI_PROVIDERS.OPENAI]: 9000   // Buffer below 10,000 TPM for gpt-4o (most restrictive)
-                                          // gpt-4o: 10K TPM, gpt-4o-mini: 30K TPM
+            [AI_PROVIDERS.CLAUDE]: 7000,   // Buffer below 8,000 hard limit (claude-sonnet-4)
+            [AI_PROVIDERS.OPENAI]: 28000   // Buffer below 30,000 TPM (user's Tier 2+)
         };
         
-        // Token usage tracking per provider
+        // Safety multiplier for token estimates (accounts for actual usage exceeding maxTokens)
+        this.SAFETY_MULTIPLIER = 1.5;
+        
+        // Token usage tracking per provider (completed requests)
         this.tokenUsage = {
             [AI_PROVIDERS.CLAUDE]: [],
             [AI_PROVIDERS.OPENAI]: []
+        };
+        
+        // In-flight request tracking per provider (prevents race condition)
+        this.inFlightTokens = {
+            [AI_PROVIDERS.CLAUDE]: 0,
+            [AI_PROVIDERS.OPENAI]: 0
         };
         
         // Request queue per provider
@@ -486,31 +494,40 @@ class AIRequestQueue {
         while (this.queues[provider].length > 0) {
             const request = this.queues[provider][0];
             
+            // Apply safety multiplier to estimated tokens
+            const safeEstimate = Math.ceil(request.estimatedTokens * this.SAFETY_MULTIPLIER);
+            
             // Check if we can make this request without exceeding rate limit
+            // Include both completed usage AND in-flight requests
             const currentUsage = this._getCurrentUsage(provider);
+            const totalUsage = currentUsage + this.inFlightTokens[provider];
             const rateLimit = this.RATE_LIMITS[provider];
             
-            if (currentUsage + request.estimatedTokens > rateLimit) {
+            if (totalUsage + safeEstimate > rateLimit) {
                 // Wait until we have capacity
-                const waitTime = this._calculateWaitTime(provider, request.estimatedTokens);
+                const waitTime = this._calculateWaitTime(provider, safeEstimate);
                 console.log(`⏳ Rate limit approaching for ${provider}. Waiting ${Math.round(waitTime/1000)}s before next request...`);
                 await new Promise(resolve => setTimeout(resolve, waitTime));
                 continue;
             }
             
-            // Remove from queue and execute
+            // Remove from queue and reserve tokens for in-flight request
             this.queues[provider].shift();
+            this.inFlightTokens[provider] += safeEstimate;
             
             try {
                 const result = await request.requestFn();
                 
-                // Track actual token usage
+                // Release reserved tokens and track actual usage
+                this.inFlightTokens[provider] -= safeEstimate;
                 if (result.usage) {
                     this._recordUsage(provider, result.usage.output_tokens);
                 }
                 
                 request.resolve(result);
             } catch (error) {
+                // Release reserved tokens on error
+                this.inFlightTokens[provider] -= safeEstimate;
                 request.reject(error);
             }
             
@@ -591,12 +608,14 @@ class AIRequestQueue {
             claude: {
                 queueLength: this.queues[AI_PROVIDERS.CLAUDE].length,
                 currentUsage: this._getCurrentUsage(AI_PROVIDERS.CLAUDE),
+                inFlightTokens: this.inFlightTokens[AI_PROVIDERS.CLAUDE],
                 rateLimit: this.RATE_LIMITS[AI_PROVIDERS.CLAUDE],
                 processing: this.processing[AI_PROVIDERS.CLAUDE]
             },
             openai: {
                 queueLength: this.queues[AI_PROVIDERS.OPENAI].length,
                 currentUsage: this._getCurrentUsage(AI_PROVIDERS.OPENAI),
+                inFlightTokens: this.inFlightTokens[AI_PROVIDERS.OPENAI],
                 rateLimit: this.RATE_LIMITS[AI_PROVIDERS.OPENAI],
                 processing: this.processing[AI_PROVIDERS.OPENAI]
             }
