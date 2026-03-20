@@ -234,10 +234,10 @@ const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 // Different content types have different update frequencies
 const CACHE_DURATIONS = {
     INTELLIGENCE: 4 * 60 * 60 * 1000,      // 4 hours - changes frequently
-    DAILY_DIGEST: 8 * 60 * 60 * 1000,      // 8 hours - once per day
-    MARKET_INSIGHTS: 12 * 60 * 60 * 1000,  // 12 hours - slow-moving trends
+    DAILY_DIGEST: 24 * 60 * 60 * 1000,     // 24 hours - daily strategic content
+    MARKET_INSIGHTS: 24 * 60 * 60 * 1000,  // 24 hours - slow-moving market trends
     TODAYS_SIGNALS: 6 * 60 * 60 * 1000,    // 6 hours - mid-frequency
-    DEEP_READS: 24 * 60 * 60 * 1000        // 24 hours - weekly content
+    DEEP_READS: 72 * 60 * 60 * 1000        // 72 hours - weekly strategic reads
 };
 
 // =============================================
@@ -9010,8 +9010,8 @@ async function renderDeepReads(forceRefresh = false) {
             if (cached) {
                 const { insights, articlesData, timestamp } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
-                // Show cached if less than 18 hours old (strategic content has longer shelf life)
-                if (age < 18 * 60 * 60 * 1000 && insights && insights.length > 0) {
+                // Show cached if less than 72 hours old (strategic content has longer shelf life)
+                if (age < 72 * 60 * 60 * 1000 && insights && insights.length > 0) {
                     trackCacheAccess('deep-reads', true); // Cache HIT
                     countEl.textContent = insights.length;
                     list.innerHTML = insights.map((insight, idx) =>
@@ -9065,7 +9065,7 @@ async function renderDeepReads(forceRefresh = false) {
                 });
                 
                 // If cache valid AND fewer than 2 new strategic articles, use cache
-                if (age < 18 * 60 * 60 * 1000 && newStrategicArticles.length < 2) {
+                if (age < 72 * 60 * 60 * 1000 && newStrategicArticles.length < 2) {
                     console.log(`Deep Reads: Only ${newStrategicArticles.length} new strategic articles, using cache`);
                     trackCacheAccess('deep-reads', true); // Cache HIT (smart trigger)
                     list.innerHTML = insights.map((insight, idx) =>
