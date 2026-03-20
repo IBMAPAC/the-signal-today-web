@@ -408,6 +408,205 @@ function getAIProviderSettings() {
     };
     return { provider, apiKeys };
 }
+// =============================================
+// AI Request Queue - Rate Limiting & Throttling
+// =============================================
+
+/**
+ * AIRequestQueue manages API calls to prevent rate limit errors.
+ * Tracks token usage per minute and queues requests when approaching limits.
+ * 
+ * Features:
+ * - Token-based rate limiting (configurable per provider)
+ * - Request queuing with sequential processing
+ * - Automatic throttling when near limits
+ * - Per-provider token tracking
+ * - Sliding window rate limiting (60-second windows)
+ */
+class AIRequestQueue {
+    constructor() {
+        // Rate limits per provider (tokens per minute)
+        // Note: Uses most restrictive model limit per provider for safety
+        this.RATE_LIMITS = {
+            [AI_PROVIDERS.CLAUDE]: 7000,  // Buffer below 8,000 hard limit (claude-sonnet-4)
+            [AI_PROVIDERS.OPENAI]: 9000   // Buffer below 10,000 TPM for gpt-4o (most restrictive)
+                                          // gpt-4o: 10K TPM, gpt-4o-mini: 30K TPM
+        };
+        
+        // Token usage tracking per provider
+        this.tokenUsage = {
+            [AI_PROVIDERS.CLAUDE]: [],
+            [AI_PROVIDERS.OPENAI]: []
+        };
+        
+        // Request queue per provider
+        this.queues = {
+            [AI_PROVIDERS.CLAUDE]: [],
+            [AI_PROVIDERS.OPENAI]: []
+        };
+        
+        // Processing state per provider
+        this.processing = {
+            [AI_PROVIDERS.CLAUDE]: false,
+            [AI_PROVIDERS.OPENAI]: false
+        };
+    }
+    
+    /**
+     * Add request to queue and process when rate limit allows.
+     * @param {string} provider - AI provider
+     * @param {Function} requestFn - Async function that makes the API call
+     * @param {number} estimatedTokens - Estimated output tokens for this request
+     * @returns {Promise} - Resolves with API response
+     */
+    async enqueue(provider, requestFn, estimatedTokens) {
+        return new Promise((resolve, reject) => {
+            this.queues[provider].push({
+                requestFn,
+                estimatedTokens,
+                resolve,
+                reject
+            });
+            
+            // Start processing if not already running
+            if (!this.processing[provider]) {
+                this._processQueue(provider);
+            }
+        });
+    }
+    
+    /**
+     * Process queued requests for a provider.
+     * @private
+     */
+    async _processQueue(provider) {
+        if (this.processing[provider]) return;
+        this.processing[provider] = true;
+        
+        while (this.queues[provider].length > 0) {
+            const request = this.queues[provider][0];
+            
+            // Check if we can make this request without exceeding rate limit
+            const currentUsage = this._getCurrentUsage(provider);
+            const rateLimit = this.RATE_LIMITS[provider];
+            
+            if (currentUsage + request.estimatedTokens > rateLimit) {
+                // Wait until we have capacity
+                const waitTime = this._calculateWaitTime(provider, request.estimatedTokens);
+                console.log(`⏳ Rate limit approaching for ${provider}. Waiting ${Math.round(waitTime/1000)}s before next request...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                continue;
+            }
+            
+            // Remove from queue and execute
+            this.queues[provider].shift();
+            
+            try {
+                const result = await request.requestFn();
+                
+                // Track actual token usage
+                if (result.usage) {
+                    this._recordUsage(provider, result.usage.output_tokens);
+                }
+                
+                request.resolve(result);
+            } catch (error) {
+                request.reject(error);
+            }
+            
+            // Small delay between requests to avoid bursts
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        this.processing[provider] = false;
+    }
+    
+    /**
+     * Get current token usage in the last 60 seconds.
+     * @private
+     */
+    _getCurrentUsage(provider) {
+        const now = Date.now();
+        const oneMinuteAgo = now - 60000;
+        
+        // Remove old entries and sum current usage
+        this.tokenUsage[provider] = this.tokenUsage[provider].filter(
+            entry => entry.timestamp > oneMinuteAgo
+        );
+        
+        return this.tokenUsage[provider].reduce(
+            (sum, entry) => sum + entry.tokens, 0
+        );
+    }
+    
+    /**
+     * Record token usage for rate limiting.
+     * @private
+     */
+    _recordUsage(provider, tokens) {
+        this.tokenUsage[provider].push({
+            timestamp: Date.now(),
+            tokens: tokens
+        });
+    }
+    
+    /**
+     * Calculate how long to wait before making next request.
+     * @private
+     */
+    _calculateWaitTime(provider, estimatedTokens) {
+        const now = Date.now();
+        const oneMinuteAgo = now - 60000;
+        const rateLimit = this.RATE_LIMITS[provider];
+        
+        // Find oldest entry that would need to expire to make room
+        const sortedUsage = this.tokenUsage[provider]
+            .filter(entry => entry.timestamp > oneMinuteAgo)
+            .sort((a, b) => a.timestamp - b.timestamp);
+        
+        let cumulativeTokens = 0;
+        for (const entry of sortedUsage) {
+            cumulativeTokens += entry.tokens;
+            if (cumulativeTokens + estimatedTokens <= rateLimit) {
+                // We have enough capacity
+                return 100; // Minimal wait
+            }
+        }
+        
+        // Need to wait for oldest entries to expire
+        if (sortedUsage.length > 0) {
+            const oldestEntry = sortedUsage[0];
+            const waitTime = (oldestEntry.timestamp + 60000) - now + 1000; // +1s buffer
+            return Math.max(waitTime, 1000);
+        }
+        
+        return 1000; // Default 1 second wait
+    }
+    
+    /**
+     * Get queue status for monitoring.
+     */
+    getStatus() {
+        return {
+            claude: {
+                queueLength: this.queues[AI_PROVIDERS.CLAUDE].length,
+                currentUsage: this._getCurrentUsage(AI_PROVIDERS.CLAUDE),
+                rateLimit: this.RATE_LIMITS[AI_PROVIDERS.CLAUDE],
+                processing: this.processing[AI_PROVIDERS.CLAUDE]
+            },
+            openai: {
+                queueLength: this.queues[AI_PROVIDERS.OPENAI].length,
+                currentUsage: this._getCurrentUsage(AI_PROVIDERS.OPENAI),
+                rateLimit: this.RATE_LIMITS[AI_PROVIDERS.OPENAI],
+                processing: this.processing[AI_PROVIDERS.OPENAI]
+            }
+        };
+    }
+}
+
+// Global request queue instance
+const aiRequestQueue = new AIRequestQueue();
+
 
 /**
  * Unified AI API caller - supports Claude and OpenAI
@@ -443,37 +642,48 @@ async function callAI(taskType, prompt, maxTokens, apiKey = null, provider = nul
         throw new Error(`No API key configured for ${provider}`);
     }
     
-    // Retry configuration
-    const MAX_RETRIES = 3;
-    const INITIAL_DELAY = 1000; // 1 second
-    let lastError;
-    
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            return await callAIInternal(taskType, prompt, maxTokens, apiKey, provider);
-        } catch (error) {
-            lastError = error;
+    // Enqueue request with rate limiting
+    // Estimate output tokens (use maxTokens as upper bound)
+    return await aiRequestQueue.enqueue(
+        provider,
+        async () => {
+            // Retry configuration for this specific request
+            const MAX_RETRIES = 3;
+            const INITIAL_DELAY = 2000; // 2 seconds for 429 errors
+            let lastError;
             
-            // Check if error is retryable
-            const isRetryable = isRetryableError(error, provider);
-            
-            // Don't retry on last attempt or non-retryable errors
-            if (attempt === MAX_RETRIES || !isRetryable) {
-                console.error(`${provider} API call failed after ${attempt} attempt(s) (${taskType}):`, error);
-                throw error;
+            for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                try {
+                    return await callAIInternal(taskType, prompt, maxTokens, apiKey, provider);
+                } catch (error) {
+                    lastError = error;
+                    
+                    // Check if error is retryable
+                    const isRetryable = isRetryableError(error, provider);
+                    const is429Error = error.message.includes('429') || error.message.includes('Too Many Requests');
+                    
+                    // Don't retry on last attempt or non-retryable errors
+                    if (attempt === MAX_RETRIES || !isRetryable) {
+                        console.error(`${provider} API call failed after ${attempt} attempt(s) (${taskType}):`, error);
+                        throw error;
+                    }
+                    
+                    // Calculate delay with exponential backoff
+                    // Use longer delays for 429 errors (rate limits)
+                    const baseDelay = is429Error ? INITIAL_DELAY : 1000;
+                    const delay = baseDelay * Math.pow(2, attempt - 1);
+                    console.warn(`${provider} API call failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms...`, error.message);
+                    
+                    // Wait before retrying
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
             }
             
-            // Calculate delay with exponential backoff
-            const delay = INITIAL_DELAY * Math.pow(2, attempt - 1);
-            console.warn(`${provider} API call failed (attempt ${attempt}/${MAX_RETRIES}), retrying in ${delay}ms...`, error.message);
-            
-            // Wait before retrying
-            await new Promise(resolve => setTimeout(resolve, delay));
-        }
-    }
-    
-    // Should never reach here, but just in case
-    throw lastError;
+            // Should never reach here, but just in case
+            throw lastError;
+        },
+        maxTokens
+    );
 }
 
 /**
