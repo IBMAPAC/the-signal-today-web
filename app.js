@@ -9150,11 +9150,11 @@ IMPORTANT: Return ONLY the JSON array. No explanatory text, no markdown code blo
         // Clean response: remove markdown code blocks if present
         let cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
         
-        // Try to extract JSON array
-        let jsonMatch = cleanedText.match(/\[[\s\S]*\]/);
+        // Try to extract JSON (array or object)
+        let jsonMatch = cleanedText.match(/\[[\s\S]*\]/) || cleanedText.match(/\{[\s\S]*\}/);
         
         if (!jsonMatch) {
-            console.error('Deep Reads: No JSON array found in response');
+            console.error('Deep Reads: No JSON found in response');
             console.error('Response (first 500 chars):', cleanedText.substring(0, 500));
             throw new Error('No valid JSON in response');
         }
