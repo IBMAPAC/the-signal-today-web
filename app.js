@@ -9188,28 +9188,37 @@ IMPORTANT: Return ONLY the JSON array. No explanatory text, no markdown code blo
         // Remove trailing commas before closing brackets
         jsonStr = jsonStr.replace(/,(\s*[\]}])/g, '$1');
         
-        // Count brackets to find balanced closing bracket
+        // Count brackets to find first balanced closing bracket
         const isArray = jsonStr[0] === '[';
         const openChar = isArray ? '[' : '{';
         const closeChar = isArray ? ']' : '}';
         let bracketCount = 0;
-        let endIndex = -1;
+        let firstBalanced = -1;
         
         for (let i = 0; i < jsonStr.length; i++) {
             if (jsonStr[i] === openChar) bracketCount++;
             if (jsonStr[i] === closeChar) {
                 bracketCount--;
-                if (bracketCount === 0) {
-                    endIndex = i;
-                    break;
+                if (bracketCount === 0 && firstBalanced === -1) {
+                    firstBalanced = i;
+                    // Don't break - continue to see what follows
                 }
             }
         }
         
-        // Truncate to balanced JSON if there's trailing content
-        if (endIndex > 0 && endIndex < jsonStr.length - 1) {
-            console.log(`Deep Reads: Truncating ${jsonStr.length - endIndex - 1} chars of trailing content`);
-            jsonStr = jsonStr.substring(0, endIndex + 1);
+        // Validate what comes after the first balanced point
+        if (firstBalanced > 0 && firstBalanced < jsonStr.length - 1) {
+            const remaining = jsonStr.substring(firstBalanced + 1).trim();
+            
+            // Check if remaining looks like valid JSON continuation
+            if (remaining.startsWith(',') || remaining.startsWith('{') || remaining.startsWith('[')) {
+                // Valid JSON continuation - keep full response
+                console.log('Deep Reads: Detected valid JSON continuation, keeping full response');
+            } else if (remaining.length > 0) {
+                // Trailing text - truncate it
+                console.log(`Deep Reads: Truncating ${remaining.length} chars of trailing text`);
+                jsonStr = jsonStr.substring(0, firstBalanced + 1);
+            }
         }
         
         let synthesized;
