@@ -9053,14 +9053,101 @@ async function renderDeepReads(forceRefresh = false) {
     const settings = getAIProviderSettings();
     const apiKey = settings.apiKeys[settings.provider];
     
+    /**
+     * Score article for Deep Reads selection based on multiple criteria
+     * @param {Object} article - Article object
+     * @returns {number} Score from 0-100
+     */
+    function scoreArticleForDeepRead(article) {
+        let score = 0;
+        
+        // 1. Strategic Category (0-30 points)
+        if (article.category === 'Strategic Perspectives') score += 30;
+        else if (article.category === 'Architecture & Platform') score += 25;
+        else if (article.category === 'Industry Trends') score += 20;
+        else if (article.category === 'AI & Machine Learning') score += 18;
+        else if (article.category === 'Cloud & Infrastructure') score += 15;
+        
+        // 2. Source Credibility (0-25 points)
+        const premiumSources = ['a16z', 'Benedict Evans', 'Stratechery', 'MIT Technology Review', 'Harvard Business Review'];
+        const goodSources = ['TechCrunch', 'The Verge', 'Ars Technica', 'The Information'];
+        
+        if (premiumSources.some(s => article.source?.includes(s))) score += 25;
+        else if (goodSources.some(s => article.source?.includes(s))) score += 15;
+        else score += 5; // Base points for any source
+        
+        // 3. Content Depth (0-20 points)
+        const contentLength = article.content?.length || article.summary?.length || 0;
+        if (contentLength > 3000) score += 20;
+        else if (contentLength > 1500) score += 15;
+        else if (contentLength > 800) score += 10;
+        else score += 5;
+        
+        // 4. Recency (0-15 points)
+        const pubDate = new Date(article.pubDate || article.isoDate);
+        const ageInDays = (Date.now() - pubDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (ageInDays <= 3) score += 15;
+        else if (ageInDays <= 7) score += 10;
+        else if (ageInDays <= 14) score += 5;
+        
+        // 5. Relevance Score (0-10 points)
+        score += Math.min((article.relevanceScore || 0) / 10, 10);
+        
+        return Math.round(score);
+    }
+    
+    /**
+     * Select diverse articles from scored candidates
+     * @param {Array} scoredCandidates - Array of {article, score} objects
+     * @param {number} count - Number of articles to select
+     * @returns {Array} Selected articles
+     */
+    function selectDiverseArticles(scoredCandidates, count = 3) {
+        const selected = [];
+        const usedCategories = new Set();
+        const usedSources = new Set();
+        
+        for (const {article, score} of scoredCandidates) {
+            if (selected.length >= count) break;
+            
+            const categoryKey = article.category;
+            const sourceKey = article.source?.split(' ')[0]; // First word of source
+            
+            // First article: always take highest score
+            if (selected.length === 0) {
+                selected.push(article);
+                usedCategories.add(categoryKey);
+                usedSources.add(sourceKey);
+                console.log(`Deep Reads: Selected #1 - "${article.title}" (score: ${score}, ${categoryKey}, ${article.source})`);
+                continue;
+            }
+            
+            // Subsequent articles: prefer different category/source
+            const isDifferentCategory = !usedCategories.has(categoryKey);
+            const isDifferentSource = !usedSources.has(sourceKey);
+            
+            // Accept if: different category OR different source OR last slot
+            if (isDifferentCategory || isDifferentSource || selected.length === count - 1) {
+                selected.push(article);
+                usedCategories.add(categoryKey);
+                usedSources.add(sourceKey);
+                console.log(`Deep Reads: Selected #${selected.length} - "${article.title}" (score: ${score}, ${categoryKey}, ${article.source})`);
+            } else {
+                console.log(`Deep Reads: Skipped "${article.title}" (score: ${score}) - duplicate category/source`);
+            }
+        }
+        
+        return selected;
+    }
+    
     // Select deep read candidates: strategic sources, analyst content, thought leadership
     // RULE: Pulls from weeklyArticles (7-14 day lookback) for strategic, longer-form content
     const strategicCategories = ['Strategic Perspectives', 'Architecture & Platform'];
     const strategicSources = ['a16z', 'Benedict Evans', 'Stratechery', 'MIT Technology Review', 'Harvard Business Review'];
     
-    // Prioritize: 1) Strategic category, 2) High credibility, 3) Longer content
-    let candidates = app.weeklyArticles.length > 0 
-        ? app.weeklyArticles 
+    // Initial filtering: strategic category OR analyst source OR high relevance
+    let candidates = app.weeklyArticles.length > 0
+        ? app.weeklyArticles
         : app.articles.filter(a => {
             const isStrategic = strategicCategories.includes(a.category);
             const isAnalyst = strategicSources.some(s => a.source?.includes(s));
@@ -9068,10 +9155,17 @@ async function renderDeepReads(forceRefresh = false) {
             return isStrategic || isAnalyst || isHighValue;
         });
     
-    // Sort by strategic value (category weight + credibility)
-    candidates = candidates.slice(0, 8);
+    // Score and sort candidates
+    const scoredCandidates = candidates
+        .map(a => ({ article: a, score: scoreArticleForDeepRead(a) }))
+        .sort((a, b) => b.score - a.score);
     
-    countEl.textContent = Math.min(candidates.length, 5);
+    console.log(`Deep Reads: Scored ${scoredCandidates.length} candidates, top score: ${scoredCandidates[0]?.score || 0}`);
+    
+    // Select top 3 diverse articles
+    candidates = selectDiverseArticles(scoredCandidates, 3);
+    
+    countEl.textContent = Math.min(candidates.length, 3);
     
     // COST OPTIMIZATION: Smart triggering - check for new strategic articles
     if (!forceRefresh && apiKey) {
@@ -9111,22 +9205,22 @@ async function renderDeepReads(forceRefresh = false) {
     
     // Without API key: render basic list and cache it
     if (!apiKey) {
-        const basicInsights = candidates.slice(0, 5).map(a => ({
+        const basicInsights = candidates.slice(0, 3).map(a => ({
             title: a.title,
             source: a.source,
             summary: a.summary || '',
             timeHorizon: 'TBD'
         }));
-        cacheDeepReads(basicInsights, candidates.slice(0, 5));
-        list.innerHTML = candidates.slice(0, 5).map(article => renderBasicDeepRead(article)).join('');
+        cacheDeepReads(basicInsights, candidates.slice(0, 3));
+        list.innerHTML = candidates.slice(0, 3).map(article => renderBasicDeepRead(article)).join('');
         return;
     }
     
     // With API key: generate strategic synthesis
     list.innerHTML = '<p class="card-description">Synthesizing strategic insights...</p>';
     
-    const articleSummaries = candidates.slice(0, 5).map((a, i) =>
-        `[${i + 1}] "${a.title}" (${a.source})\nContent: ${a.content?.substring(0, 2000) || a.summary?.substring(0, 2000) || 'No content available'}`
+    const articleSummaries = candidates.slice(0, 3).map((a, i) =>
+        `[${i + 1}] "${a.title}" (${a.source})\nContent: ${a.content?.substring(0, 500) || a.summary?.substring(0, 500) || 'No content available'}`
     ).join('\n\n');
     
     const prompt = `You are preparing a strategic reading brief for the IBM APAC Field CTO who leads 115 ATLs across 343 enterprise accounts.
@@ -9151,7 +9245,7 @@ CRITICAL EXTRACTION RULES:
 - Note problem-solution pairs stated in the article
 - Include architectural innovations (active vs total parameters, memory management approaches)
 
-Return ONLY a valid JSON array (max 5 articles). Do not include any text before or after the JSON:
+Return ONLY a valid JSON array (exactly 3 articles). Do not include any text before or after the JSON:
 [
   {
     "title": "Original article title",
@@ -9238,7 +9332,7 @@ IMPORTANT: Return ONLY the JSON array. No explanatory text, no markdown code blo
         }
         
         // Cache the synthesized insights with article data
-        cacheDeepReads(synthesized, candidates.slice(0, 5));
+        cacheDeepReads(synthesized, candidates.slice(0, 3));
         
         list.innerHTML = synthesized.map((insight, idx) => {
             const article = candidates[idx];
