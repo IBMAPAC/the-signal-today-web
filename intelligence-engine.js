@@ -35,10 +35,10 @@ class HybridIntelligenceEngine {
         // Tier 1: Keyword patterns (fast filter)
         this.keywordPatterns = {
             competitors: {
-                microsoft: ['microsoft', 'azure', 'ms ', ' ms', 'redmond'],
+                microsoft: ['microsoft', 'azure', 'redmond', 'msft', 'microsoft azure'],
                 aws: ['aws', 'amazon web services', 'amazon cloud'],
-                google: ['google cloud', 'gcp', 'google', 'alphabet'],
-                salesforce: ['salesforce', 'crm', 'tableau'],
+                google: ['google cloud', 'gcp', 'alphabet'],
+                salesforce: ['salesforce', 'tableau'],
                 sap: ['sap', 's/4hana', 'sap hana'],
                 oracle: ['oracle', 'oracle cloud'],
                 servicenow: ['servicenow', 'snow'],
@@ -348,10 +348,14 @@ class HybridIntelligenceEngine {
         const entities = this.extractEntities(text, clients);
 
         // Pattern 1: Competitor at your client (CRITICAL)
+        // Only trigger if there's actual business activity context, not just co-mention
         if (entities.competitors.length > 0 && entities.clients.length > 0) {
-            threatLevel = 95;
-            confidence = 0.90;
-            reasoning.push(`${entities.competitors[0]} activity at ${entities.clients[0]}`);
+            const activityPattern = /(?:partnership|deal|contract|agreement|selected|chosen|awarded|wins|signs|announces|launches|deploys|implements|migrates|expands|collaboration|joint venture)/i;
+            if (activityPattern.test(text)) {
+                threatLevel = 95;
+                confidence = 0.90;
+                reasoning.push(`${entities.competitors[0]} activity at ${entities.clients[0]}`);
+            }
         }
         // Pattern 2: Competitor wins deal (HIGH)
         else if (this.contextPatterns.competitorWins.test(text)) {
@@ -444,10 +448,24 @@ class HybridIntelligenceEngine {
             }
         }
 
-        // Extract clients
+        // Extract clients (with word boundary checking to avoid false positives)
         for (const client of clients) {
             const clientNames = [client.name, ...(client.aliases || [])];
-            if (clientNames.some(name => textLower.includes(name.toLowerCase()))) {
+            let isMatch = false;
+            
+            for (const name of clientNames) {
+                const nameLower = name.toLowerCase();
+                // Use word boundaries to avoid substring matches (e.g., "sea" in "research")
+                // Escape special regex characters in the name
+                const escapedName = nameLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`\\b${escapedName}\\b`, 'i');
+                if (regex.test(textLower)) {
+                    isMatch = true;
+                    break;
+                }
+            }
+            
+            if (isMatch) {
                 entities.clients.push(client.name);
                 if (client.market) entities.markets.push(client.market);
                 if (client.industry) entities.industries.push(client.industry);
@@ -733,7 +751,7 @@ OUTPUT FORMAT (JSON only):
   "confidence": 0.95,
   "waveClassification": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
   "pillarMapping": "Foundation" | "Pillar 1" | "Pillar 2" | "Pillar 3",
-  "reasoning": "Brief with names and WHY they're affected",
+  "reasoning": "One-sentence strategic context: what this signals for IBM APAC and why it matters NOW (no client names here—use actionableInsights for that)",
   "actionableInsights": ["Specific action with client/product/timeframe framed as 'Why Change'"],
   "affectedClients": [],
   "affectedMarkets": [],
