@@ -40,7 +40,7 @@ const DEFAULT_SOURCES = [
         category: "AI & Agentic",
         priority: 1,
         credibilityScore: 0.82,
-        digestType: "weekly",
+        digestType: "both",
         enabled: true
     },
     {
@@ -49,7 +49,7 @@ const DEFAULT_SOURCES = [
         category: "AI & Agentic",
         priority: 1,
         credibilityScore: 0.90,
-        digestType: "weekly",
+        digestType: "daily",
         enabled: true
     },
     {
