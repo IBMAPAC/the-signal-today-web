@@ -1448,10 +1448,10 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 }
 
 .intelligence-stats-grid .stat-value {
-    font-size: 1.75rem;
-    font-weight: 300;
+    font-size: 0.75rem;
+    font-weight: 400;
     color: var(--cds-text-primary);
-    line-height: 1.2;
+    line-height: 1.4;
 }
 
 @media (max-width: 768px) {
