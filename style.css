@@ -1375,46 +1375,98 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .intelligence-stats-display {
     margin-top: 16px;
     padding: 16px;
-    background: rgba(102, 126, 234, 0.05);
+    background: rgba(102, 126, 234, 0.08);
     border-radius: 8px;
-    border: 1px solid rgba(102, 126, 234, 0.2);
+    border: 1px solid rgba(102, 126, 234, 0.3);
 }
 
 .intelligence-stats-display h4 {
     margin: 0 0 12px 0;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
-    color: #667eea;
+    color: #5568d3;
+}
+
+/* Stats Tab Bar */
+.stats-tab-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    border-bottom: 2px solid rgba(102, 126, 234, 0.2);
+    padding-bottom: 8px;
+}
+
+.stats-tab {
+    flex: 1;
+    padding: 10px 16px;
+    background: transparent;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    border-radius: 6px 6px 0 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: #5a6c7d;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 2px solid transparent;
+}
+
+.stats-tab:hover {
+    background: rgba(102, 126, 234, 0.1);
+    color: #4a5fc1;
+    border-color: rgba(102, 126, 234, 0.4);
+}
+
+.stats-tab.active {
+    background: rgba(102, 126, 234, 0.15);
+    border-color: #667eea;
+    border-bottom-color: #667eea;
+    color: #4a5fc1;
+    font-weight: 600;
 }
 
 .intelligence-stats-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+    gap: 16px;
+    padding: 8px 0;
 }
 
 .intelligence-stats-grid .stat-item {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 6px;
+    border: 1px solid rgba(102, 126, 234, 0.15);
 }
 
 .intelligence-stats-grid .stat-label {
-    font-size: 11px;
-    color: #7f8c8d;
+    font-size: 12px;
+    color: #5a6c7d;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    font-weight: 600;
 }
 
 .intelligence-stats-grid .stat-value {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
-    color: #2c3e50;
+    color: #1a2332;
 }
 
 @media (max-width: 768px) {
     .intelligence-stats-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .stats-tab-bar {
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .stats-tab {
+        border-radius: 6px;
     }
 }
 

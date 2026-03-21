@@ -973,15 +973,34 @@ function compressArticleForPrompt(article, includeFields = ['title', 'summary', 
 }
 
 /**
- * Get token usage summary for display
+ * Get provider name from model string
+ * @param {string} model - Model name (e.g., 'claude-sonnet-4-20250514', 'gpt-4o')
+ * @returns {string} - Provider name ('claude', 'openai', or 'unknown')
  */
-function getTokenUsageSummary() {
-    const today = tokenUsageStats.calls.filter(c => 
+function getProviderFromModel(model) {
+    if (!model) return 'unknown';
+    if (model.includes('claude')) return 'claude';
+    if (model.includes('gpt')) return 'openai';
+    return 'unknown';
+}
+
+/**
+ * Get token usage summary for display
+ * @param {string|null} providerFilter - Optional provider filter ('claude', 'openai', or null for all)
+ * @returns {object} - Usage statistics
+ */
+function getTokenUsageSummary(providerFilter = null) {
+    const today = tokenUsageStats.calls.filter(c =>
         new Date(c.timestamp).toDateString() === new Date().toDateString()
     );
     
+    // Filter by provider if specified
+    const filtered = providerFilter
+        ? today.filter(c => getProviderFromModel(c.model) === providerFilter)
+        : today;
+    
     const byModel = {};
-    today.forEach(call => {
+    filtered.forEach(call => {
         if (!byModel[call.model]) {
             byModel[call.model] = { calls: 0, inputTokens: 0, outputTokens: 0, cost: 0 };
         }
@@ -992,11 +1011,12 @@ function getTokenUsageSummary() {
     });
     
     return {
-        totalCalls: today.length,
-        totalInputTokens: today.reduce((sum, c) => sum + c.inputTokens, 0),
-        totalOutputTokens: today.reduce((sum, c) => sum + c.outputTokens, 0),
-        estimatedCost: today.reduce((sum, c) => sum + c.cost, 0),
-        byModel
+        totalCalls: filtered.length,
+        totalInputTokens: filtered.reduce((sum, c) => sum + c.inputTokens, 0),
+        totalOutputTokens: filtered.reduce((sum, c) => sum + c.outputTokens, 0),
+        estimatedCost: filtered.reduce((sum, c) => sum + c.cost, 0),
+        byModel,
+        providerFilter
     };
 }
 
@@ -1012,6 +1032,18 @@ function resetTokenStats() {
         estimatedCost: 0
     };
     localStorage.setItem('signal_token_stats', JSON.stringify(tokenUsageStats));
+}
+
+/**
+ * Switch between stats tabs (Current Provider vs All Providers)
+ * @param {string} tabName - 'current' or 'all'
+ */
+function switchStatsTab(tabName) {
+    window.statsTabState = tabName;
+    // Re-render the stats display with the new filter
+    if (window.app) {
+        window.app.renderIntelligenceStatsInSettings();
+    }
 }
 
 /**
@@ -5206,15 +5238,25 @@ TOP READS
     renderIntelligenceStatsInSettings() {
         // Use the new comprehensive performance dashboard
         displayPerformanceStats();
-        
+
         // Keep the old stats display for backward compatibility
         const container = document.getElementById('settings-intelligence-stats');
         if (!container) return;
         
         const stats = this.intelligenceEngine?.getStats();
         
-        // Get token usage summary from new tracking system
-        const tokenStats = getTokenUsageSummary();
+        // Get current provider settings
+        const settings = getAIProviderSettings();
+        const currentProvider = settings.provider;
+        
+        // Get current tab state (default to 'current')
+        if (!window.statsTabState) {
+            window.statsTabState = 'current';
+        }
+        
+        // Get token usage summary based on active tab
+        const providerFilter = window.statsTabState === 'current' ? currentProvider : null;
+        const tokenStats = getTokenUsageSummary(providerFilter);
         
         // Use actual stats properties with safe defaults
         const tier3Cost = stats?.tier3Cost || 0;
@@ -5259,8 +5301,30 @@ TOP READS
         const totalCost = tokenStats.estimatedCost + tier3Cost;
         const costFormatted = totalCost < 0.01 ? '<$0.01' : `$${totalCost.toFixed(4)}`;
         
+        // Get provider display name
+        const providerDisplayName = currentProvider === 'claude' ? 'Claude' : 'OpenAI';
+        
+        // Check if there's no data for current provider
+        const noDataMessage = tokenStats.totalCalls === 0 && window.statsTabState === 'current'
+            ? `<div class="stat-item" style="grid-column: 1 / -1; text-align: center; padding: 20px; color: #666;">
+                   <p>📊 No usage data yet for ${providerDisplayName}</p>
+                   <p style="font-size: 0.9em; margin-top: 8px;">Switch to "All Providers" to see complete history</p>
+               </div>`
+            : '';
+        
         container.innerHTML = `
+            <div class="stats-tab-bar">
+                <button class="stats-tab ${window.statsTabState === 'current' ? 'active' : ''}"
+                        onclick="switchStatsTab('current')">
+                    Current Provider (${providerDisplayName})
+                </button>
+                <button class="stats-tab ${window.statsTabState === 'all' ? 'active' : ''}"
+                        onclick="switchStatsTab('all')">
+                    All Providers
+                </button>
+            </div>
             <div class="intelligence-stats-grid">
+                ${noDataMessage || `
                 <div class="stat-item">
                     <div class="stat-label">📊 Today's API Calls</div>
                     <div class="stat-value">${tokenStats.totalCalls}</div>
@@ -5286,9 +5350,10 @@ TOP READS
                     <div class="stat-label">T1→T2 Pass Rate</div>
                     <div class="stat-value">${tier1PassRate}</div>
                 </div>
+                `}
             </div>
             <p class="form-hint" style="margin-top: 12px;">
-                💡 <strong>Cost Optimization:</strong> Haiku ($0.80/1M) for summaries, Sonnet ($3/1M) for strategic analysis. 
+                💡 <strong>Cost Optimization:</strong> Haiku ($0.80/1M) for summaries, Sonnet ($3/1M) for strategic analysis.
                 Sections auto-cache (8-24h) to avoid redundant calls.
             </p>
             <button class="btn btn-sm btn-secondary" onclick="resetTokenStats(); app.renderIntelligenceStatsInSettings();" style="margin-top: 8px;">
