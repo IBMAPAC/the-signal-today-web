@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Budget Management - Intelligence Engine</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #161616;
+            color: #f4f4f4;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 400;
+            margin-bottom: 8px;
+            color: #ffffff;
+        }
+
+        .subtitle {
+            color: #c6c6c6;
+            margin-bottom: 32px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .card {
+            background: #262626;
+            border: 1px solid #393939;
+            padding: 24px;
+            border-radius: 4px;
+        }
+
+        .card h2 {
+            font-size: 20px;
+            font-weight: 400;
+            margin-bottom: 16px;
+            color: #ffffff;
+        }
+
+        .metric {
+            margin-bottom: 16px;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: #c6c6c6;
+            text-transform: uppercase;
+            letter-spacing: 0.32px;
+            margin-bottom: 4px;
+        }
+
+        .metric-value {
+            font-size: 28px;
+            font-weight: 300;
+            color: #ffffff;
+        }
+
+        .metric-secondary {
+            font-size: 14px;
+            color: #8d8d8d;
+            margin-top: 4px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #393939;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #0f62fe;
+            transition: width 0.3s ease;
+        }
+
+        .progress-fill.warning {
+            background: #f1c21b;
+        }
+
+        .progress-fill.critical {
+            background: #da1e28;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: #c6c6c6;
+            text-transform: uppercase;
+            letter-spacing: 0.32px;
+            margin-bottom: 8px;
+        }
+
+        input[type="number"] {
+            width: 100%;
+            padding: 11px 16px;
+            background: #262626;
+            border: 1px solid #393939;
+            border-bottom: 1px solid #0f62fe;
+            color: #f4f4f4;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            border-bottom: 2px solid #0f62fe;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-right: 8px;
+        }
+
+        button {
+            padding: 11px 16px;
+            background: #0f62fe;
+            border: none;
+            color: #ffffff;
+            font-size: 14px;
+            font-family: inherit;
+            cursor: pointer;
+            border-radius: 0;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #0353e9;
+        }
+
+        button:disabled {
+            background: #393939;
+            color: #8d8d8d;
+            cursor: not-allowed;
+        }
+
+        .alert {
+            padding: 16px;
+            margin-bottom: 16px;
+            border-left: 4px solid;
+            background: #262626;
+        }
+
+        .alert.warning {
+            border-color: #f1c21b;
+        }
+
+        .alert.critical {
+            border-color: #da1e28;
+        }
+
+        .alert-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+
+        .history-table th {
+            text-align: left;
+            padding: 12px;
+            background: #393939;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.32px;
+            color: #c6c6c6;
+        }
+
+        .history-table td {
+            padding: 12px;
+            border-bottom: 1px solid #393939;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-badge.ok {
+            background: #24a148;
+            color: #ffffff;
+        }
+
+        .status-badge.warning {
+            background: #f1c21b;
+            color: #000000;
+        }
+
+        .status-badge.critical {
+            background: #da1e28;
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Budget Management</h1>
+        <p class="subtitle">Monitor and control API token and cost budgets</p>
+
+        <div id="alerts"></div>
+
+        <div class="grid">
+            <!-- Daily Budget Card -->
+            <div class="card">
+                <h2>Daily Budget</h2>
+                <div class="metric">
+                    <div class="metric-label">Tokens Used</div>
+                    <div class="metric-value" id="daily-tokens-used">0</div>
+                    <div class="metric-secondary" id="daily-tokens-limit">of 1,000,000</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="daily-tokens-progress"></div>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Cost</div>
+                    <div class="metric-value" id="daily-cost-used">$0.00</div>
+                    <div class="metric-secondary" id="daily-cost-limit">of $10.00</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="daily-cost-progress"></div>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Requests</div>
+                    <div class="metric-value" id="daily-requests">0</div>
+                </div>
+            </div>
+
+            <!-- Weekly Budget Card -->
+            <div class="card">
+                <h2>Weekly Budget</h2>
+                <div class="metric">
+                    <div class="metric-label">Tokens Used</div>
+                    <div class="metric-value" id="weekly-tokens-used">0</div>
+                    <div class="metric-secondary" id="weekly-tokens-limit">of 5,000,000</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="weekly-tokens-progress"></div>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Cost</div>
+                    <div class="metric-value" id="weekly-cost-used">$0.00</div>
+                    <div class="metric-secondary" id="weekly-cost-limit">of $50.00</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="weekly-cost-progress"></div>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Requests</div>
+                    <div class="metric-value" id="weekly-requests">0</div>
+                </div>
+            </div>
+
+            <!-- Configuration Card -->
+            <div class="card">
+                <h2>Budget Configuration</h2>
+                <div class="form-group">
+                    <label for="daily-token-limit">Daily Token Limit</label>
+                    <input type="number" id="daily-token-limit" value="1000000" step="100000">
+                </div>
+                <div class="form-group">
+                    <label for="daily-cost-limit">Daily Cost Limit ($)</label>
+                    <input type="number" id="daily-cost-limit" value="10.00" step="1.00">
+                </div>
+                <div class="form-group">
+                    <label for="weekly-token-limit">Weekly Token Limit</label>
+                    <input type="number" id="weekly-token-limit" value="5000000" step="100000">
+                </div>
+                <div class="form-group">
+                    <label for="weekly-cost-limit">Weekly Cost Limit ($)</label>
+                    <input type="number" id="weekly-cost-limit" value="50.00" step="5.00">
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="enforce-limits" checked>
+                    <label for="enforce-limits" style="text-transform: none; margin: 0;">Enforce Hard Limits</label>
+                </div>
+                <button onclick="updateConfig()">Update Configuration</button>
+                <button onclick="resetBudget()" style="background: #da1e28; margin-left: 8px;">Reset Budget</button>
+            </div>
+        </div>
+
+        <!-- History Card -->
+        <div class="card">
+            <h2>Usage History</h2>
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th>Period</th>
+                        <th>Tokens</th>
+                        <th>Cost</th>
+                        <th>Requests</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body">
+                    <tr>
+                        <td colspan="5" style="text-align: center; color: #8d8d8d;">No history data</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="budget-manager.js"></script>
+    <script>
+        // Initialize budget manager
+        const budgetManager = new BudgetManager({
+            dailyTokenLimit: 1000000,
+            dailyCostLimit: 10.00,
+            weeklyTokenLimit: 5000000,
+            weeklyCostLimit: 50.00,
+            enforceHardLimits: true
+        });
+
+        // Set up alert handlers
+        budgetManager.onAlert('warning', (data) => {
+            showAlert('warning', `Warning: ${data.type} at ${data.percentage}%`, 
+                `Current: ${data.current.toLocaleString()} / Limit: ${data.limit.toLocaleString()}`);
+        });
+
+        budgetManager.onAlert('critical', (data) => {
+            showAlert('critical', `Critical: ${data.type} at ${data.percentage}%`, 
+                `Current: ${data.current.toLocaleString()} / Limit: ${data.limit.toLocaleString()}`);
+        });
+
+        function showAlert(level, title, message) {
+            const alertsDiv = document.getElementById('alerts');
+            const alert = document.createElement('div');
+            alert.className = `alert ${level}`;
+            alert.innerHTML = `
+                <div class="alert-title">${title}</div>
+                <div>${message}</div>
+            `;
+            alertsDiv.appendChild(alert);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => alert.remove(), 10000);
+        }
+
+        function updateUI() {
+            const status = budgetManager.getStatus();
+            
+            // Update daily metrics
+            document.getElementById('daily-tokens-used').textContent = status.daily.tokens.used.toLocaleString();
+            document.getElementById('daily-tokens-limit').textContent = `of ${status.daily.tokens.limit.toLocaleString()}`;
+            updateProgress('daily-tokens-progress', status.daily.tokens.percentage);
+            
+            document.getElementById('daily-cost-used').textContent = `$${status.daily.cost.used.toFixed(2)}`;
+            document.getElementById('daily-cost-limit').textContent = `of $${status.daily.cost.limit.toFixed(2)}`;
+            updateProgress('daily-cost-progress', status.daily.cost.percentage);
+            
+            document.getElementById('daily-requests').textContent = status.daily.requests.toLocaleString();
+            
+            // Update weekly metrics
+            document.getElementById('weekly-tokens-used').textContent = status.weekly.tokens.used.toLocaleString();
+            document.getElementById('weekly-tokens-limit').textContent = `of ${status.weekly.tokens.limit.toLocaleString()}`;
+            updateProgress('weekly-tokens-progress', status.weekly.tokens.percentage);
+            
+            document.getElementById('weekly-cost-used').textContent = `$${status.weekly.cost.used.toFixed(2)}`;
+            document.getElementById('weekly-cost-limit').textContent = `of $${status.weekly.cost.limit.toFixed(2)}`;
+            updateProgress('weekly-cost-progress', status.weekly.cost.percentage);
+            
+            document.getElementById('weekly-requests').textContent = status.weekly.requests.toLocaleString();
+            
+            // Update history
+            updateHistory();
+        }
+
+        function updateProgress(elementId, percentage) {
+            const element = document.getElementById(elementId);
+            const percent = parseFloat(percentage);
+            element.style.width = `${Math.min(percent, 100)}%`;
+            
+            // Update color based on threshold
+            element.className = 'progress-fill';
+            if (percent >= 90) {
+                element.classList.add('critical');
+            } else if (percent >= 75) {
+                element.classList.add('warning');
+            }
+        }
+
+        function updateHistory() {
+            const history = budgetManager.getHistory('daily', 7);
+            const tbody = document.getElementById('history-body');
+            
+            if (history.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #8d8d8d;">No history data</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = history.map(day => {
+                const status = day.cost > 8 ? 'critical' : day.cost > 6 ? 'warning' : 'ok';
+                return `
+                    <tr>
+                        <td>${day.period}</td>
+                        <td>${day.tokens.toLocaleString()}</td>
+                        <td>$${day.cost.toFixed(2)}</td>
+                        <td>${day.requests}</td>
+                        <td><span class="status-badge ${status}">${status}</span></td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateConfig() {
+            const config = {
+                dailyTokenLimit: parseInt(document.getElementById('daily-token-limit').value),
+                dailyCostLimit: parseFloat(document.getElementById('daily-cost-limit').value),
+                weeklyTokenLimit: parseInt(document.getElementById('weekly-token-limit').value),
+                weeklyCostLimit: parseFloat(document.getElementById('weekly-cost-limit').value),
+                enforceHardLimits: document.getElementById('enforce-limits').checked
+            };
+            
+            budgetManager.updateConfig(config);
+            updateUI();
+            showAlert('ok', 'Configuration Updated', 'Budget limits have been updated successfully');
+        }
+
+        function resetBudget() {
+            if (confirm('Are you sure you want to reset the budget? This will clear all current usage data.')) {
+                budgetManager.reset();
+                updateUI();
+                showAlert('ok', 'Budget Reset', 'All usage data has been cleared');
+            }
+        }
+
+        // Update UI every 5 seconds
+        setInterval(updateUI, 5000);
+        
+        // Initial update
+        updateUI();
+    </script>
+</body>
+</html>
