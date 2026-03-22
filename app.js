@@ -8305,8 +8305,7 @@ let signalFeedFilters = {
     market: 'ALL',
     client: 'ALL',
     signalType: 'ALL',
-    priority: 'all',      // all, high, strategic, tactical
-    sortBy: 'relevance'   // relevance, threat, strategic, date
+    priority: 'all'      // all, high, strategic, tactical
 };
 
 // Store enriched articles for filtering
@@ -8602,55 +8601,30 @@ function renderSignalFeed() {
         }
     });
     
-    // Sort within each group based on selected sort option
+    // Sort within each group: intelligence threat/opportunity first, then action items, then relevance
     Object.keys(grouped).forEach(key => {
         grouped[key].sort((a, b) => {
-            switch (signalFeedFilters.sortBy) {
-                case 'threat':
-                    // Sort by threat level (highest first)
-                    const aThreat = a.intelligence?.threatLevel || 0;
-                    const bThreat = b.intelligence?.threatLevel || 0;
-                    if (aThreat !== bThreat) return bThreat - aThreat;
-                    // Fallback to relevance
-                    return (b.relevanceScore || 0) - (a.relevanceScore || 0);
-                
-                case 'strategic':
-                    // Sort by strategic score (opportunity + innovation)
-                    const aStrategic = (a.intelligence?.opportunityScore || 0) +
-                                      (a.intelligence?.technologies?.length || 0) * 10;
-                    const bStrategic = (b.intelligence?.opportunityScore || 0) +
-                                      (b.intelligence?.technologies?.length || 0) * 10;
-                    if (aStrategic !== bStrategic) return bStrategic - aStrategic;
-                    // Fallback to relevance
-                    return (b.relevanceScore || 0) - (a.relevanceScore || 0);
-                
-                case 'date':
-                    // Sort by date (newest first)
-                    const aDate = new Date(a.date || a.publishedDate || 0);
-                    const bDate = new Date(b.date || b.publishedDate || 0);
-                    return bDate - aDate;
-                
-                case 'relevance':
-                default:
-                    // Default: intelligence threat/opportunity first, then action items, then relevance
-                    const aThreatRel = a.intelligence?.threatLevel || 0;
-                    const bThreatRel = b.intelligence?.threatLevel || 0;
-                    if (aThreatRel >= 80 || bThreatRel >= 80) {
-                        if (aThreatRel !== bThreatRel) return bThreatRel - aThreatRel;
-                    }
-                    
-                    const aOpp = a.intelligence?.opportunityScore || 0;
-                    const bOpp = b.intelligence?.opportunityScore || 0;
-                    if (aOpp >= 70 || bOpp >= 70) {
-                        if (aOpp !== bOpp) return bOpp - aOpp;
-                    }
-                    
-                    const aUrgent = a.actionType === 'ESCALATE' ? 2 : a.actionType === 'BRIEF_ATL' ? 1 : 0;
-                    const bUrgent = b.actionType === 'ESCALATE' ? 2 : b.actionType === 'BRIEF_ATL' ? 1 : 0;
-                    if (aUrgent !== bUrgent) return bUrgent - aUrgent;
-                    
-                    return (b.relevanceScore || 0) - (a.relevanceScore || 0);
+            // Priority 1: Intelligence threat level (high threats first)
+            const aThreat = a.intelligence?.threatLevel || 0;
+            const bThreat = b.intelligence?.threatLevel || 0;
+            if (aThreat >= 80 || bThreat >= 80) {
+                if (aThreat !== bThreat) return bThreat - aThreat;
             }
+            
+            // Priority 2: Intelligence opportunity score
+            const aOpp = a.intelligence?.opportunityScore || 0;
+            const bOpp = b.intelligence?.opportunityScore || 0;
+            if (aOpp >= 70 || bOpp >= 70) {
+                if (aOpp !== bOpp) return bOpp - aOpp;
+            }
+            
+            // Priority 3: Action items
+            const aUrgent = a.actionType === 'ESCALATE' ? 2 : a.actionType === 'BRIEF_ATL' ? 1 : 0;
+            const bUrgent = b.actionType === 'ESCALATE' ? 2 : b.actionType === 'BRIEF_ATL' ? 1 : 0;
+            if (aUrgent !== bUrgent) return bUrgent - aUrgent;
+            
+            // Priority 4: Relevance score
+            return (b.relevanceScore || 0) - (a.relevanceScore || 0);
         });
     });
     
@@ -8986,7 +8960,7 @@ function filterByClient(clientName) {
 }
 
 // =============================================
-// View Options: Priority Filter & Sort
+// View Options: Priority Filter
 // =============================================
 
 function filterByPriority(priority) {
@@ -9001,11 +8975,6 @@ function filterByPriority(priority) {
         }
     });
     
-    renderSignalFeed();
-}
-
-function sortSignalFeed(sortBy) {
-    signalFeedFilters.sortBy = sortBy;
     renderSignalFeed();
 }
 

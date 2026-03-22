@@ -101,30 +101,21 @@
                         <span class="chevron collapsed">▼</span>
                     </div>
                     <div id="signal-feed-content" class="card-body collapsed">
-                        <!-- View Options: Priority Filters + Sort -->
+                        <!-- View Options: Priority Filters -->
                         <div class="view-options-container">
                             <div class="priority-filters">
                                 <button class="priority-filter-btn active" data-priority="all" onclick="filterByPriority('all')">
                                     All
                                 </button>
                                 <button class="priority-filter-btn" data-priority="high" onclick="filterByPriority('high')">
-                                    High Priority
+                                    High
                                 </button>
                                 <button class="priority-filter-btn" data-priority="strategic" onclick="filterByPriority('strategic')">
-                                    Strategic Only
+                                    Strategic
                                 </button>
                                 <button class="priority-filter-btn" data-priority="tactical" onclick="filterByPriority('tactical')">
-                                    Tactical Only
+                                    Tactical
                                 </button>
-                            </div>
-                            <div class="sort-options">
-                                <label for="signal-sort-select" class="sort-label">Sort by:</label>
-                                <select id="signal-sort-select" class="sort-select" onchange="sortSignalFeed(this.value)">
-                                    <option value="relevance">Relevance</option>
-                                    <option value="threat">Threat Level</option>
-                                    <option value="strategic">Strategic Score</option>
-                                    <option value="date">Date</option>
-                                </select>
                             </div>
                         </div>
                         
