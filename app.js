@@ -8225,7 +8225,7 @@ function cacheSignals(signals, rawSignals) {
 }
 
 // ==========================================
-// ACTION REQUIRED - Urgent items at top
+// ACTION REQUIRED - 3-Tier Priority System
 // ==========================================
 
 function renderActionRequired() {
@@ -8248,42 +8248,117 @@ function renderActionRequired() {
         console.log('Action required cache read error:', e);
     }
     
-    // Filter for urgent action types: ESCALATE and BRIEF_ATL
-    const urgentSignals = signals
-        .map((signal, idx) => ({ signal, articleData: articlesData[idx] }))
-        .filter(({ signal }) => signal.actionType === 'ESCALATE' || signal.actionType === 'BRIEF_ATL');
+    // Get This Week's Context for meeting detection
+    const weekContext = app.settings?.thisWeekContext || '';
+    const contextLower = weekContext.toLowerCase();
     
-    if (urgentSignals.length === 0) {
+    // Helper: Check if signal is related to This Week's Context
+    const isContextRelated = (signal) => {
+        if (!weekContext) return false;
+        
+        const searchText = `${signal.headline} ${signal.context} ${signal.action}`.toLowerCase();
+        
+        // Check for client mentions
+        const clients = app.clients || [];
+        for (const client of clients) {
+            const clientName = client.name.toLowerCase();
+            if (contextLower.includes(clientName) && searchText.includes(clientName)) {
+                return true;
+            }
+        }
+        
+        // Check for market mentions
+        const markets = ['anz', 'asean', 'gcg', 'isa', 'korea', 'australia', 'singapore', 'hong kong', 'india'];
+        for (const market of markets) {
+            if (contextLower.includes(market) && searchText.includes(market)) {
+                return true;
+            }
+        }
+        
+        // Check for keyword overlap (at least 2 significant words)
+        const contextWords = contextLower.split(/\s+/).filter(w => w.length > 4);
+        const signalWords = searchText.split(/\s+/).filter(w => w.length > 4);
+        const matches = contextWords.filter(w => signalWords.includes(w));
+        
+        return matches.length >= 2;
+    };
+    
+    // Group signals by priority tier and mark context-related ones
+    const allSignals = signals.map((signal, idx) => ({
+        signal,
+        articleData: articlesData[idx],
+        isContextRelated: isContextRelated(signal)
+    }));
+    
+    // Sort within each tier: context-related first
+    const sortByContext = (a, b) => {
+        if (a.isContextRelated && !b.isContextRelated) return -1;
+        if (!a.isContextRelated && b.isContextRelated) return 1;
+        return 0;
+    };
+    
+    const criticalSignals = allSignals
+        .filter(({ signal }) => signal.actionType === 'ESCALATE')
+        .sort(sortByContext);
+    
+    const highSignals = allSignals
+        .filter(({ signal }) => signal.actionType === 'BRIEF_ATL' || signal.actionType === 'POSITION')
+        .sort(sortByContext);
+    
+    const watchSignals = allSignals
+        .filter(({ signal }) => signal.actionType === 'MONITOR' || !signal.actionType)
+        .sort(sortByContext);
+    
+    const totalCount = criticalSignals.length + highSignals.length + watchSignals.length;
+    
+    if (totalCount === 0) {
         section.classList.add('hidden');
         return;
     }
     
     section.classList.remove('hidden');
-    countEl.textContent = urgentSignals.length;
+    countEl.textContent = totalCount;
     
-    list.innerHTML = urgentSignals.map(({ signal, articleData }) => {
+    // Helper function to render a signal item
+    const renderSignalItem = ({ signal, articleData, isContextRelated }) => {
         const articles = articleData?.articles || [];
         const sourcesHtml = articles.length > 0
             ? articles.map(a => `<a class="action-source-link" href="${a.url || '#'}" target="_blank">${escapeHtml(a.title)}</a> <span class="action-source-name">(${escapeHtml(a.source || 'Source')})</span>`).join('<br>')
             : '';
         
-        const isEscalate = signal.actionType === 'ESCALATE';
-        const icon = isEscalate ? '🚨' : '📢';
-        const label = isEscalate ? 'ESCALATE' : 'BRIEF ATL';
-        const cssClass = isEscalate ? 'action-escalate' : 'action-brief';
+        // Action type styling
+        const actionStyles = {
+            'ESCALATE': { icon: '🚨', label: 'ESCALATE', class: 'action-escalate' },
+            'BRIEF_ATL': { icon: '📢', label: 'BRIEF ATL', class: 'action-brief' },
+            'POSITION': { icon: '🎯', label: 'POSITION', class: 'action-position' },
+            'MONITOR': { icon: '👁️', label: 'MONITOR', class: 'action-monitor' }
+        };
+        const style = actionStyles[signal.actionType] || actionStyles['MONITOR'];
+        
+        // Meeting prep badge if context-related
+        const meetingBadge = isContextRelated && weekContext
+            ? `<span class="action-meeting-badge">🎯 MEETING PREP</span>`
+            : '';
         
         // Markets affected
         const marketsHtml = (signal.affectedMarkets || []).length > 0
             ? signal.affectedMarkets.map(m => `<span class="action-market-tag">${m}</span>`).join(' ')
             : '';
         
+        // Context note if related to This Week's Context
+        const contextNote = isContextRelated && weekContext
+            ? `<div class="action-context-note">📅 <strong>Related to:</strong> ${escapeHtml(weekContext.substring(0, 100))}${weekContext.length > 100 ? '...' : ''}</div>`
+            : '';
+        
         return `
-            <div class="action-required-item ${cssClass}">
+            <div class="action-required-item ${style.class} ${isContextRelated ? 'context-related' : ''}">
                 <div class="action-required-header">
-                    <span class="action-required-badge ${cssClass}">${icon} ${label}</span>
+                    <span class="action-required-badge ${style.class}">${style.icon} ${style.label}</span>
+                    ${meetingBadge}
                     ${marketsHtml}
                 </div>
                 <div class="action-required-headline">${escapeHtml(signal.headline)}</div>
+                ${contextNote}
                 <div class="action-required-context">${escapeHtml(signal.context || '')}</div>
                 <div class="action-required-action">
                     <strong>→ Action:</strong> ${escapeHtml(signal.action || '')}
@@ -8293,7 +8368,85 @@ function renderActionRequired() {
                 ${sourcesHtml ? `<div class="action-required-sources">${sourcesHtml}</div>` : ''}
             </div>
         `;
-    }).join('');
+    };
+    
+    // Build HTML with collapsible sections
+    let html = '';
+    
+    // CRITICAL Section (ESCALATE) - Always expanded
+    if (criticalSignals.length > 0) {
+        html += `
+            <div class="action-priority-section critical">
+                <div class="action-priority-header" onclick="toggleActionSection('critical')">
+                    <span class="action-priority-icon">🚨</span>
+                    <span class="action-priority-title">CRITICAL</span>
+                    <span class="action-priority-subtitle">Action within 48 hours</span>
+                    <span class="action-priority-count">${criticalSignals.length}</span>
+                    <span class="action-priority-toggle">▼</span>
+                </div>
+                <div class="action-priority-content expanded">
+                    ${criticalSignals.map(renderSignalItem).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // HIGH Section (BRIEF_ATL + POSITION) - Collapsed by default
+    if (highSignals.length > 0) {
+        html += `
+            <div class="action-priority-section high">
+                <div class="action-priority-header" onclick="toggleActionSection('high')">
+                    <span class="action-priority-icon">⚡</span>
+                    <span class="action-priority-title">HIGH</span>
+                    <span class="action-priority-subtitle">Brief team / Develop positioning</span>
+                    <span class="action-priority-count">${highSignals.length}</span>
+                    <span class="action-priority-toggle">▶</span>
+                </div>
+                <div class="action-priority-content collapsed">
+                    ${highSignals.map(renderSignalItem).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // WATCH Section (MONITOR) - Collapsed by default
+    if (watchSignals.length > 0) {
+        html += `
+            <div class="action-priority-section watch">
+                <div class="action-priority-header" onclick="toggleActionSection('watch')">
+                    <span class="action-priority-icon">👁️</span>
+                    <span class="action-priority-title">WATCH</span>
+                    <span class="action-priority-subtitle">Track for escalation</span>
+                    <span class="action-priority-count">${watchSignals.length}</span>
+                    <span class="action-priority-toggle">▶</span>
+                </div>
+                <div class="action-priority-content collapsed">
+                    ${watchSignals.map(renderSignalItem).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    list.innerHTML = html;
+}
+
+// Toggle action section expand/collapse
+function toggleActionSection(sectionType) {
+    const section = document.querySelector(`.action-priority-section.${sectionType}`);
+    if (!section) return;
+    
+    const content = section.querySelector('.action-priority-content');
+    const toggle = section.querySelector('.action-priority-toggle');
+    
+    if (content.classList.contains('collapsed')) {
+        content.classList.remove('collapsed');
+        content.classList.add('expanded');
+        toggle.textContent = '▼';
+    } else {
+        content.classList.remove('expanded');
+        content.classList.add('collapsed');
+        toggle.textContent = '▶';
+    }
 }
 
 // ==========================================
@@ -8689,9 +8842,16 @@ function renderSignalFeedItem(article) {
         `<span class="signal-feed-tag market">${m}</span>`
     ).join('');
     
-    // Action tag if applicable
-    const actionTag = article.actionType 
-        ? `<span class="signal-feed-tag action action-${article.actionType === 'ESCALATE' ? 'escalate' : 'brief'}">${article.actionType === 'ESCALATE' ? '🚨 ESCALATE' : '📢 BRIEF ATL'}</span>`
+    // Action tag if applicable (all 4 types)
+    const actionTagMap = {
+        'ESCALATE': { class: 'escalate', label: '🚨 ESCALATE' },
+        'BRIEF_ATL': { class: 'brief', label: '📢 BRIEF ATL' },
+        'POSITION': { class: 'position', label: '🎯 POSITION' },
+        'MONITOR': { class: 'monitor', label: '👁️ MONITOR' }
+    };
+    const actionInfo = actionTagMap[article.actionType];
+    const actionTag = actionInfo
+        ? `<span class="signal-feed-tag action action-${actionInfo.class}">${actionInfo.label}</span>`
         : '';
     
     // Summary text (prefer context from signal synthesis)
