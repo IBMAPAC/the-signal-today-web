@@ -7562,7 +7562,9 @@ RULES:
 - Each insight must reference at least 2 articles
 - ONE insight should address competitive positioning
 - ONE insight should be actionable THIS WEEK
-- Be specific about APAC markets when relevant`;
+- Be specific about APAC markets when relevant
+- DO NOT include article numbers (like "article 7" or "article 5") in the headline or synthesis text
+- The synthesis should read naturally without referencing article numbers`;
 
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
