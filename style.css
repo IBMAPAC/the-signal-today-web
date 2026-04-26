@@ -1395,6 +1395,42 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
     }
 }
 
+/* Intelligence client context - YOUR client flag */
+.signal-intelligence-client-context {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(255, 107, 107, 0.15);
+    border-left: 4px solid #ff6b6b;
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--cds-text-primary);
+    font-weight: 600;
+}
+
+.signal-intelligence-client-context strong {
+    color: #ff6b6b;
+}
+
+/* Intelligence "So What?" - Why it matters */
+.signal-intelligence-sowhat {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: rgba(255, 193, 7, 0.12);
+    border-left: 4px solid #ffc107;
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--cds-text-primary);
+}
+
+.signal-intelligence-sowhat strong {
+    color: #ffc107;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 6px;
+}
+
 /* Intelligence reasoning and actions */
 .signal-intelligence-reasoning {
     margin-top: 12px;
@@ -1404,7 +1440,7 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
     border-radius: 4px;
     font-size: 13px;
     line-height: 1.5;
-    color: #2c3e50;
+    color: var(--cds-text-secondary);
 }
 
 .signal-intelligence-reasoning strong {
@@ -1420,7 +1456,7 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
     border-radius: 4px;
     font-size: 13px;
     line-height: 1.5;
-    color: #2c3e50;
+    color: var(--cds-text-secondary);
 }
 
 .signal-intelligence-actions strong {

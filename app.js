@@ -8899,14 +8899,18 @@ function renderSignalFeedItem(article) {
             
             ${article.intelligence ? renderIntelligenceBadges(article.intelligence) : ''}
             
+            ${article.intelligence?.clientContext ? `<div class="signal-intelligence-client-context"><strong>🎯 ${escapeHtml(article.intelligence.clientContext)}</strong></div>` : ''}
+            
+            ${article.intelligence?.soWhat ? `<div class="signal-intelligence-sowhat"><strong>💡 Why This Matters:</strong> ${escapeHtml(article.intelligence.soWhat)}</div>` : ''}
+            
             ${article.intelligence?.reasoning ? `<div class="signal-intelligence-reasoning"><strong>Analysis:</strong> ${escapeHtml(article.intelligence.reasoning)}</div>` : ''}
             
             ${article.intelligence?.actionableInsights?.length > 0 ? `
                 <div class="signal-intelligence-actions">
-                    <strong>Actions:</strong>
+                    <strong>📋 Actions:</strong>
                     <ul>
                         ${article.intelligence.actionableInsights.map(insight =>
-                            `<li>${escapeHtml(insight)}</li>`
+                            `<li>${escapeHtml(typeof insight === 'string' ? insight : insight.action || insight)}</li>`
                         ).join('')}
                     </ul>
                 </div>
