@@ -1799,7 +1799,28 @@ YOUR MANAGED CLIENTS (with tier/market/industry): ${enhancedClientList}
 
 IMPORTANT: If article mentions any of YOUR clients above, flag with "YOUR Tier X client" in clientContext field for immediate attention.
 
-Analyze this article using the framework above. Remember: ONLY suggest clients that match BOTH industry AND geography.`;
+Analyze this article using the framework above. Remember: ONLY suggest clients that match BOTH industry AND geography.
+
+CRITICAL OUTPUT FORMAT (must follow exactly):
+{
+  "threatLevel": 85,
+  "opportunityScore": 20,
+  "confidence": 0.95,
+  "waveClassification": "AI_WAVE",
+  "pillarMapping": "Foundation",
+  "reasoning": "One sentence",
+  "soWhat": "2-3 sentences",
+  "actionableInsights": ["Action 1", "Action 2"],
+  "affectedClients": ["Client"],
+  "affectedMarkets": ["Market"],
+  "competitorActivity": "Brief",
+  "clientContext": "YOUR Tier X client or empty"
+}
+
+RULES:
+- waveClassification MUST be: "AI_WAVE" or "SOVEREIGNTY_WAVE" or "BOTH" (NO BRACKETS!)
+- pillarMapping MUST be: "Foundation" or "Pillar_1" or "Pillar_2" or "Pillar_3"
+- Return ONLY valid JSON, no markdown, no code blocks`;
     }
 
     /**
