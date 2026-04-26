@@ -490,6 +490,7 @@ class HybridIntelligenceEngine {
         }
         
         return { ...article, intelligence: analysis };
+    }
 
     /**
      * PHASE 2 TASK 2.1: Batch Processing
@@ -776,7 +777,6 @@ Return a JSON array with ${articles.length} objects, one for each article in ord
             console.error('Failed to parse batch response:', error);
             throw new Error(`Batch response parsing failed: ${error.message}`);
         }
-    }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -1675,6 +1675,7 @@ Return a JSON array with ${articles.length} objects, one for each article in ord
             console.error('Semantic analysis failed:', error);
             throw error;
         }
+    }
 
     /**
      * PHASE 2 TASK 2.3: Get static system prompt for caching
@@ -1828,7 +1829,6 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                 }
             ]
         };
-    }
     }
 
     /**
