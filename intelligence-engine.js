@@ -1744,29 +1744,28 @@ ANALYSIS FRAMEWORK:
    - MEDIUM: Act within 90 days (strategic positioning, relationship building)
    - LOW: Monitor (background intelligence, long-term trends)
 
-OUTPUT FORMAT (JSON only):
+OUTPUT FORMAT (strict JSON, no markdown):
 {
-  "threatLevel": 0-100,
-  "opportunityScore": 0-100,
+  "threatLevel": 85,
+  "opportunityScore": 20,
   "confidence": 0.95,
-  "waveClassification": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
-  "pillarMapping": "Foundation" | "Pillar 1" | "Pillar 2" | "Pillar 3",
-  "reasoning": "One-sentence strategic context: what this signals for IBM APAC and why it matters NOW (no client names here—use actionableInsights for that)",
-  "soWhat": "2-3 sentences explaining WHY this matters to the Field CTO and WHAT it means for IBM's position. Connect event → impact → opportunity/threat. Be specific about timing and stakes.",
-  "actionableInsights": [
-    {
-      "action": "Specific action with client/product/timeframe framed as 'Why Change'",
-      "urgency": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
-      "timeline": "Within 7 days" | "Within 30 days" | "Within 90 days" | "Monitor",
-      "ibmAngle": "Specific IBM product/solution positioning",
-      "context": "Why this action matters now (renewal date, competitive window, etc.)"
-    }
-  ],
-  "affectedClients": [],
-  "affectedMarkets": [],
-  "competitorActivity": "Brief—name competitor, their move, IBM counter-position",
-  "clientContext": "If article mentions YOUR managed clients, flag with 'YOUR Tier X client' for immediate attention"
-}`;
+  "waveClassification": "[AI WAVE]",
+  "pillarMapping": "Foundation",
+  "reasoning": "One-sentence strategic context",
+  "soWhat": "2-3 sentences explaining WHY this matters and WHAT to do. Connect event to impact to action.",
+  "actionableInsights": ["Action 1 with urgency and timeline", "Action 2 with urgency and timeline"],
+  "affectedClients": ["ClientName"],
+  "affectedMarkets": ["ASEAN"],
+  "competitorActivity": "Competitor move and IBM counter",
+  "clientContext": "YOUR Tier 1 client if applicable"
+}
+
+IMPORTANT:
+- Return ONLY the JSON object above
+- No markdown code blocks
+- No explanations outside JSON
+- Use simple string arrays for actionableInsights (not nested objects)
+- Keep all text fields concise to avoid JSON parsing errors`;
     }
 
     /**
@@ -2012,10 +2011,37 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                 try {
                     analysis = JSON.parse(jsonStr);
                 } catch (parseError) {
-                    console.error(`${this.provider} JSON parse error at position ${parseError.message}`);
-                    console.error('Problematic JSON substring:', jsonStr.substring(Math.max(0, 280), 320));
-                    console.error('Full JSON (first 500 chars):', jsonStr.substring(0, 500));
-                    throw new Error(`JSON parse failed: ${parseError.message}`);
+                    console.error(`${this.provider} JSON parse error:`, parseError.message);
+                    
+                    // Try to identify the problematic area
+                    const errorMatch = parseError.message.match(/position (\d+)/);
+                    if (errorMatch) {
+                        const pos = parseInt(errorMatch[1]);
+                        const start = Math.max(0, pos - 100);
+                        const end = Math.min(jsonStr.length, pos + 100);
+                        console.error('Context around error position:', jsonStr.substring(start, end));
+                        console.error('Error at character:', jsonStr[pos]);
+                    }
+                    
+                    // Try to fix common JSON issues
+                    console.warn('Attempting to fix common JSON issues...');
+                    try {
+                        // Remove trailing commas
+                        let fixedJson = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+                        // Fix unescaped quotes in strings
+                        fixedJson = fixedJson.replace(/: "([^"]*)"([^,}\]]*)/g, (match, p1, p2) => {
+                            if (p2 && !p2.match(/^\s*[,}\]]/)) {
+                                return `: "${p1}\\"${p2}`;
+                            }
+                            return match;
+                        });
+                        analysis = JSON.parse(fixedJson);
+                        console.warn('Successfully fixed JSON!');
+                    } catch (fixError) {
+                        console.error('Could not auto-fix JSON');
+                        console.error('Full JSON (first 1000 chars):', jsonStr.substring(0, 1000));
+                        throw new Error(`JSON parse failed: ${parseError.message}`);
+                    }
                 }
                 
                 // Handle array response (some models might return array instead of object)
@@ -2032,16 +2058,42 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                     this.budgetManager.recordUsage(actualTokens, actualCost);
                 }
                 
+                // Normalize actionableInsights to handle both old and new formats
+                let normalizedInsights = analysis.actionableInsights || [];
+                if (normalizedInsights.length > 0) {
+                    // If first element is a string (old format), keep as is
+                    // If first element is an object (new format), keep as is
+                    // This provides backward compatibility
+                    if (typeof normalizedInsights[0] === 'string') {
+                        // Old format: array of strings
+                        normalizedInsights = normalizedInsights;
+                    } else if (typeof normalizedInsights[0] === 'object') {
+                        // New format: array of objects with action, urgency, timeline, etc.
+                        // Validate structure
+                        normalizedInsights = normalizedInsights.map(insight => ({
+                            action: insight.action || insight,
+                            urgency: insight.urgency || 'MEDIUM',
+                            timeline: insight.timeline || 'Within 30 days',
+                            ibmAngle: insight.ibmAngle || '',
+                            context: insight.context || ''
+                        }));
+                    }
+                }
+                
                 // Success! Return the result with model tier info
                 return {
                     threatLevel: analysis.threatLevel || 0,
                     opportunityScore: analysis.opportunityScore || 0,
                     confidence: analysis.confidence || 0.95,
                     reasoning: analysis.reasoning || '',
-                    actionableInsights: analysis.actionableInsights || [],
+                    soWhat: analysis.soWhat || analysis.reasoning || '',
+                    actionableInsights: normalizedInsights,
                     affectedClients: analysis.affectedClients || [],
                     affectedMarkets: analysis.affectedMarkets || [],
                     competitorActivity: analysis.competitorActivity || '',
+                    clientContext: analysis.clientContext || '',
+                    waveClassification: analysis.waveClassification || '',
+                    pillarMapping: analysis.pillarMapping || '',
                     relatedArticles: relatedArticles.map(a => a.id),
                     // PHASE 2 TASK 2.2: Add model tier information
                     modelTier: modelTier,
