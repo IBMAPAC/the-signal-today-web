@@ -1996,12 +1996,14 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                 jsonStr = jsonStr.replace(/\n/g, ' ').replace(/\r/g, '');
                 
                 // FIX: Sanitize problematic values that AI returns with brackets
-                // Replace "[AI WAVE]", "[SOVEREIGNTY WAVE]", "[BOTH]" with proper strings
-                jsonStr = jsonStr.replace(/"\[AI WAVE\]"/gi, '"AI_WAVE"');
-                jsonStr = jsonStr.replace(/"\[SOVEREIGNTY WAVE\]"/gi, '"SOVEREIGNTY_WAVE"');
-                jsonStr = jsonStr.replace(/"\[SOVEREIGNTY\]"/gi, '"SOVEREIGNTY_WAVE"');
-                jsonStr = jsonStr.replace(/"\[BOTH\]"/gi, '"BOTH"');
-                jsonStr = jsonStr.replace(/"\[NEITHER\]"/gi, '"NEITHER"');
+                // Use comprehensive regex to catch all bracketed enum values
+                // Pattern: "[ANYTHING]" -> "ANYTHING" (remove brackets from quoted strings)
+                jsonStr = jsonStr.replace(/"(\[)([A-Z_\s]+)(\])"/g, '"$2"');
+                
+                // Normalize common variations
+                jsonStr = jsonStr.replace(/"AI WAVE"/gi, '"AI_WAVE"');
+                jsonStr = jsonStr.replace(/"SOVEREIGNTY WAVE"/gi, '"SOVEREIGNTY_WAVE"');
+                jsonStr = jsonStr.replace(/"SOVEREIGN"/gi, '"SOVEREIGNTY_WAVE"');
                 
                 // Remove any text after the last closing bracket
                 const lastBracket = Math.max(jsonStr.lastIndexOf('}'), jsonStr.lastIndexOf(']'));

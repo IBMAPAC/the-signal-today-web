@@ -1644,40 +1644,8 @@ class SignalApp {
             // Categorize into daily/weekly
             this.categorizeArticles();
             
-            // Generate AI digest if API key available (skip in quick mode)
-            const settings = getAIProviderSettings();
-            const apiKey = settings.apiKeys[settings.provider];
-            if (apiKey && !quickMode) {
-                // Phase 7: compute article fingerprint to detect new articles since last digest
-                const fingerprint = this.computeArticleFingerprint(this.dailyArticles);
-                const cachedFingerprint = this.digest?.articleFingerprint;
-                const cachedContext = this.digest?.thisWeekContext;
-                const contextChanged = this.settings.thisWeekContext !== (cachedContext || '');
-
-                if (cachedFingerprint && fingerprint === cachedFingerprint && !contextChanged) {
-                    // No new articles and context unchanged — reuse cached digest
-                    console.log('💾 Digest cache hit — no new articles, skipping API call');
-                    this.showLoading('✅ Digest up to date (no new articles)');
-                    // digest already loaded from IDB in init(); nothing to do
-                } else {
-                    // Identify new articles not seen in the last digest
-                    const cachedIds = new Set(this.digest?.seenArticleIds || []);
-                    const newArticles = this.dailyArticles.filter(a => !cachedIds.has(a.id));
-                    const newCount = newArticles.length;
-
-                    if (cachedFingerprint && newCount > 0 && newCount < 8 && !contextChanged) {
-                        // Delta mode: only a few new articles — merge into existing digest
-                        console.log(`🔄 Delta refresh: ${newCount} new articles → merging into existing digest`);
-                        this.showLoading(`Updating digest with ${newCount} new articles...`);
-                        await this.mergeDeltaDigest(apiKey, newArticles);
-                    } else {
-                        // Full regeneration: first run, many new articles, or context changed
-                        console.log(`🤖 Full digest generation (${newCount} new articles, contextChanged=${contextChanged})`);
-                        this.showLoading('Generating AI-powered digest...');
-                        await this.generateAIDigest(apiKey);
-                    }
-                }
-            } else {
+            // Use cached digest or create basic digest (don't block on AI generation)
+            if (!this.digest) {
                 this.digest = this.createBasicDigest();
             }
             
@@ -1702,6 +1670,47 @@ class SignalApp {
             
             const totalTime = Math.round(performance.now() - startTime);
             console.log(`✅ Refresh completed in ${totalTime}ms`);
+            
+            // Generate AI digest AFTER UI render (async, non-blocking)
+            const settings = getAIProviderSettings();
+            const apiKey = settings.apiKeys[settings.provider];
+            if (apiKey && !quickMode) {
+                // Phase 7: compute article fingerprint to detect new articles since last digest
+                const fingerprint = this.computeArticleFingerprint(this.dailyArticles);
+                const cachedFingerprint = this.digest?.articleFingerprint;
+                const cachedContext = this.digest?.thisWeekContext;
+                const contextChanged = this.settings.thisWeekContext !== (cachedContext || '');
+
+                if (cachedFingerprint && fingerprint === cachedFingerprint && !contextChanged) {
+                    // No new articles and context unchanged — reuse cached digest
+                    console.log('💾 Digest cache hit — no new articles, skipping API call');
+                } else {
+                    // Identify new articles not seen in the last digest
+                    const cachedIds = new Set(this.digest?.seenArticleIds || []);
+                    const newArticles = this.dailyArticles.filter(a => !cachedIds.has(a.id));
+                    const newCount = newArticles.length;
+
+                    if (cachedFingerprint && newCount > 0 && newCount < 8 && !contextChanged) {
+                        // Delta mode: only a few new articles — merge into existing digest
+                        console.log(`🔄 Delta refresh: ${newCount} new articles → merging into existing digest (background)`);
+                        this.mergeDeltaDigest(apiKey, newArticles)
+                            .then(() => {
+                                console.log('✅ Delta digest updated');
+                                this.renderDigest(true); // Re-render with new digest
+                            })
+                            .catch(err => console.warn('Delta digest failed:', err));
+                    } else {
+                        // Full regeneration: first run, many new articles, or context changed
+                        console.log(`🤖 Full digest generation (${newCount} new articles, contextChanged=${contextChanged}) (background)`);
+                        this.generateAIDigest(apiKey)
+                            .then(() => {
+                                console.log('✅ AI digest generated');
+                                this.renderDigest(true); // Re-render with new digest
+                            })
+                            .catch(err => console.warn('AI digest generation failed:', err));
+                    }
+                }
+            }
             
             // ENHANCEMENT 2: Generate weekly synthesis AFTER UI render (async, non-blocking)
             if (this.patternTracker && this.intelligenceEngine) {
