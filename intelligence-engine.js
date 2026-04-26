@@ -1995,6 +1995,14 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                 // Remove newlines and carriage returns for cleaner parsing
                 jsonStr = jsonStr.replace(/\n/g, ' ').replace(/\r/g, '');
                 
+                // FIX: Sanitize problematic values that AI returns with brackets
+                // Replace "[AI WAVE]", "[SOVEREIGNTY WAVE]", "[BOTH]" with proper strings
+                jsonStr = jsonStr.replace(/"\[AI WAVE\]"/gi, '"AI_WAVE"');
+                jsonStr = jsonStr.replace(/"\[SOVEREIGNTY WAVE\]"/gi, '"SOVEREIGNTY_WAVE"');
+                jsonStr = jsonStr.replace(/"\[SOVEREIGNTY\]"/gi, '"SOVEREIGNTY_WAVE"');
+                jsonStr = jsonStr.replace(/"\[BOTH\]"/gi, '"BOTH"');
+                jsonStr = jsonStr.replace(/"\[NEITHER\]"/gi, '"NEITHER"');
+                
                 // Remove any text after the last closing bracket
                 const lastBracket = Math.max(jsonStr.lastIndexOf('}'), jsonStr.lastIndexOf(']'));
                 if (lastBracket >= 0 && lastBracket < jsonStr.length - 1) {
@@ -2156,15 +2164,15 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                 budget: totalModelCalls > 0 ? (this.stats.modelUsage.budget / totalModelCalls * 100).toFixed(1) : 0
             },
             costs: {
-                premium: this.stats.modelCosts.premium.toFixed(4),
-                midTier: this.stats.modelCosts.midTier.toFixed(4),
-                budget: this.stats.modelCosts.budget.toFixed(4),
-                total: (this.stats.modelCosts.premium + this.stats.modelCosts.midTier + this.stats.modelCosts.budget).toFixed(4)
+                premium: (this.stats.modelCosts.premium || 0).toFixed(4),
+                midTier: (this.stats.modelCosts.midTier || 0).toFixed(4),
+                budget: (this.stats.modelCosts.budget || 0).toFixed(4),
+                total: ((this.stats.modelCosts.premium || 0) + (this.stats.modelCosts.midTier || 0) + (this.stats.modelCosts.budget || 0)).toFixed(4)
             },
             // Calculate savings vs using premium model for everything
             estimatedSavings: totalModelCalls > 0 ?
                 ((this.stats.modelUsage.midTier * 0.0015 + this.stats.modelUsage.budget * 0.0008) -
-                 (this.stats.modelCosts.midTier + this.stats.modelCosts.budget)).toFixed(4) : 0
+                 ((this.stats.modelCosts.midTier || 0) + (this.stats.modelCosts.budget || 0))).toFixed(4) : 0
         };
         
         // PHASE 2 TASK 2.3: Calculate prompt cache statistics

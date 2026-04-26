@@ -1681,41 +1681,55 @@ class SignalApp {
                 this.digest = this.createBasicDigest();
             }
             
-            // ENHANCEMENT 2: Generate daily summary for pattern tracking
+            // ENHANCEMENT 2: Generate daily summary for pattern tracking (synchronous)
             if (this.patternTracker && this.articles.length > 0) {
                 try {
                     console.log('📊 Generating daily pattern summary...');
                     this.patternTracker.addDailySummary(this.articles, this.clients);
                     
-                    // Generate weekly synthesis if we have enough data
-                    const last14Days = this.patternTracker.getLastNDays(14);
-                    if (last14Days.length >= 7 && this.intelligenceEngine) {
-                        // Check if we need to regenerate (once per day)
-                        const lastSynthesis = localStorage.getItem('signal_weekly_synthesis');
-                        const lastTimestamp = localStorage.getItem('signal_weekly_timestamp');
-                        const now = new Date();
-                        const lastDate = lastTimestamp ? new Date(lastTimestamp) : null;
-                        
-                        // Regenerate if no synthesis exists or it's from a different day
-                        if (!lastSynthesis || !lastDate || lastDate.toDateString() !== now.toDateString()) {
-                            console.log('🔄 Generating weekly pattern synthesis...');
-                            this.showLoading('Analyzing weekly patterns...');
-                            
-                            try {
-                                const synthesis = await this.intelligenceEngine.generateWeeklyPatternSynthesis(last14Days);
-                                localStorage.setItem('signal_weekly_synthesis', JSON.stringify(synthesis));
-                                localStorage.setItem('signal_weekly_timestamp', now.toISOString());
-                                console.log('✅ Weekly synthesis generated');
-                            } catch (error) {
-                                console.warn('Weekly synthesis failed:', error);
-                            }
-                        }
-                    }
-                    
-                    // Render weekly patterns section
+                    // Render weekly patterns section with cached data
                     renderWeeklyPatterns();
                 } catch (error) {
                     console.warn('Pattern tracking failed:', error);
+                }
+            }
+            
+            // Save and render FIRST (don't block on AI calls)
+            localStorage.setItem(STORAGE_KEYS.LAST_REFRESH, new Date().toISOString());
+            this.saveToStorage();
+            this.renderDigest(true);
+            this.updateUI();
+            
+            const totalTime = Math.round(performance.now() - startTime);
+            console.log(`✅ Refresh completed in ${totalTime}ms`);
+            
+            // ENHANCEMENT 2: Generate weekly synthesis AFTER UI render (async, non-blocking)
+            if (this.patternTracker && this.intelligenceEngine) {
+                const last14Days = this.patternTracker.getLastNDays(14);
+                if (last14Days.length >= 7) {
+                    // Check if we need to regenerate (once per day)
+                    const lastSynthesis = localStorage.getItem('signal_weekly_synthesis');
+                    const lastTimestamp = localStorage.getItem('signal_weekly_timestamp');
+                    const now = new Date();
+                    const lastDate = lastTimestamp ? new Date(lastTimestamp) : null;
+                    
+                    // Regenerate if no synthesis exists or it's from a different day
+                    if (!lastSynthesis || !lastDate || lastDate.toDateString() !== now.toDateString()) {
+                        console.log('🔄 Generating weekly pattern synthesis (background)...');
+                        
+                        // Run asynchronously without blocking
+                        this.intelligenceEngine.generateWeeklyPatternSynthesis(last14Days)
+                            .then(synthesis => {
+                                localStorage.setItem('signal_weekly_synthesis', JSON.stringify(synthesis));
+                                localStorage.setItem('signal_weekly_timestamp', now.toISOString());
+                                console.log('✅ Weekly synthesis generated');
+                                // Re-render patterns section with new synthesis
+                                renderWeeklyPatterns();
+                            })
+                            .catch(error => {
+                                console.warn('Weekly synthesis failed:', error);
+                            });
+                    }
                 }
             }
             
@@ -1725,15 +1739,6 @@ class SignalApp {
                     console.warn('Hypothesis generation failed:', err);
                 });
             }
-            
-            // Save and render (forceRefresh = true to regenerate AI synthesis)
-            localStorage.setItem(STORAGE_KEYS.LAST_REFRESH, new Date().toISOString());
-            this.saveToStorage();
-            this.renderDigest(true);
-            this.updateUI();
-            
-            const totalTime = Math.round(performance.now() - startTime);
-            console.log(`✅ Refresh completed in ${totalTime}ms`);
             
         } catch (error) {
             console.error('Refresh error:', error);
