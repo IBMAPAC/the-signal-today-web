@@ -1979,7 +1979,8 @@ RULES:
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 // PHASE 2 TASK 2.3: Use caching-aware request format
-                const requestBody = this.formatRequestWithCaching(selectedModel, 600, systemPrompt, userContent);
+                // Increased from 600 to 1200 tokens to accommodate enhanced response format with soWhat, actionableInsights, etc.
+                const requestBody = this.formatRequestWithCaching(selectedModel, 1200, systemPrompt, userContent);
                 
                 const response = await fetch(endpoint, {
                     method: 'POST',
