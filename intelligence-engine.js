@@ -490,7 +490,6 @@ class HybridIntelligenceEngine {
         }
         
         return { ...article, intelligence: analysis };
-    }
 
     /**
      * PHASE 2 TASK 2.1: Batch Processing
@@ -777,6 +776,7 @@ Return a JSON array with ${articles.length} objects, one for each article in ord
             console.error('Failed to parse batch response:', error);
             throw new Error(`Batch response parsing failed: ${error.message}`);
         }
+    }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -1675,7 +1675,6 @@ Return a JSON array with ${articles.length} objects, one for each article in ord
             console.error('Semantic analysis failed:', error);
             throw error;
         }
-    }
 
     /**
      * PHASE 2 TASK 2.3: Get static system prompt for caching
@@ -1714,7 +1713,7 @@ ANALYSIS FRAMEWORK:
    - Client signaling AI/sovereignty challenge = 75+
    - Market shift favoring IBM positioning = 70+
 
-3. WAVE CLASSIFICATION: Tag as AI_WAVE or SOVEREIGNTY_WAVE or BOTH
+3. WAVE CLASSIFICATION: Tag as [AI WAVE] or [SOVEREIGNTY WAVE] or [BOTH]
 
 4. PILLAR MAPPING: Which IBM pillar is most relevant?
    - Data readiness issue → Foundation
@@ -1732,46 +1731,18 @@ ANALYSIS FRAMEWORK:
    - Framed as "Why Change": Surface unconsidered needs, not just answer questions
    - Example: "Position watsonx.governance with [Client] before their Q2 audit deadline"
 
-7. DECISION WINDOW SCORING:
-   Assess when action is needed, not just if it's important.
-   
-   Score as:
-   - "ACT_NOW" (🔴 2 weeks or less):
-     * Client RFP/decision imminent
-     * Competitor about to close deal
-     * Regulatory deadline approaching
-     * Executive change/reorg happening now
-     * Time-sensitive partnership window
-     
-   - "THIS_QUARTER" (🟡 30-90 days):
-     * Budget cycle alignment
-     * Known evaluation timeline
-     * Regulatory implementation period
-     * Competitive positioning window
-     * Conference/event opportunity
-     
-   - "HORIZON" (🟢 6+ months):
-     * Market trend emerging
-     * Technology shift early stages
-     * Long-term competitive threat
-     * Strategic positioning for future
-     * Relationship building opportunity
-
 OUTPUT FORMAT (JSON only):
 {
   "threatLevel": 0-100,
   "opportunityScore": 0-100,
   "confidence": 0.95,
-  "waveClassification": "AI_WAVE" | "SOVEREIGNTY_WAVE" | "BOTH",
+  "waveClassification": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
   "pillarMapping": "Foundation" | "Pillar 1" | "Pillar 2" | "Pillar 3",
   "reasoning": "One-sentence strategic context: what this signals for IBM APAC and why it matters NOW (no client names here—use actionableInsights for that)",
   "actionableInsights": ["Specific action with client/product/timeframe framed as 'Why Change'"],
   "affectedClients": [],
   "affectedMarkets": [],
-  "competitorActivity": "Brief—name competitor, their move, IBM counter-position",
-  "decisionWindow": "ACT_NOW" | "THIS_QUARTER" | "HORIZON",
-  "windowReason": "Brief explanation of why this timing",
-  "windowExpiry": "Specific date (YYYY-MM-DD) or event that closes the window"
+  "competitorActivity": "Brief—name competitor, their move, IBM counter-position"
 }`;
     }
 
@@ -1857,6 +1828,7 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                 }
             ]
         };
+    }
     }
 
     /**
@@ -1995,16 +1967,6 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                 // Remove newlines and carriage returns for cleaner parsing
                 jsonStr = jsonStr.replace(/\n/g, ' ').replace(/\r/g, '');
                 
-                // FIX: Sanitize problematic values that AI returns with brackets
-                // Use comprehensive regex to catch all bracketed enum values
-                // Pattern: "[ANYTHING]" -> "ANYTHING" (remove brackets from quoted strings)
-                jsonStr = jsonStr.replace(/"(\[)([A-Z_\s]+)(\])"/g, '"$2"');
-                
-                // Normalize common variations
-                jsonStr = jsonStr.replace(/"AI WAVE"/gi, '"AI_WAVE"');
-                jsonStr = jsonStr.replace(/"SOVEREIGNTY WAVE"/gi, '"SOVEREIGNTY_WAVE"');
-                jsonStr = jsonStr.replace(/"SOVEREIGN"/gi, '"SOVEREIGNTY_WAVE"');
-                
                 // Remove any text after the last closing bracket
                 const lastBracket = Math.max(jsonStr.lastIndexOf('}'), jsonStr.lastIndexOf(']'));
                 if (lastBracket >= 0 && lastBracket < jsonStr.length - 1) {
@@ -2049,11 +2011,7 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                     // PHASE 2 TASK 2.2: Add model tier information
                     modelTier: modelTier,
                     modelUsed: selectedModel,
-                    estimatedCost: modelCosts,
-                    // ENHANCEMENT 1: Decision Window Scoring
-                    decisionWindow: analysis.decisionWindow || 'HORIZON',
-                    windowReason: analysis.windowReason || '',
-                    windowExpiry: analysis.windowExpiry || ''
+                    estimatedCost: modelCosts
                 };
                 
             } catch (error) {
@@ -2166,15 +2124,15 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                 budget: totalModelCalls > 0 ? (this.stats.modelUsage.budget / totalModelCalls * 100).toFixed(1) : 0
             },
             costs: {
-                premium: (this.stats.modelCosts.premium || 0).toFixed(4),
-                midTier: (this.stats.modelCosts.midTier || 0).toFixed(4),
-                budget: (this.stats.modelCosts.budget || 0).toFixed(4),
-                total: ((this.stats.modelCosts.premium || 0) + (this.stats.modelCosts.midTier || 0) + (this.stats.modelCosts.budget || 0)).toFixed(4)
+                premium: this.stats.modelCosts.premium.toFixed(4),
+                midTier: this.stats.modelCosts.midTier.toFixed(4),
+                budget: this.stats.modelCosts.budget.toFixed(4),
+                total: (this.stats.modelCosts.premium + this.stats.modelCosts.midTier + this.stats.modelCosts.budget).toFixed(4)
             },
             // Calculate savings vs using premium model for everything
             estimatedSavings: totalModelCalls > 0 ?
                 ((this.stats.modelUsage.midTier * 0.0015 + this.stats.modelUsage.budget * 0.0008) -
-                 ((this.stats.modelCosts.midTier || 0) + (this.stats.modelCosts.budget || 0))).toFixed(4) : 0
+                 (this.stats.modelCosts.midTier + this.stats.modelCosts.budget)).toFixed(4) : 0
         };
         
         // PHASE 2 TASK 2.3: Calculate prompt cache statistics
@@ -2293,284 +2251,6 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
         }
         
         return true;
-    }
-    
-    /**
-     * ENHANCEMENT 2: Generate Weekly Pattern Synthesis
-     * Analyzes 14 days of signal history to detect trends and patterns
-     *
-     * @param {Array} last14Days - Array of daily summaries from PatternTracker
-     * @returns {Promise<Object>} Weekly synthesis with patterns and priorities
-     */
-    async generateWeeklyPatternSynthesis(last14Days) {
-        if (!this.apiKey) {
-            throw new Error('API key not configured');
-        }
-        
-        if (!last14Days || last14Days.length < 2) {
-            throw new Error('Insufficient data for pattern analysis (need at least 2 days)');
-        }
-        
-        const prompt = `You are the strategic intelligence analyst for the IBM APAC Field CTO.
-
-HISTORICAL SIGNAL DATA (Last ${last14Days.length} Days):
-${JSON.stringify(last14Days, null, 2)}
-
-ANALYZE FOR PATTERNS:
-
-1. COMPETITOR VELOCITY
-   - Which competitors are increasing activity? Where?
-   - What segments are they targeting?
-   - Is this a campaign or isolated moves?
-
-2. MARKET MOMENTUM
-   - Which markets are heating up?
-   - What's driving the activity?
-   - Regulatory trigger? Competitive trigger? Client trigger?
-
-3. THEME EMERGENCE
-   - What new topics are appearing across multiple sources?
-   - What themes are fading?
-   - What does this signal about enterprise priorities?
-
-4. WAVE DYNAMICS
-   - Is AI Wave or Sovereignty Wave gaining momentum?
-   - Any market-specific wave shifts?
-   - What's driving the shift?
-
-5. STRATEGIC IMPLICATIONS
-   - What should change in IBM's positioning this week?
-   - Which ATLs need to be briefed?
-   - What client conversations should be accelerated?
-
-Return JSON:
-{
-    "weekSummary": "2-3 sentence executive summary",
-    "competitorAlert": {
-        "hottest": "Competitor name",
-        "velocity": "+X% week-over-week",
-        "targetSegment": "Where they're focusing",
-        "ibmResponse": "Recommended counter-action"
-    },
-    "marketMomentum": [
-        { "market": "ASEAN", "trend": "heating", "driver": "reason", "action": "what to do" }
-    ],
-    "emergingThemes": [
-        { "theme": "name", "strength": "high/medium", "firstSeen": "date", "implication": "what it means" }
-    ],
-    "waveShift": {
-        "direction": "AI gaining" | "Sovereignty gaining" | "Stable",
-        "magnitude": "percentage shift",
-        "driver": "what's causing it"
-    },
-    "weeklyPriorities": [
-        "Priority 1: specific action",
-        "Priority 2: specific action",
-        "Priority 3: specific action"
-    ]
-}`;
-
-        try {
-            // Use mid-tier model for strategic synthesis (Sonnet 3.5)
-            const providerConfig = this.providerConfig[this.provider];
-            const model = providerConfig.models.midTier;
-            const maxTokens = 1000;
-            
-            // Make API call
-            const config = providerConfig;
-            let endpoint = config.endpoint;
-            if (config.useKeyInUrl) {
-                endpoint = `${endpoint}/${model}:generateContent?key=${this.apiKey}`;
-            }
-            
-            const requestBody = {
-                model,
-                max_tokens: maxTokens,
-                messages: [
-                    {
-                        role: "user",
-                        content: prompt
-                    }
-                ]
-            };
-            
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: config.headers(this.apiKey),
-                body: JSON.stringify(requestBody)
-            });
-            
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({}));
-                throw new Error(`${this.provider} API error: ${response.status} - ${error.error?.message || error.message || 'Unknown error'}`);
-            }
-            
-            const data = await response.json();
-            let text = config.extractResponse(data);
-            
-            // Clean response
-            text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-            
-            // Extract JSON
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                throw new Error('Could not parse weekly synthesis response');
-            }
-            
-            const synthesis = JSON.parse(jsonMatch[0]);
-            
-            // Add metadata
-            synthesis.generatedAt = new Date().toISOString();
-            synthesis.daysAnalyzed = last14Days.length;
-            
-            return synthesis;
-            
-        } catch (error) {
-            console.error('Weekly pattern synthesis failed:', error);
-            throw error;
-        }
-    }
-
-    // =============================================
-    // ENHANCEMENT 3: Hypothesis Generation
-    // =============================================
-
-    /**
-     * Generate strategic hypotheses from high-priority signals
-     *
-     * Transforms ACT_NOW and THIS_QUARTER signals into testable hypotheses
-     * with clear test criteria and implications.
-     *
-     * @param {Array} signals - High-priority signals (ACT_NOW, THIS_QUARTER)
-     * @param {Array} clients - List of client names
-     * @param {Object} weeklyPatterns - Optional weekly pattern context
-     * @returns {Promise<Array>} - Array of hypothesis objects
-     */
-    async generateHypotheses(signals, clients = [], weeklyPatterns = null) {
-        if (!signals || signals.length === 0) {
-            return [];
-        }
-
-        try {
-            // Filter to high-priority signals only
-            const highPrioritySignals = signals.filter(s => 
-                s.intelligence?.decisionWindow === 'ACT_NOW' || 
-                s.intelligence?.decisionWindow === 'THIS_QUARTER'
-            );
-
-            if (highPrioritySignals.length === 0) {
-                return [];
-            }
-
-            // Limit to top 10 signals to avoid token overload
-            const topSignals = highPrioritySignals.slice(0, 10);
-
-            // Build context
-            const signalSummaries = topSignals.map((s, i) => {
-                const intel = s.intelligence || {};
-                return `${i + 1}. ${s.title}
-   - Window: ${intel.decisionWindow || 'UNKNOWN'}
-   - Threat: ${intel.threatLevel || 0}/100
-   - Opportunity: ${intel.opportunityScore || 0}/100
-   - Clients: ${intel.entities?.clients?.join(', ') || 'None'}
-   - Competitors: ${intel.entities?.competitors?.join(', ') || 'None'}
-   - Reasoning: ${intel.reasoning || 'N/A'}`;
-            }).join('\n\n');
-
-            // Add weekly pattern context if available
-            let patternContext = '';
-            if (weeklyPatterns) {
-                patternContext = `\n\nWEEKLY PATTERN CONTEXT:\n`;
-                if (weeklyPatterns.competitorAlert) {
-                    patternContext += `- Competitor Alert: ${weeklyPatterns.competitorAlert.hottest} (${weeklyPatterns.competitorAlert.velocity})\n`;
-                }
-                if (weeklyPatterns.emergingThemes?.length > 0) {
-                    patternContext += `- Emerging Themes: ${weeklyPatterns.emergingThemes.map(t => t.theme).join(', ')}\n`;
-                }
-                if (weeklyPatterns.waveShift) {
-                    patternContext += `- Wave Shift: ${weeklyPatterns.waveShift.direction}\n`;
-                }
-            }
-
-            const systemPrompt = `You are a strategic intelligence analyst for IBM's Account Technology Leaders (ATLs).
-
-Your task: Transform high-priority signals into testable strategic hypotheses.
-
-A good hypothesis:
-1. Makes a specific, falsifiable claim about the future
-2. Has clear test criteria (what evidence would confirm/refute it?)
-3. Explains implications for IBM (what should we do if true? if false?)
-4. Focuses on strategic decisions, not tactical actions
-5. Has a 90-day time horizon
-
-CLIENTS: ${clients.map(c => c.name || c).join(', ')}
-
-Generate 2-4 hypotheses from these signals. Focus on:
-- Competitive threats requiring strategic response
-- Market shifts creating new opportunities
-- Client needs that could reshape our approach
-- Technology trends that could disrupt current strategies
-
-Return ONLY valid JSON (no markdown, no explanation):
-{
-  "hypotheses": [
-    {
-      "statement": "Clear, specific hypothesis statement",
-      "rationale": "Why this hypothesis matters (2-3 sentences)",
-      "testCriteria": ["Observable criterion 1", "Observable criterion 2", "Observable criterion 3"],
-      "implications": {
-        "ifTrue": "What IBM should do if confirmed",
-        "ifFalse": "What IBM should do if refuted"
-      },
-      "confidence": "high|medium|low",
-      "relatedSignals": [0, 1, 2]
-    }
-  ]
-}`;
-
-            const userPrompt = `HIGH-PRIORITY SIGNALS:\n\n${signalSummaries}${patternContext}
-
-Generate strategic hypotheses from these signals.`;
-
-            // Call AI provider
-            const response = await this.callAIProvider(systemPrompt, userPrompt, {
-                temperature: 0.7,
-                maxTokens: 2000,
-                model: 'mid-tier' // Use mid-tier model for hypothesis generation
-            });
-
-            let text = response.content || response.text || '';
-            
-            // Clean response
-            text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-            
-            // Extract JSON
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (!jsonMatch) {
-                throw new Error('Could not parse hypothesis response');
-            }
-            
-            const result = JSON.parse(jsonMatch[0]);
-            
-            // Add signal references
-            if (result.hypotheses) {
-                result.hypotheses.forEach(h => {
-                    if (h.relatedSignals && Array.isArray(h.relatedSignals)) {
-                        h.relatedSignals = h.relatedSignals.map(idx => ({
-                            title: topSignals[idx]?.title || 'Unknown',
-                            url: topSignals[idx]?.link || '',
-                            decisionWindow: topSignals[idx]?.intelligence?.decisionWindow || 'UNKNOWN'
-                        }));
-                    }
-                });
-            }
-            
-            return result.hypotheses || [];
-            
-        } catch (error) {
-            console.error('Hypothesis generation failed:', error);
-            return [];
-        }
     }
 }
 

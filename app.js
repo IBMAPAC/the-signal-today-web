@@ -1147,12 +1147,6 @@ class SignalApp {
         this.intelligenceEngine = null;
         this.intelligenceStats = null;
         
-        // ENHANCEMENT 2: Pattern Tracker
-        this.patternTracker = typeof PatternTracker !== 'undefined' ? new PatternTracker() : null;
-        
-        // ENHANCEMENT 3: Hypothesis Tracker
-        window.hypothesisTracker = typeof HypothesisTracker !== 'undefined' ? new HypothesisTracker() : null;
-        
         this.init();
     }
 
@@ -1500,8 +1494,6 @@ class SignalApp {
         this.updateReadingTime();
         this.updateLastRefreshed();
         this.updateSourceHealthBadge();
-        renderWeeklyPatterns(); // ENHANCEMENT 2: Render weekly pattern intelligence
-        renderHypotheses(); // ENHANCEMENT 3: Render strategic hypotheses
     }
 
     updateSourceHealthBadge() {
@@ -1644,34 +1636,7 @@ class SignalApp {
             // Categorize into daily/weekly
             this.categorizeArticles();
             
-            // Use cached digest or create basic digest (don't block on AI generation)
-            if (!this.digest) {
-                this.digest = this.createBasicDigest();
-            }
-            
-            // ENHANCEMENT 2: Generate daily summary for pattern tracking (synchronous)
-            if (this.patternTracker && this.articles.length > 0) {
-                try {
-                    console.log('📊 Generating daily pattern summary...');
-                    this.patternTracker.addDailySummary(this.articles, this.clients);
-                    
-                    // Render weekly patterns section with cached data
-                    renderWeeklyPatterns();
-                } catch (error) {
-                    console.warn('Pattern tracking failed:', error);
-                }
-            }
-            
-            // Save and render FIRST (don't block on AI calls)
-            localStorage.setItem(STORAGE_KEYS.LAST_REFRESH, new Date().toISOString());
-            this.saveToStorage();
-            this.renderDigest(true);
-            this.updateUI();
-            
-            const totalTime = Math.round(performance.now() - startTime);
-            console.log(`✅ Refresh completed in ${totalTime}ms`);
-            
-            // Generate AI digest AFTER UI render (async, non-blocking)
+            // Generate AI digest if API key available (skip in quick mode)
             const settings = getAIProviderSettings();
             const apiKey = settings.apiKeys[settings.provider];
             if (apiKey && !quickMode) {
@@ -1684,6 +1649,8 @@ class SignalApp {
                 if (cachedFingerprint && fingerprint === cachedFingerprint && !contextChanged) {
                     // No new articles and context unchanged — reuse cached digest
                     console.log('💾 Digest cache hit — no new articles, skipping API call');
+                    this.showLoading('✅ Digest up to date (no new articles)');
+                    // digest already loaded from IDB in init(); nothing to do
                 } else {
                     // Identify new articles not seen in the last digest
                     const cachedIds = new Set(this.digest?.seenArticleIds || []);
@@ -1692,62 +1659,28 @@ class SignalApp {
 
                     if (cachedFingerprint && newCount > 0 && newCount < 8 && !contextChanged) {
                         // Delta mode: only a few new articles — merge into existing digest
-                        console.log(`🔄 Delta refresh: ${newCount} new articles → merging into existing digest (background)`);
-                        this.mergeDeltaDigest(apiKey, newArticles)
-                            .then(() => {
-                                console.log('✅ Delta digest updated');
-                                this.renderDigest(true); // Re-render with new digest
-                            })
-                            .catch(err => console.warn('Delta digest failed:', err));
+                        console.log(`🔄 Delta refresh: ${newCount} new articles → merging into existing digest`);
+                        this.showLoading(`Updating digest with ${newCount} new articles...`);
+                        await this.mergeDeltaDigest(apiKey, newArticles);
                     } else {
                         // Full regeneration: first run, many new articles, or context changed
-                        console.log(`🤖 Full digest generation (${newCount} new articles, contextChanged=${contextChanged}) (background)`);
-                        this.generateAIDigest(apiKey)
-                            .then(() => {
-                                console.log('✅ AI digest generated');
-                                this.renderDigest(true); // Re-render with new digest
-                            })
-                            .catch(err => console.warn('AI digest generation failed:', err));
+                        console.log(`🤖 Full digest generation (${newCount} new articles, contextChanged=${contextChanged})`);
+                        this.showLoading('Generating AI-powered digest...');
+                        await this.generateAIDigest(apiKey);
                     }
                 }
+            } else {
+                this.digest = this.createBasicDigest();
             }
             
-            // ENHANCEMENT 2: Generate weekly synthesis AFTER UI render (async, non-blocking)
-            if (this.patternTracker && this.intelligenceEngine) {
-                const last14Days = this.patternTracker.getLastNDays(14);
-                if (last14Days.length >= 7) {
-                    // Check if we need to regenerate (once per day)
-                    const lastSynthesis = localStorage.getItem('signal_weekly_synthesis');
-                    const lastTimestamp = localStorage.getItem('signal_weekly_timestamp');
-                    const now = new Date();
-                    const lastDate = lastTimestamp ? new Date(lastTimestamp) : null;
-                    
-                    // Regenerate if no synthesis exists or it's from a different day
-                    if (!lastSynthesis || !lastDate || lastDate.toDateString() !== now.toDateString()) {
-                        console.log('🔄 Generating weekly pattern synthesis (background)...');
-                        
-                        // Run asynchronously without blocking
-                        this.intelligenceEngine.generateWeeklyPatternSynthesis(last14Days)
-                            .then(synthesis => {
-                                localStorage.setItem('signal_weekly_synthesis', JSON.stringify(synthesis));
-                                localStorage.setItem('signal_weekly_timestamp', now.toISOString());
-                                console.log('✅ Weekly synthesis generated');
-                                // Re-render patterns section with new synthesis
-                                renderWeeklyPatterns();
-                            })
-                            .catch(error => {
-                                console.warn('Weekly synthesis failed:', error);
-                            });
-                    }
-                }
-            }
+            // Save and render (forceRefresh = true to regenerate AI synthesis)
+            localStorage.setItem(STORAGE_KEYS.LAST_REFRESH, new Date().toISOString());
+            this.saveToStorage();
+            this.renderDigest(true);
+            this.updateUI();
             
-            // ENHANCEMENT 3: Generate hypotheses from high-priority signals (async, non-blocking)
-            if (this.intelligenceEngine && window.hypothesisTracker) {
-                generateHypothesesFromSignals().catch(err => {
-                    console.warn('Hypothesis generation failed:', err);
-                });
-            }
+            const totalTime = Math.round(performance.now() - startTime);
+            console.log(`✅ Refresh completed in ${totalTime}ms`);
             
         } catch (error) {
             console.error('Refresh error:', error);
@@ -8357,57 +8290,24 @@ function renderActionRequired() {
         isContextRelated: isContextRelated(signal)
     }));
     
-    // ENHANCEMENT 1: Sort within each tier: ACT_NOW first, then context-related, then window expiry
-    const sortByUrgency = (a, b) => {
-        // Priority 1: Decision window (ACT_NOW > THIS_QUARTER > HORIZON)
-        const windowOrder = { 'ACT_NOW': 0, 'THIS_QUARTER': 1, 'HORIZON': 2 };
-        const aWindow = a.articleData?.articles?.[0]?.intelligence?.decisionWindow || 'HORIZON';
-        const bWindow = b.articleData?.articles?.[0]?.intelligence?.decisionWindow || 'HORIZON';
-        const aWindowPriority = windowOrder[aWindow] ?? 2;
-        const bWindowPriority = windowOrder[bWindow] ?? 2;
-        
-        if (aWindowPriority !== bWindowPriority) {
-            return aWindowPriority - bWindowPriority;
-        }
-        
-        // Priority 2: Context-related (meeting prep)
+    // Sort within each tier: context-related first
+    const sortByContext = (a, b) => {
         if (a.isContextRelated && !b.isContextRelated) return -1;
         if (!a.isContextRelated && b.isContextRelated) return 1;
-        
-        // Priority 3: Window expiry date (soonest first)
-        const aExpiry = a.articleData?.articles?.[0]?.intelligence?.windowExpiry || '9999-12-31';
-        const bExpiry = b.articleData?.articles?.[0]?.intelligence?.windowExpiry || '9999-12-31';
-        return aExpiry.localeCompare(bExpiry);
+        return 0;
     };
     
-    // ENHANCEMENT 1: Also include ACT_NOW items in critical signals
     const criticalSignals = allSignals
-        .filter(({ signal, articleData }) => {
-            const isEscalate = signal.actionType === 'ESCALATE';
-            const isActNow = articleData?.articles?.[0]?.intelligence?.decisionWindow === 'ACT_NOW';
-            const isHighThreat = articleData?.articles?.[0]?.intelligence?.threatLevel >= 80;
-            return isEscalate || isActNow || isHighThreat;
-        })
-        .sort(sortByUrgency);
+        .filter(({ signal }) => signal.actionType === 'ESCALATE')
+        .sort(sortByContext);
     
     const highSignals = allSignals
-        .filter(({ signal, articleData }) => {
-            const isBriefOrPosition = signal.actionType === 'BRIEF_ATL' || signal.actionType === 'POSITION';
-            const isThisQuarter = articleData?.articles?.[0]?.intelligence?.decisionWindow === 'THIS_QUARTER';
-            // Exclude items already in critical
-            const notInCritical = !criticalSignals.some(c => c.signal === signal);
-            return (isBriefOrPosition || isThisQuarter) && notInCritical;
-        })
-        .sort(sortByUrgency);
+        .filter(({ signal }) => signal.actionType === 'BRIEF_ATL' || signal.actionType === 'POSITION')
+        .sort(sortByContext);
     
     const watchSignals = allSignals
-        .filter(({ signal }) => {
-            // Exclude items already in critical or high
-            const notInCritical = !criticalSignals.some(c => c.signal === signal);
-            const notInHigh = !highSignals.some(h => h.signal === signal);
-            return (signal.actionType === 'MONITOR' || !signal.actionType) && notInCritical && notInHigh;
-        })
-        .sort(sortByUrgency);
+        .filter(({ signal }) => signal.actionType === 'MONITOR' || !signal.actionType)
+        .sort(sortByContext);
     
     const totalCount = criticalSignals.length + highSignals.length + watchSignals.length;
     
@@ -8549,123 +8449,6 @@ function toggleActionSection(sectionType) {
     }
 }
 
-// =============================================
-// ENHANCEMENT 2: Weekly Patterns Rendering
-// =============================================
-
-function renderWeeklyPatterns() {
-    const section = document.getElementById('weekly-patterns-section');
-    const list = document.getElementById('weekly-patterns-list');
-    const timestamp = document.getElementById('weekly-patterns-timestamp');
-    
-    if (!section || !list) return;
-    
-    try {
-        const synthesisStr = localStorage.getItem('signal_weekly_synthesis');
-        const synthesisTimestamp = localStorage.getItem('signal_weekly_timestamp');
-        
-        if (!synthesisStr) {
-            section.classList.add('hidden');
-            return;
-        }
-        
-        const synthesis = JSON.parse(synthesisStr);
-        section.classList.remove('hidden');
-        
-        // Update timestamp
-        if (timestamp && synthesisTimestamp) {
-            const date = new Date(synthesisTimestamp);
-            timestamp.textContent = `Generated ${formatRelativeDate(date)}`;
-        }
-        
-        // Render pattern cards
-        let html = `
-            <div class="pattern-summary">
-                <div class="pattern-exec-summary">${escapeHtml(synthesis.weekSummary)}</div>
-            </div>
-        `;
-        
-        // Competitor Alert Card
-        if (synthesis.competitorAlert) {
-            const alert = synthesis.competitorAlert;
-            html += `
-                <div class="pattern-card competitor-alert">
-                    <div class="pattern-card-header">🎯 Competitor Watch: ${escapeHtml(alert.hottest)}</div>
-                    <div class="pattern-velocity">${escapeHtml(alert.velocity)}</div>
-                    <div class="pattern-detail"><strong>Target:</strong> ${escapeHtml(alert.targetSegment)}</div>
-                    <div class="pattern-action">→ ${escapeHtml(alert.ibmResponse)}</div>
-                </div>
-            `;
-        }
-        
-        // Market Momentum Cards
-        if (synthesis.marketMomentum && synthesis.marketMomentum.length > 0) {
-            synthesis.marketMomentum.forEach(market => {
-                const trendClass = market.trend === 'heating' ? 'trend-up' : market.trend === 'cooling' ? 'trend-down' : 'trend-stable';
-                html += `
-                    <div class="pattern-card market-momentum">
-                        <div class="pattern-card-header">📍 ${escapeHtml(market.market)}</div>
-                        <div class="pattern-trend ${trendClass}">${escapeHtml(market.trend)}</div>
-                        <div class="pattern-detail"><strong>Driver:</strong> ${escapeHtml(market.driver)}</div>
-                        <div class="pattern-action">→ ${escapeHtml(market.action)}</div>
-                    </div>
-                `;
-            });
-        }
-        
-        // Emerging Themes
-        if (synthesis.emergingThemes && synthesis.emergingThemes.length > 0) {
-            html += `
-                <div class="pattern-card emerging-themes">
-                    <div class="pattern-card-header">🌱 Emerging Themes</div>
-                    <ul class="theme-list">
-                        ${synthesis.emergingThemes.map(theme => `
-                            <li class="theme-item">
-                                <span class="theme-name">${escapeHtml(theme.theme)}</span>
-                                <span class="theme-strength strength-${theme.strength}">${theme.strength}</span>
-                                <div class="theme-implication">${escapeHtml(theme.implication)}</div>
-                            </li>
-                        `).join('')}
-                    </ul>
-                </div>
-            `;
-        }
-        
-        // Wave Shift Card
-        if (synthesis.waveShift) {
-            const wave = synthesis.waveShift;
-            const waveClass = wave.direction.includes('AI') ? 'ai-wave' : wave.direction.includes('Sovereignty') ? 'sov-wave' : 'stable-wave';
-            html += `
-                <div class="pattern-card wave-shift">
-                    <div class="pattern-card-header">🌊 Wave Dynamics</div>
-                    <div class="wave-indicator ${waveClass}">
-                        ${escapeHtml(wave.direction)} ${wave.magnitude ? `(${escapeHtml(wave.magnitude)})` : ''}
-                    </div>
-                    <div class="pattern-detail">${escapeHtml(wave.driver)}</div>
-                </div>
-            `;
-        }
-        
-        // Weekly Priorities
-        if (synthesis.weeklyPriorities && synthesis.weeklyPriorities.length > 0) {
-            html += `
-                <div class="pattern-card priorities">
-                    <div class="pattern-card-header">⚡ This Week's Priorities</div>
-                    <ol class="priority-list">
-                        ${synthesis.weeklyPriorities.map(p => `<li>${escapeHtml(p)}</li>`).join('')}
-                    </ol>
-                </div>
-            `;
-        }
-        
-        list.innerHTML = html;
-        
-    } catch (error) {
-        console.error('Failed to render weekly patterns:', error);
-        section.classList.add('hidden');
-    }
-}
-
 // ==========================================
 // UNIFIED SIGNAL FEED - Phase 2
 // ==========================================
@@ -8675,262 +8458,8 @@ let signalFeedFilters = {
     market: 'ALL',
     client: 'ALL',
     signalType: 'ALL',
-    priority: 'all',      // all, high, strategic, tactical
-    decisionWindow: 'ALL' // ENHANCEMENT 1: ALL, ACT_NOW, THIS_QUARTER, HORIZON
+    priority: 'all'      // all, high, strategic, tactical
 };
-
-
-// =============================================
-// ENHANCEMENT 3: Hypothesis Rendering & Management
-// =============================================
-
-let currentHypothesisFilter = 'active';
-
-function renderHypotheses() {
-    const section = document.getElementById('hypotheses-section');
-    const list = document.getElementById('hypotheses-list');
-    const countEl = document.getElementById('hypotheses-count');
-    const timestamp = document.getElementById('hypotheses-timestamp');
-    
-    if (!section || !list || !window.hypothesisTracker) return;
-    
-    try {
-        const hypotheses = window.hypothesisTracker.getByStatus(currentHypothesisFilter);
-        
-        if (hypotheses.length === 0) {
-            section.classList.add('hidden');
-            return;
-        }
-        
-        section.classList.remove('hidden');
-        if (countEl) countEl.textContent = hypotheses.length;
-        
-        // Update timestamp with most recent hypothesis
-        if (timestamp && hypotheses.length > 0) {
-            const mostRecent = hypotheses[0];
-            const date = new Date(mostRecent.updatedAt);
-            timestamp.textContent = `Updated ${formatRelativeDate(date)}`;
-        }
-        
-        // Render hypothesis cards
-        let html = hypotheses.map(h => renderHypothesisCard(h)).join('');
-        list.innerHTML = html;
-        
-    } catch (error) {
-        console.error('Failed to render hypotheses:', error);
-        section.classList.add('hidden');
-    }
-}
-
-function renderHypothesisCard(hypothesis) {
-    const statusClass = `hypothesis-${hypothesis.status}`;
-    const confidenceClass = `confidence-${hypothesis.confidence}`;
-    const daysOld = Math.floor((Date.now() - hypothesis.createdAt) / (24 * 60 * 60 * 1000));
-    const daysUntilExpiry = Math.floor((hypothesis.expiresAt - Date.now()) / (24 * 60 * 60 * 1000));
-    
-    // Status badge
-    let statusBadge = '';
-    if (hypothesis.status === 'confirmed') {
-        statusBadge = '<span class="hypothesis-status-badge confirmed">✓ Confirmed</span>';
-    } else if (hypothesis.status === 'refuted') {
-        statusBadge = '<span class="hypothesis-status-badge refuted">✗ Refuted</span>';
-    } else if (hypothesis.status === 'expired') {
-        statusBadge = '<span class="hypothesis-status-badge expired">⏱ Expired</span>';
-    } else {
-        statusBadge = `<span class="hypothesis-status-badge active">Active (${daysUntilExpiry}d left)</span>`;
-    }
-    
-    // Confidence badge
-    const confidenceBadge = `<span class="hypothesis-confidence ${confidenceClass}">${hypothesis.confidence.toUpperCase()}</span>`;
-    
-    // Test criteria
-    let criteriaHtml = '';
-    if (hypothesis.testCriteria && hypothesis.testCriteria.length > 0) {
-        criteriaHtml = `
-            <div class="hypothesis-criteria">
-                <strong>Test Criteria:</strong>
-                <ul>
-                    ${hypothesis.testCriteria.map(c => `<li>${escapeHtml(c)}</li>`).join('')}
-                </ul>
-            </div>
-        `;
-    }
-    
-    // Implications
-    let implicationsHtml = '';
-    if (hypothesis.implications) {
-        implicationsHtml = '<div class="hypothesis-implications">';
-        if (hypothesis.implications.ifTrue) {
-            implicationsHtml += `<div class="implication if-true"><strong>If Confirmed:</strong> ${escapeHtml(hypothesis.implications.ifTrue)}</div>`;
-        }
-        if (hypothesis.implications.ifFalse) {
-            implicationsHtml += `<div class="implication if-false"><strong>If Refuted:</strong> ${escapeHtml(hypothesis.implications.ifFalse)}</div>`;
-        }
-        implicationsHtml += '</div>';
-    }
-    
-    // Related signals
-    let signalsHtml = '';
-    if (hypothesis.relatedSignals && hypothesis.relatedSignals.length > 0) {
-        signalsHtml = `
-            <div class="hypothesis-signals">
-                <strong>Related Signals:</strong>
-                <ul>
-                    ${hypothesis.relatedSignals.map(s => `
-                        <li>
-                            <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.title)}</a>
-                            <span class="signal-window">${s.decisionWindow}</span>
-                        </li>
-                    `).join('')}
-                </ul>
-            </div>
-        `;
-    }
-    
-    // Action buttons (only for active hypotheses)
-    let actionsHtml = '';
-    if (hypothesis.status === 'active') {
-        actionsHtml = `
-            <div class="hypothesis-actions">
-                <button class="btn btn-sm btn-success" onclick="updateHypothesisStatus('${hypothesis.id}', 'confirmed')">
-                    ✓ Confirm
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="updateHypothesisStatus('${hypothesis.id}', 'refuted')">
-                    ✗ Refute
-                </button>
-                <button class="btn btn-sm btn-secondary" onclick="deleteHypothesis('${hypothesis.id}')">
-                    🗑 Delete
-                </button>
-            </div>
-        `;
-    }
-    
-    return `
-        <div class="hypothesis-card ${statusClass}">
-            <div class="hypothesis-header">
-                <div class="hypothesis-badges">
-                    ${statusBadge}
-                    ${confidenceBadge}
-                </div>
-                <div class="hypothesis-meta">
-                    Created ${daysOld}d ago
-                </div>
-            </div>
-            <div class="hypothesis-statement">${escapeHtml(hypothesis.statement)}</div>
-            <div class="hypothesis-rationale">${escapeHtml(hypothesis.rationale)}</div>
-            ${criteriaHtml}
-            ${implicationsHtml}
-            ${signalsHtml}
-            ${actionsHtml}
-        </div>
-    `;
-}
-
-function filterHypotheses(status) {
-    currentHypothesisFilter = status;
-    
-    // Update filter button states
-    document.querySelectorAll('.hypothesis-filter').forEach(btn => {
-        if (btn.dataset.status === status) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
-    });
-    
-    renderHypotheses();
-}
-
-function updateHypothesisStatus(id, status) {
-    if (!window.hypothesisTracker) return;
-    
-    const note = prompt(`Why are you marking this hypothesis as ${status}?`);
-    if (note === null) return; // User cancelled
-    
-    window.hypothesisTracker.updateStatus(id, status, note || `Marked as ${status}`);
-    renderHypotheses();
-}
-
-function deleteHypothesis(id) {
-    if (!window.hypothesisTracker) return;
-    
-    if (!confirm('Are you sure you want to delete this hypothesis?')) return;
-    
-    window.hypothesisTracker.delete(id);
-    renderHypotheses();
-}
-
-function exportHypothesesForBrief() {
-    if (!window.hypothesisTracker) return;
-    
-    const markdown = window.hypothesisTracker.exportForMeetingBrief();
-    
-    // Copy to clipboard
-    navigator.clipboard.writeText(markdown).then(() => {
-        alert('Hypotheses exported to clipboard! Paste into your meeting brief.');
-    }).catch(err => {
-        console.error('Failed to copy:', err);
-        // Fallback: show in alert
-        alert('Copy this text:\n\n' + markdown);
-    });
-}
-
-async function generateHypothesesFromSignals() {
-    if (!window.app?.intelligenceEngine || !window.hypothesisTracker) {
-        console.warn('Intelligence engine or hypothesis tracker not available');
-        return;
-    }
-    
-    try {
-        // Get high-priority signals
-        const highPrioritySignals = signalFeedArticles.filter(a => 
-            a.intelligence?.decisionWindow === 'ACT_NOW' || 
-            a.intelligence?.decisionWindow === 'THIS_QUARTER'
-        );
-        
-        if (highPrioritySignals.length === 0) {
-            console.log('No high-priority signals for hypothesis generation');
-            return;
-        }
-        
-        // Get weekly patterns for context
-        let weeklyPatterns = null;
-        try {
-            const synthesisStr = localStorage.getItem('signal_weekly_synthesis');
-            if (synthesisStr) {
-                weeklyPatterns = JSON.parse(synthesisStr);
-            }
-        } catch (e) {
-            console.log('Could not load weekly patterns:', e);
-        }
-        
-        // Get clients list
-        const clients = JSON.parse(localStorage.getItem('signal_clients') || '[]');
-        
-        // Generate hypotheses
-        console.log('Generating hypotheses from', highPrioritySignals.length, 'high-priority signals...');
-        const hypotheses = await window.app.intelligenceEngine.generateHypotheses(
-            highPrioritySignals,
-            clients,
-            weeklyPatterns
-        );
-        
-        if (hypotheses && hypotheses.length > 0) {
-            console.log('Generated', hypotheses.length, 'hypotheses');
-            
-            // Add to tracker
-            hypotheses.forEach(h => {
-                window.hypothesisTracker.addHypothesis(h);
-            });
-            
-            // Render
-            renderHypotheses();
-        }
-        
-    } catch (error) {
-        console.error('Failed to generate hypotheses:', error);
-    }
-}
 
 // Store enriched articles for filtering
 let signalFeedArticles = [];
@@ -9141,13 +8670,6 @@ function renderSignalFeed() {
     if (signalFeedFilters.client !== 'ALL') {
         filtered = filtered.filter(a =>
             a.matchedClients.some(c => c.name === signalFeedFilters.client)
-        );
-    }
-    
-    // ENHANCEMENT 1: Decision Window filter
-    if (signalFeedFilters.decisionWindow !== 'ALL') {
-        filtered = filtered.filter(a =>
-            a.intelligence?.decisionWindow === signalFeedFilters.decisionWindow
         );
     }
     
@@ -9413,32 +8935,6 @@ function renderSignalFeedItem(article) {
     `;
 
 /**
- * Render decision window badge for an article
- * ENHANCEMENT 1: Decision Window Scoring
- */
-function renderDecisionWindowBadge(intelligence) {
-    if (!intelligence || !intelligence.decisionWindow) return '';
-    
-    const configs = {
-        'ACT_NOW': { emoji: '🔴', label: 'ACT NOW', class: 'window-urgent', title: 'Action needed within 2 weeks' },
-        'THIS_QUARTER': { emoji: '🟡', label: 'THIS QUARTER', class: 'window-quarter', title: 'Action needed within 30-90 days' },
-        'HORIZON': { emoji: '🟢', label: 'HORIZON', class: 'window-horizon', title: 'Strategic positioning (6+ months)' }
-    };
-    const config = configs[intelligence.decisionWindow] || configs['HORIZON'];
-    
-    const reasonTitle = intelligence.windowReason ? `${config.title}\n${intelligence.windowReason}` : config.title;
-    const expiryText = intelligence.windowExpiry ? ` ⏰ ${intelligence.windowExpiry}` : '';
-    
-    return `
-        <div class="decision-window-badge ${config.class}" title="${escapeHtml(reasonTitle)}">
-            <span class="window-indicator">${config.emoji}</span>
-            <span class="window-label">${config.label}</span>
-            ${expiryText ? `<span class="window-expiry">${escapeHtml(expiryText)}</span>` : ''}
-        </div>
-    `;
-}
-
-/**
  * Render intelligence badges for an article
  * Shows tier, threat level, opportunity score, and confidence
  */
@@ -9446,11 +8942,6 @@ function renderIntelligenceBadges(intelligence) {
     if (!intelligence || !intelligence.isRelevant) return '';
     
     const badges = [];
-    
-    // ENHANCEMENT 1: Decision Window badge (most prominent)
-    if (intelligence.decisionWindow) {
-        badges.push(renderDecisionWindowBadge(intelligence));
-    }
     
     // Tier badge
     const tierColors = {
@@ -9653,18 +9144,6 @@ function filterBySignalType(type) {
     // Update button active states
     document.querySelectorAll('.signal-type-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.type === type);
-    });
-    
-    renderSignalFeed();
-}
-
-// ENHANCEMENT 1: Decision Window Filter
-function filterByDecisionWindow(window) {
-    signalFeedFilters.decisionWindow = window;
-    
-    // Update button active states
-    document.querySelectorAll('.window-filter').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.window === window);
     });
     
     renderSignalFeed();
@@ -10281,7 +9760,6 @@ window.copyStarter = function(i) { app.copyStarter(i); };
 // Signal Feed filters (Phase 2)
 window.filterByClient = filterByClient;
 window.filterBySignalType = filterBySignalType;
-window.filterByDecisionWindow = filterByDecisionWindow; // ENHANCEMENT 1
 window.switchMarket = switchMarket;
 window.toggleSignalFeedItem = toggleSignalFeedItem;
 window.toggleSignalCategory = toggleSignalCategory;
