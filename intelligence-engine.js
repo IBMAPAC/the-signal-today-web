@@ -885,7 +885,7 @@ Return a JSON array with ${articles.length} objects, one for each article in ord
 
             // PHASE 2 TASK 2.3: Use prompt caching
             const systemPrompt = this.getSystemPrompt();
-            const userContent = this.buildUserContent(article, clientList, contextBlock, truncatedSummary);
+            const userContent = this.buildUserContent(article, clientList, contextBlock, truncatedSummary, clients);
             
             const requestBody = this.formatRequestWithCaching(
                 model,
@@ -1732,6 +1732,18 @@ ANALYSIS FRAMEWORK:
    - Framed as "Why Change": Surface unconsidered needs, not just answer questions
    - Example: "Position watsonx.governance with [Client] before their Q2 audit deadline"
 
+7. "SO WHAT?" ANALYSIS (CRITICAL - Make it INSIGHTFUL):
+   - Don't just report what happened—explain WHY IT MATTERS to the Field CTO
+   - Connect the dots: Event → Impact on IBM → Specific action needed
+   - Add urgency context: renewal dates, competitive windows, regulatory deadlines
+   - Example: "Microsoft wins DBS deal" → "Competitor now has foothold in payments at YOUR Tier 1 client. Renewal in 90 days. Position watsonx.data for real-time fraud detection before they lock in 3-year Microsoft contract."
+
+8. URGENCY LEVELS:
+   - CRITICAL: Act within 7 days (client renewal, competitive threat, regulatory deadline)
+   - HIGH: Act within 30 days (emerging pattern, market shift, opportunity window)
+   - MEDIUM: Act within 90 days (strategic positioning, relationship building)
+   - LOW: Monitor (background intelligence, long-term trends)
+
 OUTPUT FORMAT (JSON only):
 {
   "threatLevel": 0-100,
@@ -1740,10 +1752,20 @@ OUTPUT FORMAT (JSON only):
   "waveClassification": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
   "pillarMapping": "Foundation" | "Pillar 1" | "Pillar 2" | "Pillar 3",
   "reasoning": "One-sentence strategic context: what this signals for IBM APAC and why it matters NOW (no client names here—use actionableInsights for that)",
-  "actionableInsights": ["Specific action with client/product/timeframe framed as 'Why Change'"],
+  "soWhat": "2-3 sentences explaining WHY this matters to the Field CTO and WHAT it means for IBM's position. Connect event → impact → opportunity/threat. Be specific about timing and stakes.",
+  "actionableInsights": [
+    {
+      "action": "Specific action with client/product/timeframe framed as 'Why Change'",
+      "urgency": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
+      "timeline": "Within 7 days" | "Within 30 days" | "Within 90 days" | "Monitor",
+      "ibmAngle": "Specific IBM product/solution positioning",
+      "context": "Why this action matters now (renewal date, competitive window, etc.)"
+    }
+  ],
   "affectedClients": [],
   "affectedMarkets": [],
-  "competitorActivity": "Brief—name competitor, their move, IBM counter-position"
+  "competitorActivity": "Brief—name competitor, their move, IBM counter-position",
+  "clientContext": "If article mentions YOUR managed clients, flag with 'YOUR Tier X client' for immediate attention"
 }`;
     }
 
@@ -1757,12 +1779,25 @@ OUTPUT FORMAT (JSON only):
      * @param {string} truncatedSummary - Article summary (truncated)
      * @returns {string} Dynamic user content (~300 tokens)
      */
-    buildUserContent(article, clientList, contextBlock, truncatedSummary) {
+    buildUserContent(article, clientList, contextBlock, truncatedSummary, clients = []) {
+        // Build enhanced client list with tier information
+        let enhancedClientList = clientList || 'None';
+        if (clients && clients.length > 0) {
+            const topClients = clients
+                .filter(c => c.tier === 1 || c.tier === 2)
+                .slice(0, 20)
+                .map(c => `${c.name} (Tier ${c.tier}, ${c.market}, ${c.industry})`)
+                .join(', ');
+            enhancedClientList = topClients || clientList || 'None';
+        }
+
         return `ARTICLE TO ANALYZE:
 Title: ${article.title}
 Summary: ${truncatedSummary}${contextBlock}
 
-TOP CLIENTS: ${clientList || 'None'}
+YOUR MANAGED CLIENTS (with tier/market/industry): ${enhancedClientList}
+
+IMPORTANT: If article mentions any of YOUR clients above, flag with "YOUR Tier X client" in clientContext field for immediate attention.
 
 Analyze this article using the framework above. Remember: ONLY suggest clients that match BOTH industry AND geography.`;
     }
@@ -1889,7 +1924,7 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
         // Savings: ~$0.00027 per article (90% of $0.0003)
         
         const systemPrompt = this.getSystemPrompt();
-        const userContent = this.buildUserContent(article, clientList, contextBlock, truncatedSummary);
+        const userContent = this.buildUserContent(article, clientList, contextBlock, truncatedSummary, clients);
 
         // Get provider configuration (reuse providerConfig from above)
         const config = providerConfig;
