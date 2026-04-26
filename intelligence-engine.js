@@ -1714,7 +1714,7 @@ ANALYSIS FRAMEWORK:
    - Client signaling AI/sovereignty challenge = 75+
    - Market shift favoring IBM positioning = 70+
 
-3. WAVE CLASSIFICATION: Tag as [AI WAVE] or [SOVEREIGNTY WAVE] or [BOTH]
+3. WAVE CLASSIFICATION: Tag as "AI_WAVE" or "SOVEREIGNTY_WAVE" or "BOTH"
 
 4. PILLAR MAPPING: Which IBM pillar is most relevant?
    - Data readiness issue → Foundation
@@ -1744,15 +1744,15 @@ ANALYSIS FRAMEWORK:
    - MEDIUM: Act within 90 days (strategic positioning, relationship building)
    - LOW: Monitor (background intelligence, long-term trends)
 
-OUTPUT FORMAT (strict JSON, no markdown):
+OUTPUT FORMAT (strict JSON, no markdown, no brackets in values):
 {
   "threatLevel": 85,
   "opportunityScore": 20,
   "confidence": 0.95,
-  "waveClassification": "[AI WAVE]",
+  "waveClassification": "AI_WAVE",
   "pillarMapping": "Foundation",
   "reasoning": "One-sentence strategic context",
-  "soWhat": "2-3 sentences explaining WHY this matters and WHAT to do. Connect event to impact to action.",
+  "soWhat": "2-3 sentences explaining WHY this matters and WHAT to do",
   "actionableInsights": ["Action 1 with urgency and timeline", "Action 2 with urgency and timeline"],
   "affectedClients": ["ClientName"],
   "affectedMarkets": ["ASEAN"],
@@ -1760,12 +1760,13 @@ OUTPUT FORMAT (strict JSON, no markdown):
   "clientContext": "YOUR Tier 1 client if applicable"
 }
 
-IMPORTANT:
-- Return ONLY the JSON object above
-- No markdown code blocks
-- No explanations outside JSON
-- Use simple string arrays for actionableInsights (not nested objects)
-- Keep all text fields concise to avoid JSON parsing errors`;
+CRITICAL JSON RULES:
+- Return ONLY the JSON object (no markdown, no code blocks, no extra text)
+- waveClassification must be: "AI_WAVE" or "SOVEREIGNTY_WAVE" or "BOTH" (no brackets)
+- pillarMapping must be: "Foundation" or "Pillar_1" or "Pillar_2" or "Pillar_3" (no spaces)
+- All string values must use proper escaping for quotes
+- Arrays must have proper comma separation
+- No trailing commas`;
     }
 
     /**
