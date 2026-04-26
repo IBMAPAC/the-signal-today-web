@@ -2058,9 +2058,16 @@ RULES:
                 }
                 
                 if (!jsonStr) {
-                    console.error(`${this.provider} response parsing failed. Could not find matching braces. Raw response:`, text.substring(0, 500));
+                    console.error(`${this.provider} response parsing failed. Could not find matching braces.`);
+                    console.error('Raw response (first 500 chars):', text.substring(0, 500));
+                    console.error('Raw response (last 500 chars):', text.substring(Math.max(0, text.length - 500)));
                     throw new Error(`Could not parse ${this.provider} response - incomplete JSON`);
                 }
+                
+                // DEBUG: Log extracted JSON for inspection
+                console.log('📋 Extracted JSON length:', jsonStr.length);
+                console.log('📋 First 200 chars:', jsonStr.substring(0, 200));
+                console.log('📋 Last 200 chars:', jsonStr.substring(Math.max(0, jsonStr.length - 200)));
                 
                 // Remove trailing commas before closing brackets
                 jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
@@ -2078,16 +2085,26 @@ RULES:
                 try {
                     analysis = JSON.parse(jsonStr);
                 } catch (parseError) {
-                    console.error(`${this.provider} JSON parse error:`, parseError.message);
+                    console.error(`❌ ${this.provider} JSON parse error:`, parseError.message);
                     
                     // Try to identify the problematic area
                     const errorMatch = parseError.message.match(/position (\d+)/);
                     if (errorMatch) {
                         const pos = parseInt(errorMatch[1]);
-                        const start = Math.max(0, pos - 100);
-                        const end = Math.min(jsonStr.length, pos + 100);
-                        console.error('Context around error position:', jsonStr.substring(start, end));
-                        console.error('Error at character:', jsonStr[pos]);
+                        const start = Math.max(0, pos - 150);
+                        const end = Math.min(jsonStr.length, pos + 150);
+                        const context = jsonStr.substring(start, end);
+                        const errorChar = jsonStr[pos];
+                        const errorCharCode = errorChar ? errorChar.charCodeAt(0) : 'EOF';
+                        
+                        console.error('📍 Context around error position:', context);
+                        console.error(`📍 Error at character: "${errorChar}" (code: ${errorCharCode})`);
+                        console.error(`📍 Position ${pos} of ${jsonStr.length} total chars`);
+                        
+                        // Show surrounding characters for better debugging
+                        const before = jsonStr.substring(Math.max(0, pos - 5), pos);
+                        const after = jsonStr.substring(pos + 1, Math.min(jsonStr.length, pos + 6));
+                        console.error(`📍 Surrounding: ...${before}[${errorChar}]${after}...`);
                     }
                     
                     // Try to fix common JSON issues
