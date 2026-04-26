@@ -65,6 +65,52 @@
                     </div>
                 </section>
 
+                <!-- ENHANCEMENT 2: WEEKLY PATTERNS - 14-day trend analysis (collapsible, collapsed) -->
+                <section id="weekly-patterns-section" class="card weekly-patterns-card hidden">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('weekly-patterns')">
+                        <h2>📈 Weekly Patterns</h2>
+                        <span class="badge badge-muted">14-day trends</span>
+                        <span id="weekly-patterns-timestamp" class="section-timestamp"></span>
+                        <span class="chevron collapsed">▼</span>
+                    </div>
+                    <div id="weekly-patterns-content" class="card-body collapsed">
+                        <p class="card-description">Signal velocity and trend analysis over the past 2 weeks</p>
+                        <div id="weekly-patterns-list"></div>
+                    </div>
+                </section>
+
+
+                <!-- ENHANCEMENT 3: STRATEGIC HYPOTHESES - Testable strategic claims (collapsible, collapsed) -->
+                <section id="hypotheses-section" class="card hypotheses-card hidden">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('hypotheses')">
+                        <h2>🔬 Strategic Hypotheses</h2>
+                        <span id="hypotheses-count" class="badge badge-muted">0</span>
+                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); exportHypothesesForBrief()" title="Export for meeting brief">📋 Export</button>
+                        <span id="hypotheses-timestamp" class="section-timestamp"></span>
+                        <span class="chevron collapsed">▼</span>
+                    </div>
+                    <div id="hypotheses-content" class="card-body collapsed">
+                        <p class="card-description">Testable strategic claims derived from high-priority signals</p>
+                        
+                        <!-- Status Filters -->
+                        <div class="hypothesis-filters">
+                            <button class="hypothesis-filter active" data-status="active" onclick="filterHypotheses('active')">
+                                Active
+                            </button>
+                            <button class="hypothesis-filter" data-status="confirmed" onclick="filterHypotheses('confirmed')">
+                                ✓ Confirmed
+                            </button>
+                            <button class="hypothesis-filter" data-status="refuted" onclick="filterHypotheses('refuted')">
+                                ✗ Refuted
+                            </button>
+                            <button class="hypothesis-filter" data-status="all" onclick="filterHypotheses('all')">
+                                All
+                            </button>
+                        </div>
+                        
+                        <div id="hypotheses-list"></div>
+                    </div>
+                </section>
                 <!-- PRIORITY 1: TODAY'S BRIEF - 3 things to know today (collapsible, collapsed) -->
                 <section id="executive-summary-section" class="card executive-summary-card">
                     <div class="card-header card-header--collapsible" onclick="toggleSection('executive-summary')">
@@ -133,6 +179,14 @@
                         <div id="client-chip-filters" class="client-chip-filters">
                             <button class="client-chip active" data-client="ALL" onclick="filterByClient('ALL')">All Clients</button>
                             <!-- Dynamic client chips inserted here -->
+                        </div>
+                        
+                        <!-- ENHANCEMENT 1: Decision Window Filters -->
+                        <div class="window-filters">
+                            <button class="window-filter active" data-window="ALL" onclick="filterByDecisionWindow('ALL')">All</button>
+                            <button class="window-filter" data-window="ACT_NOW" onclick="filterByDecisionWindow('ACT_NOW')">🔴 Act Now</button>
+                            <button class="window-filter" data-window="THIS_QUARTER" onclick="filterByDecisionWindow('THIS_QUARTER')">🟡 This Quarter</button>
+                            <button class="window-filter" data-window="HORIZON" onclick="filterByDecisionWindow('HORIZON')">🟢 Horizon</button>
                         </div>
                         
                         <!-- Signal feed grouped by category -->
@@ -558,6 +612,8 @@
     </div>
 
     <script src="sources.js"></script>
+    <script src="pattern-tracker.js"></script>
+    <script src="hypothesis-tracker.js"></script>
     <script src="intelligence-engine.js"></script>
     <script src="hybrid-classifier.js"></script>
     <script src="app.js"></script>
