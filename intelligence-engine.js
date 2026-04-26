@@ -2006,16 +2006,61 @@ RULES:
                 // Clean response: remove markdown code blocks if present
                 text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
                 
-                // Try to extract JSON (object or array)
-                let jsonMatch = text.match(/\{[\s\S]*\}/) || text.match(/\[[\s\S]*\]/);
+                // Try to extract valid JSON by finding matching braces
+                let jsonStr = '';
+                let startIdx = text.indexOf('{');
                 
-                if (!jsonMatch) {
-                    console.error(`${this.provider} response parsing failed. Raw response:`, text.substring(0, 500));
-                    throw new Error(`Could not parse ${this.provider} response - no valid JSON found`);
+                if (startIdx === -1) {
+                    // Try array format
+                    startIdx = text.indexOf('[');
+                    if (startIdx === -1) {
+                        console.error(`${this.provider} response parsing failed. Raw response:`, text.substring(0, 500));
+                        throw new Error(`Could not parse ${this.provider} response - no valid JSON found`);
+                    }
                 }
                 
-                // Clean up JSON before parsing
-                let jsonStr = jsonMatch[0];
+                // Find matching closing brace/bracket
+                let braceCount = 0;
+                let inString = false;
+                let escapeNext = false;
+                const startChar = text[startIdx];
+                const endChar = startChar === '{' ? '}' : ']';
+                
+                for (let i = startIdx; i < text.length; i++) {
+                    const char = text[i];
+                    
+                    if (escapeNext) {
+                        escapeNext = false;
+                        continue;
+                    }
+                    
+                    if (char === '\\') {
+                        escapeNext = true;
+                        continue;
+                    }
+                    
+                    if (char === '"' && !escapeNext) {
+                        inString = !inString;
+                        continue;
+                    }
+                    
+                    if (!inString) {
+                        if (char === startChar) {
+                            braceCount++;
+                        } else if (char === endChar) {
+                            braceCount--;
+                            if (braceCount === 0) {
+                                jsonStr = text.substring(startIdx, i + 1);
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (!jsonStr) {
+                    console.error(`${this.provider} response parsing failed. Could not find matching braces. Raw response:`, text.substring(0, 500));
+                    throw new Error(`Could not parse ${this.provider} response - incomplete JSON`);
+                }
                 
                 // Remove trailing commas before closing brackets
                 jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
