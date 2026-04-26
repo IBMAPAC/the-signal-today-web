@@ -1714,7 +1714,7 @@ ANALYSIS FRAMEWORK:
    - Client signaling AI/sovereignty challenge = 75+
    - Market shift favoring IBM positioning = 70+
 
-3. WAVE CLASSIFICATION: Tag as [AI WAVE] or [SOVEREIGNTY WAVE] or [BOTH]
+3. WAVE CLASSIFICATION: Tag as AI_WAVE or SOVEREIGNTY_WAVE or BOTH
 
 4. PILLAR MAPPING: Which IBM pillar is most relevant?
    - Data readiness issue → Foundation
@@ -1762,7 +1762,7 @@ OUTPUT FORMAT (JSON only):
   "threatLevel": 0-100,
   "opportunityScore": 0-100,
   "confidence": 0.95,
-  "waveClassification": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
+  "waveClassification": "AI_WAVE" | "SOVEREIGNTY_WAVE" | "BOTH",
   "pillarMapping": "Foundation" | "Pillar 1" | "Pillar 2" | "Pillar 3",
   "reasoning": "One-sentence strategic context: what this signals for IBM APAC and why it matters NOW (no client names here—use actionableInsights for that)",
   "actionableInsights": ["Specific action with client/product/timeframe framed as 'Why Change'"],
