@@ -1673,21 +1673,29 @@ class SignalApp {
                 this.digest = this.createBasicDigest();
             }
             
-            // Save and render (forceRefresh = true to regenerate AI synthesis)
+            // Save articles and categorize
             localStorage.setItem(STORAGE_KEYS.LAST_REFRESH, new Date().toISOString());
             this.saveToStorage();
-            this.renderDigest(true);
+            this.categorizeArticles();
+            
+            // PROGRESSIVE LOADING: Show content immediately with cached data
+            // Hide loading spinner and show content before AI analysis completes
+            this.hideLoading();
+            this.isLoading = false;
+            
+            // Render with cached intelligence (forceRefresh = false to use cache first)
+            // AI analysis will update in background via renderTodaysSignals()
+            this.renderDigest(false);
             this.updateUI();
             
             const totalTime = Math.round(performance.now() - startTime);
-            console.log(`✅ Refresh completed in ${totalTime}ms`);
+            console.log(`✅ Articles ready in ${totalTime}ms (AI analysis continues in background)`);
             
         } catch (error) {
             console.error('Refresh error:', error);
             this.showError(`Failed to refresh: ${error.message}`);
-        } finally {
-            this.isLoading = false;
             this.hideLoading();
+            this.isLoading = false;
         }
     }
 
