@@ -3453,28 +3453,30 @@ ${articleList}`;
         // 3. Signal Feed — Unified view (replaces Client Radar + All Signals)
         // 4. Deep Reads — Weekend reading (collapsed)
         
-        // Generate signals first (async), then extract Action Required and build Signal Feed
-        // Pass forceRefresh to ensure Action Required updates on refresh
-        renderTodaysSignals(forceRefresh)
-            .then(() => {
-                renderActionRequired();
-                renderSignalFeed();
-            })
-            .catch((error) => {
-                console.error('Signal generation failed:', error);
-                // Still render Action Required and Signal Feed from cache
-                // This ensures the UI updates even if signal generation fails
-                renderActionRequired();
-                renderSignalFeed();
-            });
-        
-        // These can render in parallel
+        // PROGRESSIVE LOADING: Render immediately with cached data
+        // This ensures instant UI feedback while AI analysis runs in background
+        renderActionRequired();
+        renderSignalFeed();
         renderExecutiveSummary(forceRefresh);
         renderMarketInsights(forceRefresh);
         renderDeepReads(forceRefresh);
         
         // Update portfolio stats
         updateClientManagerCounts();
+        
+        // BACKGROUND AI ANALYSIS: Update UI when complete
+        // Generate signals asynchronously, then refresh Action Required and Signal Feed
+        // Pass forceRefresh to ensure Action Required updates on refresh
+        renderTodaysSignals(forceRefresh)
+            .then(() => {
+                // Refresh sections with AI-enhanced insights
+                renderActionRequired();
+                renderSignalFeed();
+            })
+            .catch((error) => {
+                console.error('Signal generation failed:', error);
+                // UI already rendered with cached data, so failure is graceful
+            });
     }
 
     // ==========================================
