@@ -292,7 +292,7 @@ class HybridIntelligenceEngine {
      * @param {Array} existingArticles - Previous articles for context
      * @returns {Object} Enhanced article with intelligence metadata
      */
-    async analyzeArticle(article, clients, existingArticles = []) {
+    async analyzeArticle(article, clients, existingArticles = [], skipTier3 = false) {
         const startTime = Date.now();
         
         // PHASE 1 TASK 1.3: Emit analysis start event
@@ -415,7 +415,8 @@ class HybridIntelligenceEngine {
         }
 
         // TIER 3: Semantic analysis (~10% of articles - only high-value)
-        if (this.shouldRunSemanticAnalysis(article, tier2Result, clients)) {
+        // Skip if skipTier3 flag is set (for fast initial scoring)
+        if (!skipTier3 && this.shouldRunSemanticAnalysis(article, tier2Result, clients)) {
             try {
                 const tier3Result = await this.tier3_semanticAnalysis(
                     article,

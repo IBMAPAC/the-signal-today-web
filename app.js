@@ -1689,13 +1689,93 @@ class SignalApp {
             this.updateUI();
             
             const totalTime = Math.round(performance.now() - startTime);
-            console.log(`✅ Articles ready in ${totalTime}ms (AI analysis continues in background)`);
+            console.log(`✅ Articles ready in ${totalTime}ms (Tier 1 & 2 complete)`);
+            
+            // Run Tier 3 analysis in background for high-value articles
+            this.runBackgroundTier3Analysis();
             
         } catch (error) {
             console.error('Refresh error:', error);
             this.showError(`Failed to refresh: ${error.message}`);
             this.hideLoading();
             this.isLoading = false;
+        }
+    }
+
+    // ==========================================
+    // Background Tier 3 Analysis
+    // ==========================================
+
+    async runBackgroundTier3Analysis() {
+        if (!this.intelligenceEngine) {
+            console.log('⚠️ Intelligence Engine not available, skipping Tier 3 analysis');
+            return;
+        }
+        
+        // Get articles that need Tier 3 analysis (Tier 2 with confidence < 0.85)
+        const articlesNeedingTier3 = this.articles.filter(a =>
+            a.intelligence?.tier === 2 &&
+            a.intelligence?.confidence < 0.85 &&
+            a.intelligence?.isRelevant
+        );
+        
+        if (articlesNeedingTier3.length === 0) {
+            console.log('✅ No articles need Tier 3 analysis');
+            return;
+        }
+        
+        console.log(`🧠 Starting background Tier 3 analysis for ${articlesNeedingTier3.length} articles...`);
+        const startTime = performance.now();
+        
+        // Process in batches of 10 to avoid overwhelming the API
+        const BATCH_SIZE = 10;
+        let analyzed = 0;
+        
+        for (let i = 0; i < articlesNeedingTier3.length; i += BATCH_SIZE) {
+            const batch = articlesNeedingTier3.slice(i, i + BATCH_SIZE);
+            
+            // Analyze batch in parallel
+            const batchResults = await Promise.allSettled(
+                batch.map(article =>
+                    this.intelligenceEngine.analyzeArticle(
+                        article,
+                        this.clients,
+                        this.articles,
+                        false // skipTier3 = false, run full Tier 3 analysis
+                    )
+                )
+            );
+            
+            // Update articles with results
+            for (let j = 0; j < batchResults.length; j++) {
+                const result = batchResults[j];
+                if (result.status === 'fulfilled') {
+                    const updatedArticle = result.value;
+                    const index = this.articles.findIndex(a => a.id === updatedArticle.id);
+                    if (index !== -1) {
+                        this.articles[index] = updatedArticle;
+                    }
+                    analyzed++;
+                }
+            }
+            
+            // Update UI after each batch to show progressive enhancement
+            this.renderDigest(false);
+            
+            const progress = Math.round((analyzed / articlesNeedingTier3.length) * 100);
+            console.log(`🧠 Tier 3 progress: ${progress}% (${analyzed}/${articlesNeedingTier3.length})`);
+        }
+        
+        const totalTime = Math.round(performance.now() - startTime);
+        console.log(`✅ Background Tier 3 analysis complete in ${totalTime}ms (${analyzed} articles)`);
+        
+        // Final UI update with all Tier 3 intelligence
+        this.saveToStorage();
+        this.renderDigest(false);
+        
+        // Update intelligence stats
+        if (typeof updateIntelligenceStats === 'function') {
+            updateIntelligenceStats();
         }
     }
 
@@ -2457,7 +2537,8 @@ class SignalApp {
                         return this.intelligenceEngine.analyzeArticle(
                             article,
                             this.clients,
-                            this.articles // Pass existing articles for context
+                            this.articles, // Pass existing articles for context
+                            true // skipTier3 = true for fast initial scoring
                         );
                     }
                     return Promise.resolve(article);
