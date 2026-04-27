@@ -332,16 +332,23 @@ class HybridIntelligenceEngine {
         const articleHash = `${article.id}-${article.title}-${article.publishedDate}`;
         if (this.analysisCache.has(articleHash)) {
             const cached = this.analysisCache.get(articleHash);
-            cached.processingTime = Date.now() - startTime;
-            cached.fromCache = true;
             
-            // PHASE 1 TASK 1.3: Emit cache hit event
-            this.emit('cacheHit', {
-                article: { id: article.id, title: article.title },
-                result: cached
-            });
-            
-            return { ...article, intelligence: cached };
+            // Only use cache if it has the tier we need
+            // If skipTier3=false (need Tier 3) but cache only has Tier 2, continue to fresh analysis
+            if (skipTier3 || cached.tier === 3) {
+                cached.processingTime = Date.now() - startTime;
+                cached.fromCache = true;
+                
+                // PHASE 1 TASK 1.3: Emit cache hit event
+                this.emit('cacheHit', {
+                    article: { id: article.id, title: article.title },
+                    result: cached
+                });
+                
+                return { ...article, intelligence: cached };
+            }
+            // Cache has Tier 2 but we need Tier 3 - continue to fresh analysis
+            console.log(`📊 In-memory cache has Tier ${cached.tier}, need Tier 3 for: ${article.title.substring(0, 50)}...`);
         }
         
         // Initialize analysis result
