@@ -1767,7 +1767,11 @@ class SignalApp {
             }
             
             // Update UI after each batch to show progressive enhancement
-            this.renderDigest(false);
+            // Direct call to renderSignalFeed() to avoid renderTodaysSignals() overwriting with cached data
+            renderSignalFeed();
+            if (typeof updateIntelligenceStats === 'function') {
+                updateIntelligenceStats();
+            }
             
             const progress = Math.round((analyzed / articlesNeedingTier3.length) * 100);
             console.log(`🧠 Tier 3 progress: ${progress}% (${analyzed}/${articlesNeedingTier3.length})`);
@@ -1778,7 +1782,10 @@ class SignalApp {
         
         // Final UI update with all Tier 3 intelligence
         this.saveToStorage();
-        this.renderDigest(false);
+        renderSignalFeed();
+        if (typeof updateIntelligenceStats === 'function') {
+            updateIntelligenceStats();
+        }
         
         // Update intelligence stats
         if (typeof updateIntelligenceStats === 'function') {
