@@ -1754,8 +1754,15 @@ class SignalApp {
                     const index = this.articles.findIndex(a => a.id === updatedArticle.id);
                     if (index !== -1) {
                         this.articles[index] = updatedArticle;
+                        // Log Tier 3 completion for debugging
+                        if (updatedArticle.intelligence?.tier === 3) {
+                            console.log(`✅ Tier 3 complete: ${updatedArticle.title.substring(0, 50)}... (has clientContext: ${!!updatedArticle.intelligence.clientContext})`);
+                        }
                     }
                     analyzed++;
+                } else {
+                    // Log errors for debugging
+                    console.error(`❌ Tier 3 analysis failed for article ${batch[j]?.title?.substring(0, 50)}:`, result.reason);
                 }
             }
             

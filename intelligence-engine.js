@@ -307,17 +307,23 @@ class HybridIntelligenceEngine {
             const cachedResult = await this.cacheManager.get(cacheKey);
             
             if (cachedResult) {
-                this.stats.cacheHits++;
-                cachedResult.processingTime = Date.now() - startTime;
-                cachedResult.fromCache = true;
-                
-                // PHASE 1 TASK 1.3: Emit cache hit event
-                this.emit('cacheHit', {
-                    article: { id: article.id, title: article.title },
-                    result: cachedResult
-                });
-                
-                return { ...article, intelligence: cachedResult };
+                // Only use cache if it has the tier we need
+                // If skipTier3=false (need Tier 3) but cache only has Tier 2, continue to fresh analysis
+                if (skipTier3 || cachedResult.tier === 3) {
+                    this.stats.cacheHits++;
+                    cachedResult.processingTime = Date.now() - startTime;
+                    cachedResult.fromCache = true;
+                    
+                    // PHASE 1 TASK 1.3: Emit cache hit event
+                    this.emit('cacheHit', {
+                        article: { id: article.id, title: article.title },
+                        result: cachedResult
+                    });
+                    
+                    return { ...article, intelligence: cachedResult };
+                }
+                // Cache has Tier 2 but we need Tier 3 - continue to fresh analysis
+                console.log(`📊 Cache has Tier ${cachedResult.tier}, need Tier 3 for: ${article.title.substring(0, 50)}...`);
             }
             this.stats.cacheMisses++;
         }
