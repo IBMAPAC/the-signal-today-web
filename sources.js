@@ -1329,44 +1329,6 @@ const APAC_MARKET_CONTEXT = {
 };
 
 // ============================================
-// SIGNAL CLASSIFICATION RULES
-// For categorizing detected signals
-// ============================================
-const SIGNAL_CLASSIFICATION = {
-    // Wave 1: AI/Agentic transformation
-    AI_WAVE: [
-        'generative ai', 'genai', 'llm', 'large language model', 'ai agent', 'agentic',
-        'copilot', 'ai assistant', 'chatbot', 'conversational ai', 'ai automation',
-        'machine learning', 'deep learning', 'neural network', 'foundation model',
-        'ai governance', 'responsible ai', 'ai ethics', 'ai safety', 'ai regulation',
-        'ai strategy', 'ai adoption', 'ai transformation', 'ai investment', 'ai platform'
-    ],
-    // Wave 2: Sovereignty & Regulation
-    SOVEREIGNTY_WAVE: [
-        'data sovereignty', 'data localization', 'data residency', 'cross-border data',
-        'sovereign cloud', 'government cloud', 'classified cloud', 'air-gapped',
-        'regulatory compliance', 'gdpr', 'privacy regulation', 'data protection',
-        'operational resilience', 'dora', 'third party risk', 'outsourcing',
-        'critical infrastructure', 'national security', 'supply chain security'
-    ],
-    // Competitive threat level
-    COMPETITIVE_THREAT: [
-        'selects microsoft', 'selects azure', 'selects aws', 'selects google',
-        'partnership with microsoft', 'partnership with amazon', 'partnership with google',
-        'replaces ibm', 'migrates from ibm', 'moves away from ibm',
-        'competitive bid', 'vendor bakeoff', 'platform evaluation'
-    ],
-    // IBM opportunity
-    IBM_OPPORTUNITY: [
-        'hybrid cloud', 'multicloud', 'cloud repatriation', 'on-premise',
-        'mainframe modernization', 'core transformation', 'mission critical',
-        'regulated industry', 'compliance requirements', 'data governance',
-        'ai governance', 'responsible ai', 'open source', 'red hat',
-        'automation', 'integration', 'security', 'observability'
-    ]
-};
-
-// ============================================
 // DEEP READS SOURCE CLASSIFICATION
 // Sources that provide strategic, long-form content
 // Used by renderDeepReads() for source selection
@@ -1452,22 +1414,6 @@ function detectMarketFromText(text) {
             return market;
         }
     }
-    return null;
-}
-
-/**
- * Classify which wave (AI or Sovereignty) an article belongs to
- * @param {string} text - Article title or content to search
- * @returns {string|null} - 'AI_WAVE', 'SOVEREIGNTY_WAVE', or null
- */
-function classifyWave(text) {
-    const lowerText = text.toLowerCase();
-    const aiScore = SIGNAL_CLASSIFICATION.AI_WAVE.filter(kw => lowerText.includes(kw)).length;
-    const sovScore = SIGNAL_CLASSIFICATION.SOVEREIGNTY_WAVE.filter(kw => lowerText.includes(kw)).length;
-    
-    if (aiScore > sovScore && aiScore > 0) return 'AI_WAVE';
-    if (sovScore > aiScore && sovScore > 0) return 'SOVEREIGNTY_WAVE';
-    if (aiScore > 0) return 'AI_WAVE'; // Tie-breaker: AI wave
     return null;
 }
 

@@ -3261,7 +3261,7 @@ UPDATE RULES:
 - If a new article matches a watchlist client, surface it in executiveSummary and name the conversation door to open with them
 - Keep all existing content that is still valid
 - Add new conversationStarters only if new articles provide genuinely new hypotheses to test with a client CTO
-- Apply the same [AI WAVE] / [SOVEREIGNTY WAVE] tagging, citation, and hypothesis-framing rules as the original digest
+- Apply the same citation and hypothesis-framing rules as the original digest
 - Return ONLY valid JSON with the same structure as the original digest
 
 Return ONLY valid JSON, no markdown fences:
@@ -3409,7 +3409,6 @@ YOUR JOB IS NOT TO SUMMARIZE NEWS. Map today's signals to the five client conver
 ROLE CONTEXT:
 - You lead 115 ATLs across 343 enterprise accounts in Asia Pacific (excluding Japan)
 - Joint cockpit model: TSL + ATL together at C-suite altitude
-- Dual-wave thesis: Tag EVERY insight as [AI WAVE] or [SOVEREIGNTY WAVE]
 - Priority industries: Financial Services, Government, Manufacturing, Energy, Retail
 - Competitors: Microsoft Azure, AWS, Google Cloud, Salesforce, SAP, Oracle, ServiceNow, Databricks, Snowflake
 
@@ -3439,27 +3438,27 @@ RULES:
 
 Return valid JSON:
 {
-    "executiveSummary": "3-4 ACTION-ORIENTED sentences. Tag each [AI WAVE] or [SOVEREIGNTY WAVE]. Cite sources. Name the strongest conversation door. If thisWeekContext mentions a client meeting, lead with that signal.",
+    "executiveSummary": "3-4 ACTION-ORIENTED sentences. Cite sources. Name the strongest conversation door. If thisWeekContext mentions a client meeting, lead with that signal.",
     "sections": [
         {
             "title": "Competitive Alerts",
             "emoji": "🚨",
-            "summary": "Competitive threats with [Source Name](URL) citations. Tag wave. State IBM counter-position from the relevant conversation door. Do not claim IBM can replace — frame as the question the client should be asking."
+            "summary": "Competitive threats with [Source Name](URL) citations. State IBM counter-position from the relevant conversation door. Do not claim IBM can replace — frame as the question the client should be asking."
         },
         {
             "title": "Regulatory & Sovereignty",
             "emoji": "🛡️",
-            "summary": "Regulatory and data-residency developments with citations. Tag [SOVEREIGNTY WAVE]. Map to Conv 1 (data residency), Conv 3 (audit/identity mandate), or Conv 4 (workload placement)."
+            "summary": "Regulatory and data-residency developments with citations. Map to Conv 1 (data residency), Conv 3 (audit/identity mandate), or Conv 4 (workload placement)."
         },
         {
             "title": "AI & Agentic",
             "emoji": "🤖",
-            "summary": "AI and agent developments with citations. Tag [AI WAVE]. Map to Conv 2 (agent control plane), Conv 1 (data the agents need), or Conv 5 (AI coding/modernisation)."
+            "summary": "AI and agent developments with citations. Map to Conv 2 (agent control plane), Conv 1 (data the agents need), or Conv 5 (AI coding/modernisation)."
         },
         {
             "title": "Market Signals",
             "emoji": "🌏",
-            "summary": "APAC market-specific signals with citations. Name market and matched client if applicable. Tag wave."
+            "summary": "APAC market-specific signals with citations. Name market and matched client if applicable. Name the conversation door."
         }
     ],
     "conversationStarters": [
@@ -4284,9 +4283,7 @@ FIELD DEFINITIONS:
 
 - soWhat: The market shift this signals. Why it matters NOW in APAC. Frame the unconsidered need — what the client has not yet realised they need. Do NOT mention IBM here.
 
-- conversationDoor: Which of the five conversations does this article most strongly open? (Conv 1 / Conv 2 / Conv 3 / Conv 4 / Conv 5)
-
-- waveClassification: Tag as [AI WAVE] or [SOVEREIGNTY WAVE] or [BOTH]
+- conversationDoor: Which of the five conversations does this article most strongly open? (Conv 1 / Conv 2 / Conv 3 / Conv 4 / Conv 5 / Conv L)
 
 - ibmAngle: Name the SPECIFIC IBM product from the conversationDoor and frame the Why Change — the cost of standing still. Use the competitive counter if a competitor is named in the article.
 
@@ -4301,12 +4298,11 @@ FIELD DEFINITIONS:
   "I've been thinking that [observation from article] — is that consistent with what you're seeing?"
   Peer CTO tone. Not a sales pitch. Not an open-ended probe. Cites the article signal.
 
-Return ONLY valid JSON:
+Return ONLY valid JSON, no markdown fences:
 {
     "keyFacts": ["string", "string", "string"],
     "soWhat": "string",
-    "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5 | Conv L",
-    "waveClassification": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
+    "conversationDoor": "Conv 1 or Conv 2 or Conv 3 or Conv 4 or Conv 5 or Conv L",
     "ibmAngle": "string",
     "clientImplication": "string",
     "competitiveWatch": "string",
@@ -4335,11 +4331,6 @@ Return ONLY valid JSON:
                     <div class="deep-read-section">
                         <div class="deep-read-label">🗣️ Conversation Door</div>
                         <div class="deep-read-text"><strong>${this.escapeHtml(result.conversationDoor || result.pillarMapping)}</strong></div>
-                    </div>` : ''}
-                    ${result.waveClassification ? `
-                    <div class="deep-read-section">
-                        <div class="deep-read-label">🌊 Wave Classification</div>
-                        <div class="deep-read-text"><strong>${this.escapeHtml(result.waveClassification)}</strong></div>
                     </div>` : ''}
                     <div class="deep-read-section">
                         <div class="deep-read-label">🔵 IBM Angle</div>
@@ -5120,7 +5111,7 @@ Return ONLY valid JSON:
                 'FIELD CTO CONTEXT',
                 '================================================================================',
                 '115 ATLs | 343 Accounts | 5 Markets (ANZ, ASEAN, GCG, ISA, KOREA)',
-                'Dual-Wave Thesis: AI/Agentic Transformation + Sovereignty/Regulation',
+                'Five Conversations: Govern Data · Connect & Automate · Trust Identity · Run Anywhere · Build & Modernise',
                 '',
                 '================================================================================',
                 'ESCALATION & BRIEFING ITEMS',
@@ -5171,7 +5162,7 @@ CONTEXT:
 - Markets: ANZ, ASEAN, GCG, ISA, KOREA
 - Each ATL manages 2-3 clients in "cockpit model" with TSL
 - Goal: Earn "Client CTO" posture, increase IBM share
-- Dual-wave: AI/Agentic + Sovereignty/Regulation
+- Five Conversations framework: map every signal to the relevant conversation door
 
 VOICE: First person, direct, action-oriented. Senior technical leader, not corporate comms. "Here's what I'm seeing..." not "The following observations..."
 
@@ -5194,7 +5185,7 @@ Structure (plain text):
 Subject: IBM APAC Field CTO — Weekly ATL Intelligence Brief | ${date}
 
 WHAT TO LEAD WITH THIS WEEK
-[2-3 sentences. Single IBM message for ATLs. Tag [AI WAVE] or [SOVEREIGNTY WAVE]. Specific call to action.]
+[2-3 sentences. Single IBM message for ATLs. Name the conversation door to open. Specific call to action.]
 
 ESCALATION ITEMS
 [If ESCALATE signals: client/market + what ATL should do. If none: "No escalation items this week — but stay close to your Tier 1s."]
@@ -5209,10 +5200,10 @@ COMPETITIVE WATCH
 [2-3 sentences on threats/opportunities. Name competitors + IBM counter-position + specific solutions.]
 
 ATL TALKING POINTS
-[Exactly 3 conversational one-liners for client CTOs. Peer CTO tone, not sales pitch. Max 25 words each.]
-1. [AI/Agentic wave]
-2. [Sovereignty/Regulation wave]
-3. [IBM strategic positioning]
+[Exactly 3 conversational one-liners for client CTOs. Peer CTO tone, not sales pitch. Max 25 words each. Each should name the conversation door it opens.]
+1. [Agentic arc — Conv 2 or Conv 5]
+2. [Sovereignty arc — Conv 3 or Conv 4]
+3. [IBM strategic positioning — any conversation door]
 
 IBM POSITIONING THIS WEEK
 [1-2 sentences on which IBM solutions to emphasize and why.]
@@ -7681,22 +7672,19 @@ MISSION: Generate EXACTLY 3 executive insights for the "Client CTO" role.
 Each insight must:
 1. SYNTHESIZE multiple articles into ONE actionable insight
 2. Answer "So what does this mean for IBM APAC?"
-3. Tag as [AI WAVE] or [SOVEREIGNTY WAVE]
-4. Map to IBM pillar (Foundation / Pillar 1 / Pillar 2 / Pillar 3)
-5. Include specific action or positioning recommendation
+3. Name the conversation door it opens (Conv 1 / Conv 2 / Conv 3 / Conv 4 / Conv 5)
+4. Include specific action or positioning recommendation
 
 FRAMEWORK REMINDERS:
-- Only 16% of AI reaches enterprise scale—data readiness is the bottleneck
-- IBM addresses BOTH waves: AI transformation AND sovereignty
+- Under 1% of enterprise data is AI-ready — governed access is the bottleneck, not the model
 - Position ATLs as "Client CTOs"—strategic advisors, not vendors
 
-Return JSON array:
+Return JSON array, no markdown fences:
 [
   {
     "headline": "Sharp, memorable (8 words max)",
     "synthesis": "2-3 sentences: what's happening, why it matters for IBM APAC, what to do",
-    "wave": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
-    "pillar": "Foundation | Pillar 1 | Pillar 2 | Pillar 3",
+    "conversationDoor": "Conv 1 or Conv 2 or Conv 3 or Conv 4 or Conv 5",
     "sourceIndices": [1, 3, 5]
   }
 ]
@@ -7761,8 +7749,7 @@ function copyExecutiveSummary() {
         const { insights } = JSON.parse(cached);
         if (!insights?.length) { showToast('No brief to copy'); return; }
         insights.forEach(ins => {
-            const meta = [ins.wave, ins.pillar].filter(Boolean).join(' · ');
-            if (meta) text += `[${meta}]\n`;
+            if (ins.conversationDoor) text += `[${ins.conversationDoor}]\n`;
             text += `${ins.headline}\n`;
             if (ins.synthesis) text += `${ins.synthesis}\n`;
             text += '\n';
@@ -7998,17 +7985,15 @@ function renderExecutiveInsight(insight) {
         `<a href="${s.url || '#'}" target="_blank" class="exec-source-link">${escapeHtml(s.title)}</a> <span class="exec-source-name">(${escapeHtml(s.source || 'Source')})</span>`
     ).join('<br>');
     
-    // Wave and Pillar badges
-    const waveBadge = insight.wave ? `<span class="insight-badge wave-badge">${escapeHtml(insight.wave)}</span>` : '';
-    const pillarBadge = insight.pillar ? `<span class="insight-badge pillar-badge">${escapeHtml(insight.pillar)}</span>` : '';
-    
+    const convDoorBadge = insight.conversationDoor ? `<span class="insight-badge">${escapeHtml(insight.conversationDoor)}</span>` : '';
+
     return `
         <div class="executive-insight ${typeClass}">
             <div class="executive-insight-header">
                 <span class="executive-insight-type">${typeEmoji}</span>
                 <span class="executive-insight-headline">${escapeHtml(insight.headline)}</span>
             </div>
-            ${waveBadge || pillarBadge ? `<div class="executive-insight-badges">${waveBadge}${pillarBadge}</div>` : ''}
+            ${convDoorBadge ? `<div class="executive-insight-badges">${convDoorBadge}</div>` : ''}
             <div class="executive-insight-synthesis">${escapeHtml(insight.synthesis)}</div>
             <div class="executive-insight-sources">
                 <span class="executive-sources-label">Sources:</span>
@@ -8233,7 +8218,7 @@ ${signalSummaries}
 CONTEXT:
 - Tier 1 clients: ${tier1Clients || 'See watchlist'}
 - Markets with signals: ${marketsInSignals.length > 0 ? marketsInSignals.join(', ') : 'All markets'}
-- Dual-wave thesis: AI/Agentic + Sovereignty/Regulation
+- Five Conversations framework: map every signal to the relevant conversation door
 - Goal: Earn "Client CTO" posture — trusted strategic advisor, not a vendor
 - APAC Geographic Scope: ANZ (Australia/New Zealand), ASEAN (Singapore/Malaysia/Indonesia/Thailand/Philippines/Vietnam), GCG (Hong Kong/Taiwan/China), ISA (India/Sri Lanka/Bangladesh), KOREA (South Korea)
 
@@ -9718,7 +9703,7 @@ Long-form articles for strategic thinking — content for CxO conversations, boa
 ARTICLES:
 ${articleSummaries}
 
-CONTEXT: Elevate tactical to strategic. Translate tech trends to business impact for CFOs/CEOs. Build ATL team capability. Dual-wave: AI/Agentic + Sovereignty/Regulation.
+CONTEXT: Elevate tactical to strategic. Translate tech trends to business impact for CFOs/CEOs. Build ATL team capability. Five Conversations framework: map signals to conversation doors (Conv 1–5 + Conv L).
 
 ANALYSIS FRAMEWORK:
 1. Extract technical specifications (numbers, metrics, capabilities) - be specific

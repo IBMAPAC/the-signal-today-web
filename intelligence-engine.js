@@ -1701,10 +1701,6 @@ COMPETITIVE COUNTERS (use in ibmAngle and competitorActivity):
 - vs GitHub Copilot/Cursor → Conv 5: whole lifecycle and governed spend, not just autocomplete
 - vs Snyk/Chainguard/Athena → Conv L: scanning is not fixing; Lightwell supplies the signed fix at the version they already run; do not treat as either/or
 
-DUAL-WAVE THESIS:
-- [AI WAVE]: AI and agentic transformation — agents that act, not chatbots
-- [SOVEREIGNTY WAVE]: Data residency, regulatory compliance, operational control
-
 KEY PROOF POINTS:
 - Conv 1: Under 1% of enterprise data is AI-ready — governed access is the bottleneck, not the model
 - Conv 2: Agents proliferating across teams with no central record of what acts or what it can reach
@@ -1724,9 +1720,7 @@ ANALYSIS FRAMEWORK:
    - Client signaling a conversation door signal = 75+
    - Market shift favouring IBM positioning = 70+
 
-3. WAVE CLASSIFICATION: Tag as [AI WAVE] or [SOVEREIGNTY WAVE] or [BOTH]
-
-4. CONVERSATION DOOR: Which conversation does this signal most strongly open?
+3. CONVERSATION DOOR: Which conversation does this signal most strongly open?
    - Data platform sprawl, residency, AI stalled on data → Conv 1
    - Agent sprawl, middleware debt, M&A integration, stalled RPA → Conv 2
    - Zero-trust/audit mandate, identity growth, DORA-style regulation → Conv 3
@@ -1734,12 +1728,12 @@ ANALYSIS FRAMEWORK:
    - Legacy estate, ungoverned AI coding spend, stalled modernisation → Conv 5
    - Open-source CVE exposure the client owns and cannot fix, pinned dependency, private fork, community open-source in production, patch-to-production cycle → Conv L (qualifying path — never open cold; route here only when these words appear explicitly)
 
-5. CLIENT MATCHING RULES (CRITICAL):
+4. CLIENT MATCHING RULES (CRITICAL):
    - ONLY match clients whose INDUSTRY matches the article topic
    - ONLY match clients whose MARKET/GEOGRAPHY matches the article location
    - If no match on BOTH criteria: affectedClients = [], lower opportunityScore to 30-50
 
-6. ACTION ITEMS must follow the five-step motion:
+5. ACTION ITEMS must follow the five-step motion:
    - OPEN: Diagnostic question, not a pitch — TSL + ATL together at C-suite altitude
    - WHY CHANGE: Surface the cost of standing still and the unconsidered need
    - SHAPE: Draw the product-blind architecture. Name no product until the client points at a layer
@@ -1747,32 +1741,31 @@ ANALYSIS FRAMEWORK:
    - PROGRESS: Agree a client step (review, workshop, PoC)
    - Example: "Open with DBS on Conv 3 — ask 'Can you list every non-human identity with credentials in your environment?' before their MAS audit deadline. Shape the identity fabric (product-blind). When they point at secrets/agents, position Vault."
 
-7. "SO WHAT?" ANALYSIS (CRITICAL — make it insightful):
+6. "SO WHAT?" ANALYSIS (CRITICAL — make it insightful):
    - Don't just report what happened — explain WHY IT MATTERS to the Field CTO
    - Connect the dots: Event → conversation door it opens → specific ATL action
    - Add urgency context: renewal dates, regulatory deadlines, competitive windows
    - Example: "Microsoft wins DBS deal" → "Competitor has foothold in payments at YOUR Tier 1 client. Open Conv 2 — ask who governs the agents and integrations Microsoft will now deploy. Renewal in 90 days."
 
-8. URGENCY LEVELS:
+7. URGENCY LEVELS:
    - CRITICAL: Act within 7 days (client renewal, competitive threat, regulatory deadline)
    - HIGH: Act within 30 days (emerging pattern, market shift, opportunity window)
    - MEDIUM: Act within 90 days (strategic positioning, relationship building)
    - LOW: Monitor (background intelligence, long-term trends)
 
-OUTPUT FORMAT (JSON only):
+OUTPUT FORMAT — respond with a single JSON object, nothing else, no markdown fences:
 {
-  "threatLevel": 0-100,
-  "opportunityScore": 0-100,
+  "threatLevel": 0,
+  "opportunityScore": 0,
   "confidence": 0.95,
-  "waveClassification": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
-  "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5 | Conv L",
+  "conversationDoor": "Conv 1 or Conv 2 or Conv 3 or Conv 4 or Conv 5 or Conv L",
   "reasoning": "One-sentence strategic context: what this signals for IBM APAC and why it matters NOW. Name the conversation door it opens. No client names here — use actionableInsights for that.",
   "soWhat": "2-3 sentences explaining WHY this matters to the Field CTO. Connect event → conversation door → specific ATL action. Be specific about timing and stakes.",
   "actionableInsights": [
     {
       "action": "Specific action using the five-step motion: who opens which conversation door, with which client, by when. Lead with Why Change.",
-      "urgency": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
-      "timeline": "Within 7 days" | "Within 30 days" | "Within 90 days" | "Monitor",
+      "urgency": "CRITICAL or HIGH or MEDIUM or LOW",
+      "timeline": "Within 7 days or Within 30 days or Within 90 days or Monitor",
       "ibmAngle": "Specific IBM product from the conversation door + the Why Change framing. Use competitive counter if a competitor is named.",
       "context": "Why this action matters now (renewal date, regulatory deadline, competitive window)"
     }
