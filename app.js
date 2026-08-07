@@ -1094,7 +1094,8 @@ const STORAGE_KEYS = {
     LAST_REFRESH: 'signal_last_refresh',
     TREND_HISTORY: 'signal_trend_history',
     ARTICLE_RATINGS: 'signal_article_ratings',   // Per-article 👍/👎 feedback
-    SOURCE_SCORE_DRIFT: 'signal_score_drift'      // Accumulated score drift per source
+    SOURCE_SCORE_DRIFT: 'signal_score_drift',     // Accumulated score drift per source
+    SECTION_STATE: 'signal_section_state'         // Persisted section open/close states
 };
 
 // Utility: Escape HTML entities to prevent XSS
@@ -1207,6 +1208,20 @@ class SignalApp {
                 // Only categorize and render for instant display
                 this.categorizeArticles();
                 this.renderDigest();
+                // Restore section open/close states from localStorage
+                // Default: action-required open, all others as last left
+                try {
+                    const savedStates = JSON.parse(localStorage.getItem(STORAGE_KEYS.SECTION_STATE) || '{}');
+                    if (!savedStates.hasOwnProperty('action-required')) {
+                        savedStates['action-required'] = true; // open by default
+                    }
+                    Object.entries(savedStates).forEach(([id, isOpen]) => {
+                        const content = document.getElementById(`${id}-content`);
+                        const chevron = document.querySelector(`#${id}-section .chevron`);
+                        if (content) content.classList.toggle('collapsed', !isOpen);
+                        if (chevron) chevron.classList.toggle('collapsed', !isOpen);
+                    });
+                } catch(e) {}
                 // Update intelligence stats if available
                 if (typeof updateIntelligenceStats === 'function') {
                     updateIntelligenceStats();
@@ -1401,9 +1416,27 @@ class SignalApp {
                 case 'S':
                     if (!anyModalOpen) { e.preventDefault(); this.openSettings(); }
                     break;
+                case 'w':
+                case 'W':
+                    if (!anyModalOpen) { e.preventDefault(); openWeekContextEditor(); }
+                    break;
+                case 'a':
+                case 'A':
+                    if (!anyModalOpen) {
+                        e.preventDefault();
+                        const arSection = document.getElementById('action-required-section');
+                        const arContent = document.getElementById('action-required-content');
+                        if (arSection && !arSection.classList.contains('hidden')) {
+                            if (arContent?.classList.contains('collapsed')) toggleSection('action-required');
+                            arSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    }
+                    break;
                 case 'Escape':
                     e.preventDefault();
-                    if (articleModal && !articleModal.classList.contains('hidden')) {
+                    if (document.getElementById('week-context-modal') && !document.getElementById('week-context-modal').classList.contains('hidden')) {
+                        closeWeekContextEditor();
+                    } else if (articleModal && !articleModal.classList.contains('hidden')) {
                         closeArticle();
                     } else if (settingsModal && !settingsModal.classList.contains('hidden')) {
                         closeSettings();
@@ -1432,8 +1465,10 @@ class SignalApp {
     showKeyboardHelp() {
         const shortcuts = [
             ['R', 'Refresh digest'],
-            ['1', 'Switch to Daily tab'],
-            ['2', 'Switch to Weekly tab'],
+            ['W', 'Set this week\'s context'],
+            ['A', 'Jump to Action Required'],
+            ['C', 'Open Client Manager'],
+            ['S', 'Open Settings'],
             ['J / K', 'Navigate articles down / up'],
             ['O', 'Open focused article'],
             ['Esc', 'Close modal'],
@@ -1483,6 +1518,17 @@ class SignalApp {
         }
         
         scheduleNext();
+
+        // Auto-refresh when tab becomes visible after 2+ hours of inactivity
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden || this.isLoading) return;
+            const last = localStorage.getItem(STORAGE_KEYS.LAST_REFRESH);
+            const age = last ? Date.now() - new Date(last).getTime() : Infinity;
+            if (age > 2 * 3600 * 1000) {
+                console.log('👁 Tab refocused after >2h — refreshing stale content');
+                this.refresh();
+            }
+        });
     }
 
     // ==========================================
@@ -1494,6 +1540,7 @@ class SignalApp {
         this.updateReadingTime();
         this.updateLastRefreshed();
         this.updateSourceHealthBadge();
+        updateWeekContextWidget();
     }
 
     updateSourceHealthBadge() {
@@ -1503,12 +1550,18 @@ class SignalApp {
         if (count === 0) {
             badge.classList.add('hidden');
             badge.removeAttribute('title');
+            badge.onclick = null;
             return;
         }
         badge.classList.remove('hidden');
         badge.textContent = `⚠️ ${count} source${count > 1 ? 's' : ''} failed`;
-        const names = this.failedSources.map(s => `• ${s.name}`).join('\n');
-        badge.title = `Failed to fetch:\n${names}`;
+        badge.title = 'Click to see failed sources';
+        badge.style.cursor = 'pointer';
+        const failed = this.failedSources.slice(); // snapshot
+        badge.onclick = () => {
+            const names = failed.map(s => `• ${s.name}`).join('\n');
+            showToast(`⚠️ Failed sources:\n${names}`);
+        };
     }
 
     updateDate() {
@@ -1673,123 +1726,21 @@ class SignalApp {
                 this.digest = this.createBasicDigest();
             }
             
-            // Save articles and categorize
+            // Save and render (forceRefresh = true to regenerate AI synthesis)
             localStorage.setItem(STORAGE_KEYS.LAST_REFRESH, new Date().toISOString());
             this.saveToStorage();
-            this.categorizeArticles();
-            
-            // PROGRESSIVE LOADING: Show content immediately with cached data
-            // Hide loading spinner and show content before AI analysis completes
-            this.hideLoading();
-            this.isLoading = false;
-            
-            // Render with cached intelligence (forceRefresh = false to use cache first)
-            // AI analysis will update in background via renderTodaysSignals()
-            this.renderDigest(false);
+            this.renderDigest(true);
             this.updateUI();
             
             const totalTime = Math.round(performance.now() - startTime);
-            console.log(`✅ Articles ready in ${totalTime}ms (Tier 1 & 2 complete)`);
-            
-            // Run Tier 3 analysis in background for high-value articles
-            this.runBackgroundTier3Analysis();
+            console.log(`✅ Refresh completed in ${totalTime}ms`);
             
         } catch (error) {
             console.error('Refresh error:', error);
             this.showError(`Failed to refresh: ${error.message}`);
-            this.hideLoading();
+        } finally {
             this.isLoading = false;
-        }
-    }
-
-    // ==========================================
-    // Background Tier 3 Analysis
-    // ==========================================
-
-    async runBackgroundTier3Analysis() {
-        if (!this.intelligenceEngine) {
-            console.log('⚠️ Intelligence Engine not available, skipping Tier 3 analysis');
-            return;
-        }
-        
-        // Get articles that need Tier 3 analysis (Tier 2 with confidence < 0.85)
-        const articlesNeedingTier3 = this.articles.filter(a =>
-            a.intelligence?.tier === 2 &&
-            a.intelligence?.confidence < 0.85 &&
-            a.intelligence?.isRelevant
-        );
-        
-        if (articlesNeedingTier3.length === 0) {
-            console.log('✅ No articles need Tier 3 analysis');
-            return;
-        }
-        
-        console.log(`🧠 Starting background Tier 3 analysis for ${articlesNeedingTier3.length} articles...`);
-        const startTime = performance.now();
-        
-        // Process in batches of 10 to avoid overwhelming the API
-        const BATCH_SIZE = 10;
-        let analyzed = 0;
-        
-        for (let i = 0; i < articlesNeedingTier3.length; i += BATCH_SIZE) {
-            const batch = articlesNeedingTier3.slice(i, i + BATCH_SIZE);
-            
-            // Analyze batch in parallel
-            const batchResults = await Promise.allSettled(
-                batch.map(article =>
-                    this.intelligenceEngine.analyzeArticle(
-                        article,
-                        this.clients,
-                        this.articles,
-                        false // skipTier3 = false, run full Tier 3 analysis
-                    )
-                )
-            );
-            
-            // Update articles with results
-            for (let j = 0; j < batchResults.length; j++) {
-                const result = batchResults[j];
-                if (result.status === 'fulfilled') {
-                    const updatedArticle = result.value;
-                    const index = this.articles.findIndex(a => a.id === updatedArticle.id);
-                    if (index !== -1) {
-                        this.articles[index] = updatedArticle;
-                        // Log Tier 3 completion for debugging
-                        if (updatedArticle.intelligence?.tier === 3) {
-                            console.log(`✅ Tier 3 complete: ${updatedArticle.title.substring(0, 50)}... (has clientContext: ${!!updatedArticle.intelligence.clientContext})`);
-                        }
-                    }
-                    analyzed++;
-                } else {
-                    // Log errors for debugging
-                    console.error(`❌ Tier 3 analysis failed for article ${batch[j]?.title?.substring(0, 50)}:`, result.reason);
-                }
-            }
-            
-            // Update UI after each batch to show progressive enhancement
-            // Direct call to renderSignalFeed() to avoid renderTodaysSignals() overwriting with cached data
-            renderSignalFeed();
-            if (typeof updateIntelligenceStats === 'function') {
-                updateIntelligenceStats();
-            }
-            
-            const progress = Math.round((analyzed / articlesNeedingTier3.length) * 100);
-            console.log(`🧠 Tier 3 progress: ${progress}% (${analyzed}/${articlesNeedingTier3.length})`);
-        }
-        
-        const totalTime = Math.round(performance.now() - startTime);
-        console.log(`✅ Background Tier 3 analysis complete in ${totalTime}ms (${analyzed} articles)`);
-        
-        // Final UI update with all Tier 3 intelligence
-        this.saveToStorage();
-        renderSignalFeed();
-        if (typeof updateIntelligenceStats === 'function') {
-            updateIntelligenceStats();
-        }
-        
-        // Update intelligence stats
-        if (typeof updateIntelligenceStats === 'function') {
-            updateIntelligenceStats();
+            this.hideLoading();
         }
     }
 
@@ -2551,8 +2502,7 @@ class SignalApp {
                         return this.intelligenceEngine.analyzeArticle(
                             article,
                             this.clients,
-                            this.articles, // Pass existing articles for context
-                            true // skipTier3 = true for fast initial scoring
+                            this.articles // Pass existing articles for context
                         );
                     }
                     return Promise.resolve(article);
@@ -3556,30 +3506,30 @@ ${articleList}`;
         // 3. Signal Feed — Unified view (replaces Client Radar + All Signals)
         // 4. Deep Reads — Weekend reading (collapsed)
         
-        // PROGRESSIVE LOADING: Render immediately with cached data
-        // This ensures instant UI feedback while AI analysis runs in background
-        renderActionRequired();
-        renderSignalFeed();
+        // Generate signals first (async), then extract Action Required and build Signal Feed
+        // Pass forceRefresh to ensure Action Required updates on refresh
+        renderTodaysSignals(forceRefresh)
+            .then(() => {
+                renderActionRequired();
+                renderSignalFeed();
+                renderClientRisk(); // Sprint 5.2 — client risk based on scored articles
+            })
+            .catch((error) => {
+                console.error('Signal generation failed:', error);
+                // Still render Action Required and Signal Feed from cache
+                // This ensures the UI updates even if signal generation fails
+                renderActionRequired();
+                renderSignalFeed();
+                renderClientRisk();
+            });
+        
+        // These can render in parallel
         renderExecutiveSummary(forceRefresh);
         renderMarketInsights(forceRefresh);
         renderDeepReads(forceRefresh);
         
         // Update portfolio stats
         updateClientManagerCounts();
-        
-        // BACKGROUND AI ANALYSIS: Update UI when complete
-        // Generate signals asynchronously, then refresh Action Required and Signal Feed
-        // Pass forceRefresh to ensure Action Required updates on refresh
-        renderTodaysSignals(forceRefresh)
-            .then(() => {
-                // Refresh sections with AI-enhanced insights
-                renderActionRequired();
-                renderSignalFeed();
-            })
-            .catch((error) => {
-                console.error('Signal generation failed:', error);
-                // UI already rendered with cached data, so failure is graceful
-            });
     }
 
     // ==========================================
@@ -4016,11 +3966,14 @@ ${articleList}`;
             
             return `
                 <div class="client-group">
+                    <div class="client-group-signal-strip client-signal-${dominantSignal}">
+                        ${badge.emoji} ${badge.label} · ${articles.length} signal${articles.length !== 1 ? 's' : ''}
+                    </div>
                     <div class="client-name-row">
                         ${tierLabel}
                         <span class="client-name">${this.escapeHtml(clientName)}</span>
-                        <span class="signal-type-badge ${badge.cssClass}">${badge.emoji} ${badge.label}</span>
-                        <button class="btn-meeting-brief" onclick="openMeetingBrief('${safeClientName}')" title="Meeting Brief">📋</button>
+                        <button class="btn btn-sm btn-primary btn-meeting-brief-primary"
+                                onclick="openMeetingBrief('${safeClientName}')">📋 Meeting Brief</button>
                     </div>
                     <div class="client-articles">
                         ${articles.slice(0, 3).map(a => {
@@ -4194,6 +4147,11 @@ ${articleList}`;
         this.db.markRead(id);
         this.saveToStorage();
         this.updateReadingTime();
+        // Live-update read state in signal feed without re-render
+        try {
+            const feedItem = document.querySelector(`.signal-feed-item[data-article-id="${CSS.escape(id)}"]`);
+            if (feedItem) feedItem.classList.add('signal-feed-item--read');
+        } catch(e) {}
         
         // Show/hide Deep Read button based on API key availability
         const settings = getAIProviderSettings();
@@ -5338,6 +5296,12 @@ TOP READS
         updateSourcesCount();
         
         document.getElementById('settings-modal').classList.remove('hidden');
+        // Auto-focus the active API key field
+        setTimeout(() => {
+            const provider = localStorage.getItem('signal_ai_provider') || 'claude';
+            const keyEl = document.getElementById(`${provider}-api-key`);
+            if (keyEl && !keyEl.closest('.hidden')) keyEl.focus();
+        }, 50);
     }
 
     renderIntelligenceStatsInSettings() {
@@ -5539,12 +5503,31 @@ function switchDigestTab(tab) {
     // Kept for backwards compatibility in case any code calls it
 }
 
+// ==========================================
+// SETTINGS TABS
+// ==========================================
+function switchSettingsTab(tab) {
+    document.querySelectorAll('.settings-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    document.querySelectorAll('.settings-tab-content').forEach(el => {
+        const tabName = el.id.replace('settings-tab-', '');
+        el.classList.toggle('hidden', tabName !== tab);
+    });
+}
+
 function toggleSection(sectionId) {
     const content = document.getElementById(`${sectionId}-content`);
     const chevron = document.querySelector(`#${sectionId}-section .chevron`);
-    
+    if (!content) return;
     content.classList.toggle('collapsed');
     chevron?.classList.toggle('collapsed');
+    // Persist open/close state
+    try {
+        const states = JSON.parse(localStorage.getItem(STORAGE_KEYS.SECTION_STATE) || '{}');
+        states[sectionId] = !content.classList.contains('collapsed');
+        localStorage.setItem(STORAGE_KEYS.SECTION_STATE, JSON.stringify(states));
+    } catch(e) {}
 }
 
 function closeSettings() {
@@ -6211,6 +6194,7 @@ function addNewSource() {
     updateDigestTypeButtons();
     
     document.getElementById('source-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('source-name')?.focus(), 50);
 }
 
 function editSource(index) {
@@ -6489,6 +6473,7 @@ function openAddClientForm() {
     document.getElementById('client-form-atl').value = '';
     document.getElementById('client-form-aliases').value = '';
     updateCountryOptions();
+    setTimeout(() => document.getElementById('client-form-name')?.focus(), 50);
 }
 
 function editClient(idx) {
@@ -7712,6 +7697,27 @@ RULES:
     }
 }
 
+// ==========================================
+// COPY: Today's Brief to clipboard
+// ==========================================
+function copyExecutiveSummary() {
+    let text = `📊 Today's Brief — ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}\n\n`;
+    try {
+        const cached = localStorage.getItem(STORAGE_KEY_EXEC_SUMMARY);
+        if (!cached) { showToast('No brief to copy'); return; }
+        const { insights } = JSON.parse(cached);
+        if (!insights?.length) { showToast('No brief to copy'); return; }
+        insights.forEach(ins => {
+            const meta = [ins.wave, ins.pillar].filter(Boolean).join(' · ');
+            if (meta) text += `[${meta}]\n`;
+            text += `${ins.headline}\n`;
+            if (ins.synthesis) text += `${ins.synthesis}\n`;
+            text += '\n';
+        });
+    } catch(e) { showToast('Copy failed'); return; }
+    navigator.clipboard.writeText(text.trim()).then(() => showToast("✅ Today's Brief copied"));
+}
+
 function calculateWeeklyTrends(articles) {
     // Compare themes in current articles vs stored weekly data
     const trends = [];
@@ -8555,6 +8561,38 @@ function toggleActionSection(sectionType) {
 }
 
 // ==========================================
+// COPY: Action Required to clipboard
+// ==========================================
+function copyActionRequired() {
+    let text = `🚨 Action Required — ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}\n\n`;
+    try {
+        const cached = localStorage.getItem(STORAGE_KEYS.TODAYS_SIGNALS);
+        if (!cached) { showToast('No signals to copy'); return; }
+        const data = JSON.parse(cached);
+        const signals = data.signals || [];
+        if (!signals.length) { showToast('No signals to copy'); return; }
+
+        const actionLabels = {
+            'ESCALATE':  '🚨 ESCALATE',
+            'BRIEF_ATL': '📢 BRIEF ATL',
+            'POSITION':  '🎯 POSITION',
+            'MONITOR':   '👁️ MONITOR'
+        };
+
+        signals.forEach(signal => {
+            const label = actionLabels[signal.actionType] || '👁️ MONITOR';
+            text += `${label}: ${signal.headline}\n`;
+            if (signal.context)      text += `Context: ${signal.context}\n`;
+            if (signal.action)       text += `→ Action: ${signal.action}\n`;
+            if (signal.talkingPoint) text += `💬 "${signal.talkingPoint}"\n`;
+            if (signal.ibmAngle)     text += `IBM: ${signal.ibmAngle}\n`;
+            text += '\n';
+        });
+    } catch(e) { showToast('Copy failed'); return; }
+    navigator.clipboard.writeText(text.trim()).then(() => showToast('✅ Action Required copied'));
+}
+
+// ==========================================
 // UNIFIED SIGNAL FEED - Phase 2
 // ==========================================
 
@@ -8886,37 +8924,33 @@ function renderSignalFeed() {
         });
     });
     
-    // Render grouped view
-    // All categories collapsed by default, expand only when specific signal type is filtered
-    const expandedCategory = signalFeedFilters.signalType !== 'ALL'
-        ? (signalFeedFilters.signalType === 'general' ? 'information' : signalFeedFilters.signalType)
-        : null;
-    
+    // Render grouped view — always show first 2 articles per category, rest behind "Show more"
     list.innerHTML = categories.map(cat => {
         const articles = grouped[cat.key];
         if (articles.length === 0) return '';
         
-        // Only expand if this specific category is filtered
-        const isExpanded = expandedCategory === cat.key;
-        const topArticles = articles.slice(0, 5); // Show max 5 per category initially
-        const hasMore = articles.length > 5;
+        const previewArticles = articles.slice(0, 2);
+        const hiddenArticles  = articles.slice(2);
+        const hasMore = hiddenArticles.length > 0;
         
         return `
-            <div class="signal-category ${isExpanded ? 'expanded' : ''}" data-category="${cat.key}">
-                <div class="signal-category-header" onclick="toggleSignalCategory('${cat.key}')">
+            <div class="signal-category" data-category="${cat.key}">
+                <div class="signal-category-header">
                     <span class="signal-category-emoji">${cat.emoji}</span>
                     <span class="signal-category-label">${cat.label}</span>
                     <span class="signal-category-count">${articles.length}</span>
-                    <span class="signal-category-chevron">${isExpanded ? '▲' : '▼'}</span>
                 </div>
                 <div class="signal-category-body">
                     <div class="signal-category-items">
-                        ${topArticles.map(article => renderSignalFeedItem(article)).join('')}
+                        ${previewArticles.map(article => renderSignalFeedItem(article)).join('')}
                     </div>
                     ${hasMore ? `
                         <div class="signal-category-more">
+                            <div class="signal-category-hidden" id="signal-hidden-${cat.key}" style="display:none">
+                                ${hiddenArticles.map(article => renderSignalFeedItem(article)).join('')}
+                            </div>
                             <button class="signal-category-show-more" onclick="showMoreInCategory('${cat.key}')">
-                                Show ${articles.length - 5} more ${cat.label.toLowerCase()} signals
+                                Show ${hiddenArticles.length} more ${cat.label.toLowerCase()} signal${hiddenArticles.length !== 1 ? 's' : ''}
                             </button>
                         </div>
                     ` : ''}
@@ -8924,6 +8958,7 @@ function renderSignalFeed() {
             </div>
         `;
     }).join('');
+    updateSectionTimestamp('signal-feed', Date.now(), false);
 }
 
 function renderSignalFeedItem(article) {
@@ -8987,8 +9022,11 @@ function renderSignalFeedItem(article) {
         </div>
     ` : '';
     
+    // Read state — dim if already read
+    const isRead = Array.isArray(app.articles) && app.articles.some(a => a.id === article.id && a.isRead);
+
     return `
-        <div class="signal-feed-item signal-${article.signalType}" data-article-id="${article.id}">
+        <div class="signal-feed-item signal-${article.signalType}${isRead ? ' signal-feed-item--read' : ''}" data-article-id="${article.id}">
             <div class="signal-feed-header">
                 <span class="signal-feed-type" title="${article.signalType}">${signalEmoji}</span>
                 <div class="signal-feed-headline">
@@ -9004,18 +9042,14 @@ function renderSignalFeedItem(article) {
             
             ${article.intelligence ? renderIntelligenceBadges(article.intelligence) : ''}
             
-            ${article.intelligence?.clientContext ? `<div class="signal-intelligence-client-context"><strong>🎯 ${escapeHtml(article.intelligence.clientContext)}</strong></div>` : ''}
-            
-            ${article.intelligence?.soWhat ? `<div class="signal-intelligence-sowhat"><strong>💡 Why This Matters:</strong> ${escapeHtml(article.intelligence.soWhat)}</div>` : ''}
-            
             ${article.intelligence?.reasoning ? `<div class="signal-intelligence-reasoning"><strong>Analysis:</strong> ${escapeHtml(article.intelligence.reasoning)}</div>` : ''}
             
             ${article.intelligence?.actionableInsights?.length > 0 ? `
                 <div class="signal-intelligence-actions">
-                    <strong>📋 Actions:</strong>
+                    <strong>Actions:</strong>
                     <ul>
                         ${article.intelligence.actionableInsights.map(insight =>
-                            `<li>${escapeHtml(typeof insight === 'string' ? insight : insight.action || insight)}</li>`
+                            `<li>${escapeHtml(insight)}</li>`
                         ).join('')}
                     </ul>
                 </div>
@@ -9033,11 +9067,15 @@ function renderSignalFeedItem(article) {
             ${hasDetails ? `
                 <div class="signal-feed-actions">
                     <button class="signal-feed-expand" onclick="toggleSignalFeedItem(this)">Show IBM angle & talking points</button>
-                    ${article.matchedClients.length > 0 ? `<button class="btn btn-sm btn-brief-atl" onclick="openBriefATL('${escapeHtml(article.matchedClients[0].name)}')">📤 Brief ATL</button>` : ''}
+                    ${article.matchedClients.length > 0 ? `
+                        <button class="btn btn-sm btn-brief-atl" onclick="openBriefATL('${escapeHtml(article.matchedClients[0].name)}')">📤 Brief ATL</button>
+                        <button class="btn btn-sm btn-meeting-brief" onclick="app.openMeetingBrief('${escapeHtml(article.matchedClients[0].name)}')">📋 Meeting Brief</button>
+                    ` : ''}
                 </div>
             ` : article.matchedClients.length > 0 ? `
                 <div class="signal-feed-actions">
                     <button class="btn btn-sm btn-brief-atl" onclick="openBriefATL('${escapeHtml(article.matchedClients[0].name)}')">📤 Brief ATL</button>
+                    <button class="btn btn-sm btn-meeting-brief" onclick="app.openMeetingBrief('${escapeHtml(article.matchedClients[0].name)}')">📋 Meeting Brief</button>
                 </div>
             ` : ''}
         </div>
@@ -9159,7 +9197,15 @@ function toggleSignalCategory(categoryKey) {
 }
 
 function showMoreInCategory(categoryKey) {
-    // Get all articles for this category from signalFeedArticles
+    // Reveal pre-rendered hidden articles and hide the button
+    const hidden = document.getElementById(`signal-hidden-${categoryKey}`);
+    if (hidden) {
+        hidden.style.display = '';
+        const btn = hidden.nextElementSibling;
+        if (btn) btn.style.display = 'none';
+        return;
+    }
+    // Fallback: legacy approach for any edge case
     const typeMapping = {
         'risk': 'risk',
         'opportunity': 'opportunity',
@@ -9747,6 +9793,30 @@ function cacheDeepReads(insights, articles) {
     } catch (e) {
         console.log('Deep reads cache write error:', e);
     }
+    updateSectionTimestamp('deep-reads', Date.now(), false);
+}
+
+// ==========================================
+// COPY: Deep Reads to clipboard
+// ==========================================
+function copyDeepReads() {
+    let text = `📚 Deep Reads — ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}\n\n`;
+    try {
+        const cached = localStorage.getItem(STORAGE_KEYS.DEEP_READS);
+        if (!cached) { showToast('No deep reads to copy'); return; }
+        const { insights, articlesData } = JSON.parse(cached);
+        if (!insights?.length) { showToast('No deep reads to copy'); return; }
+        insights.forEach((ins, i) => {
+            const art = articlesData?.[i] || {};
+            text += `${ins.title || art.title || ''}\n`;
+            if (art.source) text += `Source: ${art.source}\n`;
+            if (ins.strategicThesis)       text += `💡 Thesis: ${ins.strategicThesis}\n`;
+            if (ins.leadershipImplication) text += `📊 Implication: ${ins.leadershipImplication}\n`;
+            if (ins.cxoQuestion)           text += `🎯 CxO Q: "${ins.cxoQuestion}"\n`;
+            text += '\n';
+        });
+    } catch(e) { showToast('Copy failed'); return; }
+    navigator.clipboard.writeText(text.trim()).then(() => showToast('✅ Deep Reads copied'));
 }
 
 function renderSynthesizedDeepRead(insight, article) {
@@ -9840,6 +9910,120 @@ function formatTimeAgo(timestamp) {
     return new Date(timestamp).toLocaleDateString();
 }
 
+// ==========================================
+// WEEK CONTEXT EDITOR
+// ==========================================
+function openWeekContextEditor() {
+    const modal = document.getElementById('week-context-modal');
+    if (!modal) return;
+    const ta = document.getElementById('week-context-inline');
+    if (ta) ta.value = app?.settings?.thisWeekContext || '';
+    modal.classList.remove('hidden');
+    setTimeout(() => ta?.focus(), 50);
+}
+function closeWeekContextEditor() {
+    document.getElementById('week-context-modal')?.classList.add('hidden');
+}
+function saveWeekContext() {
+    const ta = document.getElementById('week-context-inline');
+    if (!ta) return;
+    app.settings.thisWeekContext = ta.value.trim();
+    // Sync to settings modal textarea if open
+    const settingsTa = document.getElementById('week-context');
+    if (settingsTa) settingsTa.value = app.settings.thisWeekContext;
+    app.saveToStorage();
+    updateWeekContextWidget();
+    closeWeekContextEditor();
+    // Re-render context-dependent sections
+    if (app.articles.length > 0) {
+        renderActionRequired();
+        renderExecutiveSummary(true);
+    }
+    showToast('✅ Context saved');
+}
+function updateWeekContextWidget() {
+    const label = document.getElementById('week-context-label');
+    if (!label) return;
+    const ctx = app?.settings?.thisWeekContext || '';
+    label.textContent = ctx
+        ? (ctx.length > 55 ? ctx.substring(0, 52) + '…' : ctx)
+        : "Set this week's context";
+}
+
+// ==========================================
+// CLIENT RISK SCORES — Sprint 5
+// ==========================================
+function calculateClientRiskScores() {
+    const scores = {};
+    const now = Date.now();
+    const ONE_DAY = 86400000;
+    const allArticles = [...(app?.dailyArticles || []), ...(app?.articles || [])];
+    const seen = new Set();
+
+    (app?.clients || []).forEach(client => {
+        const name = typeof client === 'string' ? client : client.name;
+        if (!name) return;
+        const matched = allArticles.filter(a => {
+            if (seen.has(a.id + name)) return false;
+            const clients = a.matchedClients || [];
+            return clients.some(c => {
+                const cn = typeof c === 'string' ? c : c.name;
+                return cn?.toLowerCase() === name.toLowerCase();
+            });
+        });
+        if (matched.length === 0) return;
+        let weightedSum = 0, totalWeight = 0;
+        matched.forEach(a => {
+            const threat = a.intelligence?.threatLevel || 0;
+            const age = (now - new Date(a.publishedDate || a.date || 0).getTime()) / ONE_DAY;
+            const weight = age < 1 ? 3 : age < 2 ? 2 : 1;
+            weightedSum += threat * weight;
+            totalWeight += weight;
+        });
+        const score = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+        if (score > 0) {
+            const counts = {};
+            matched.forEach(a => { const t = a.signalType || 'background'; counts[t] = (counts[t]||0)+1; });
+            const dominant = Object.entries(counts).sort((x,y)=>y[1]-x[1])[0]?.[0] || 'background';
+            scores[name] = {
+                score,
+                level: score >= 81 ? 'critical' : score >= 61 ? 'elevated' : score >= 31 ? 'watch' : 'stable',
+                emoji: score >= 81 ? '🔴' : score >= 61 ? '🟠' : score >= 31 ? '🟡' : '🟢',
+                signalCount: matched.length,
+                dominantType: dominant
+            };
+        }
+    });
+    return scores;
+}
+
+function renderClientRisk() {
+    const section = document.getElementById('client-risk-section');
+    const list = document.getElementById('client-risk-list');
+    const countEl = document.getElementById('client-risk-count');
+    if (!section || !list) return;
+
+    const scores = calculateClientRiskScores();
+    const sorted = Object.entries(scores)
+        .sort((a, b) => b[1].score - a[1].score)
+        .slice(0, 10);
+
+    if (sorted.length === 0) { section.classList.add('hidden'); return; }
+    section.classList.remove('hidden');
+    if (countEl) countEl.textContent = sorted.length;
+
+    list.innerHTML = sorted.map(([name, data]) => `
+        <div class="client-risk-row">
+            <span class="client-risk-level">${data.emoji}</span>
+            <span class="client-risk-name">${escapeHtml(name)}</span>
+            <span class="client-risk-type">${data.dominantType}</span>
+            <span class="client-risk-count">${data.signalCount} signal${data.signalCount !== 1 ? 's' : ''}</span>
+            <button class="btn btn-sm btn-secondary" onclick="app.openMeetingBrief('${escapeHtml(name)}')">📋 Brief</button>
+        </div>
+    `).join('');
+    updateSectionTimestamp('client-risk', Date.now(), false);
+}
+
 // Initialize app
 const app = new SignalApp();
 
@@ -9865,6 +10049,15 @@ window.enableSource = function(url) { app.enableSource(url); };
 window.removeDisabledSource = function(url) { app.removeDisabledSource(url); };
 window.enableAllSources = function() { app.enableAllSources(); };
 window.copyStarter = function(i) { app.copyStarter(i); };
+
+// New globals from UX enhancement sprints
+window.openWeekContextEditor = openWeekContextEditor;
+window.closeWeekContextEditor = closeWeekContextEditor;
+window.saveWeekContext = saveWeekContext;
+window.switchSettingsTab = switchSettingsTab;
+window.copyActionRequired = copyActionRequired;
+window.copyExecutiveSummary = copyExecutiveSummary;
+window.copyDeepReads = copyDeepReads;
 
 // Signal Feed filters (Phase 2)
 window.filterByClient = filterByClient;

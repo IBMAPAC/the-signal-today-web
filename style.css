@@ -1395,42 +1395,6 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
     }
 }
 
-/* Intelligence client context - YOUR client flag */
-.signal-intelligence-client-context {
-    margin-top: 12px;
-    padding: 10px 12px;
-    background: rgba(255, 107, 107, 0.15);
-    border-left: 4px solid #ff6b6b;
-    border-radius: 4px;
-    font-size: 14px;
-    line-height: 1.5;
-    color: var(--cds-text-primary);
-    font-weight: 600;
-}
-
-.signal-intelligence-client-context strong {
-    color: #ff6b6b;
-}
-
-/* Intelligence "So What?" - Why it matters */
-.signal-intelligence-sowhat {
-    margin-top: 12px;
-    padding: 12px 14px;
-    background: rgba(255, 193, 7, 0.12);
-    border-left: 4px solid #ffc107;
-    border-radius: 4px;
-    font-size: 14px;
-    line-height: 1.6;
-    color: var(--cds-text-primary);
-}
-
-.signal-intelligence-sowhat strong {
-    color: #ffc107;
-    font-weight: 600;
-    display: block;
-    margin-bottom: 6px;
-}
-
 /* Intelligence reasoning and actions */
 .signal-intelligence-reasoning {
     margin-top: 12px;
@@ -1440,7 +1404,7 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
     border-radius: 4px;
     font-size: 13px;
     line-height: 1.5;
-    color: var(--cds-text-secondary);
+    color: #2c3e50;
 }
 
 .signal-intelligence-reasoning strong {
@@ -1456,7 +1420,7 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
     border-radius: 4px;
     font-size: 13px;
     line-height: 1.5;
-    color: var(--cds-text-secondary);
+    color: #2c3e50;
 }
 
 .signal-intelligence-actions strong {
@@ -1753,4 +1717,149 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
     margin-top: 1.5rem;
     padding-top: 1rem;
     border-top: 1px solid var(--cds-border-subtle-01);
+}
+
+
+/* =============================================
+   UX ENHANCEMENTS — Sprints 1–5
+   ============================================= */
+
+/* Week Context Widget (Sprint 1.3) */
+.week-context-widget {
+    cursor: pointer;
+    color: var(--cds-text-secondary);
+    font-size: var(--cds-body-01);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 2px 4px;
+    border-bottom: 1px dashed transparent;
+    transition: color 70ms, border-color 70ms;
+    user-select: none;
+    touch-action: manipulation;
+}
+.week-context-widget:hover {
+    color: var(--cds-text-primary);
+    border-bottom-color: var(--cds-border-strong-01);
+}
+#week-context-label {
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Signal Feed Read State (Sprint 1.5) */
+.signal-feed-item--read {
+    opacity: 0.45;
+}
+.signal-feed-item--read .signal-feed-headline a {
+    color: var(--cds-text-secondary);
+}
+
+/* Signal Feed — category headers always visible, no accordion (Sprint 2.1) */
+.signal-category-header {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    padding: var(--cds-spacing-03) var(--cds-spacing-05);
+    background: var(--cds-layer-02);
+    font-weight: 600;
+    font-size: var(--cds-body-01);
+    border-left: 3px solid var(--cds-border-subtle-02);
+}
+.signal-category-body { display: block; }
+.signal-category-hidden { display: none; }
+.signal-category-more { padding: var(--cds-spacing-03) var(--cds-spacing-05); }
+
+/* Client Group Signal Strip (Sprint 3.1) */
+.client-group-signal-strip {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.32px;
+    padding: var(--cds-spacing-02) var(--cds-spacing-04);
+    margin-bottom: var(--cds-spacing-03);
+}
+.client-signal-risk        { background: var(--cds-tag-background-red);    color: var(--cds-tag-color-red); }
+.client-signal-opportunity { background: var(--cds-tag-background-green);  color: var(--cds-tag-color-green); }
+.client-signal-competitive { background: var(--cds-tag-background-orange); color: var(--cds-tag-color-orange); }
+.client-signal-regulatory  { background: var(--cds-tag-background-teal);   color: var(--cds-tag-color-teal); }
+.client-signal-relationship{ background: var(--cds-tag-background-green);  color: var(--cds-tag-color-green); }
+.client-signal-ibm         { background: var(--cds-tag-background-blue);   color: var(--cds-tag-color-blue); }
+.client-signal-background  { background: var(--cds-layer-02);              color: var(--cds-text-secondary); }
+.btn-meeting-brief-primary { margin-left: auto; }
+
+/* Settings Tabs (Sprint 3.2) */
+.settings-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--cds-border-subtle-01);
+    background: var(--cds-layer-01);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+.settings-tabs::-webkit-scrollbar { display: none; }
+.settings-tab {
+    flex: 1;
+    min-width: 80px;
+    padding: var(--cds-spacing-03) var(--cds-spacing-04);
+    min-height: var(--touch-min);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-family: inherit;
+    font-size: var(--cds-body-01);
+    color: var(--cds-text-secondary);
+    cursor: pointer;
+    transition: all 70ms;
+    white-space: nowrap;
+    touch-action: manipulation;
+}
+.settings-tab:hover { background: var(--cds-layer-hover-01); color: var(--cds-text-primary); }
+.settings-tab.active {
+    color: var(--cds-text-primary);
+    border-bottom-color: var(--cds-interactive);
+    font-weight: 600;
+}
+.settings-tab-content { display: block; }
+.settings-tab-content.hidden { display: none; }
+
+/* Source Health Badge clickable (Sprint 4.2) */
+.source-health-badge { cursor: pointer !important; }
+
+/* Client Risk Section (Sprint 5.2) */
+.client-risk-card .card-header { border-left-color: var(--cds-support-warning); }
+.client-risk-row {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-04);
+    padding: var(--cds-spacing-04) var(--cds-spacing-05);
+    border-bottom: 1px solid var(--cds-border-subtle-01);
+    flex-wrap: wrap;
+    min-height: var(--touch-min);
+}
+.client-risk-row:last-child { border-bottom: none; }
+.client-risk-level { font-size: 1.1rem; flex-shrink: 0; }
+.client-risk-name {
+    font-weight: 600;
+    color: var(--cds-text-primary);
+    flex: 1;
+    min-width: 100px;
+}
+.client-risk-type {
+    font-size: 0.72rem;
+    color: var(--cds-text-secondary);
+    background: var(--cds-layer-02);
+    padding: 2px var(--cds-spacing-03);
+    flex-shrink: 0;
+}
+.client-risk-count {
+    font-size: 0.75rem;
+    color: var(--cds-text-helper);
+    white-space: nowrap;
+    flex-shrink: 0;
 }

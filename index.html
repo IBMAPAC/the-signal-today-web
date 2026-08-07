@@ -37,6 +37,11 @@
                 <span id="last-updated"></span>
                 <span id="portfolio-stats" class="portfolio-stats"></span>
                 <div id="intelligence-stats" class="intelligence-stats hidden"></div>
+                <span id="week-context-widget" class="week-context-widget"
+                      onclick="openWeekContextEditor()"
+                      title="Click to set this week's meetings &amp; context (W)">
+                    📅 <span id="week-context-label">Set this week's context</span> ✏️
+                </span>
             </div>
         </header>
 
@@ -58,10 +63,26 @@
                     <div class="card-header card-header--collapsible" onclick="toggleSection('action-required')">
                         <h2>🚨 Action Required</h2>
                         <span id="action-required-count" class="badge badge-red">0</span>
+                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyActionRequired()" title="Copy to clipboard">📋 Copy</button>
+                        <span id="action-required-timestamp" class="section-timestamp"></span>
                         <span class="chevron">▼</span>
                     </div>
                     <div id="action-required-content" class="card-body">
                         <div id="action-required-list"></div>
+                    </div>
+                </section>
+
+                <!-- CLIENT RISK - Accounts with elevated threat signals (collapsible, collapsed) -->
+                <section id="client-risk-section" class="card client-risk-card hidden">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('client-risk')">
+                        <h2>⚠️ Client Risk</h2>
+                        <span id="client-risk-count" class="badge badge-orange">0</span>
+                        <span id="client-risk-timestamp" class="section-timestamp"></span>
+                        <span class="chevron collapsed">▼</span>
+                    </div>
+                    <div id="client-risk-content" class="card-body collapsed">
+                        <p class="card-description">Clients with elevated threat signals this week</p>
+                        <div id="client-risk-list"></div>
                     </div>
                 </section>
 
@@ -70,6 +91,7 @@
                     <div class="card-header card-header--collapsible" onclick="toggleSection('executive-summary')">
                         <h2>📊 Today's Brief</h2>
                         <span class="badge badge-muted">Top 3</span>
+                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyExecutiveSummary()" title="Copy to clipboard">📋 Copy</button>
                         <span id="executive-summary-timestamp" class="section-timestamp"></span>
                         <span class="chevron collapsed">▼</span>
                     </div>
@@ -98,6 +120,7 @@
                     <div class="card-header card-header--collapsible" onclick="toggleSection('signal-feed')">
                         <h2>📡 Signal Feed</h2>
                         <span id="signal-feed-count" class="badge badge-muted">0</span>
+                        <span id="signal-feed-timestamp" class="section-timestamp"></span>
                         <span class="chevron collapsed">▼</span>
                     </div>
                     <div id="signal-feed-content" class="card-body collapsed">
@@ -148,6 +171,8 @@
                     <div class="card-header card-header--collapsible" onclick="toggleSection('deep-reads')">
                         <h2>📚 Deep Reads</h2>
                         <span id="deep-reads-count" class="badge badge-muted">0</span>
+                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyDeepReads()" title="Copy to clipboard">📋 Copy</button>
+                        <span id="deep-reads-timestamp" class="section-timestamp"></span>
                         <span class="chevron collapsed">▼</span>
                     </div>
                     <div id="deep-reads-content" class="card-body collapsed">
@@ -307,6 +332,13 @@
                     <button class="modal-close" onclick="closeSettings()">×</button>
                 </div>
                 <div class="modal-body">
+                    <!-- Settings Tabs -->
+                    <div class="settings-tabs">
+                        <button class="settings-tab active" data-tab="general" onclick="switchSettingsTab('general')">⚙️ General</button>
+                        <button class="settings-tab" data-tab="industries" onclick="switchSettingsTab('industries')">🏢 Industries</button>
+                        <button class="settings-tab" data-tab="sources" onclick="switchSettingsTab('sources')">📰 Sources</button>
+                    </div>
+                    <div id="settings-tab-general" class="settings-tab-content">
                     <section class="settings-section">
                         <h3>🤖 AI Provider</h3>
                         <div class="form-group">
@@ -365,11 +397,26 @@
                         </div>
                     </section>
                     <section class="settings-section">
+                        <h3>🗑️ Data</h3>
+                        <button class="btn btn-warning" onclick="clearCacheData()" style="margin-bottom: 10px;">Clear Cache Data</button>
+                        <button class="btn btn-danger" onclick="clearAllData()">Clear All Data</button>
+                        <p style="font-size: 0.85em; color: #666; margin-top: 10px;">
+                            <strong>Clear Cache Data:</strong> Removes cached digests and articles. Preserves settings and API keys.<br>
+                            <strong>Clear All Data:</strong> Removes everything including settings and API keys.
+                        </p>
+                    </section>
+                    </div><!-- /settings-tab-general -->
+
+                    <div id="settings-tab-industries" class="settings-tab-content hidden">
+                    <section class="settings-section">
                         <h3>🏢 Industry Priorities</h3>
                         <p class="form-hint">Tier 1 = +30%, Tier 2 = +20%, Tier 3 = +10%</p>
                         <div id="industry-settings"></div>
                     </section>
                     <div id="disabled-sources-container"></div>
+                    </div><!-- /settings-tab-industries -->
+
+                    <div id="settings-tab-sources" class="settings-tab-content hidden">
                     <section class="settings-section">
                         <h3>📰 News Sources</h3>
                         <div class="sources-header">
@@ -394,15 +441,7 @@
                         </div>
                         <div id="sources-list" class="sources-list"></div>
                     </section>
-                    <section class="settings-section">
-                        <h3>🗑️ Data</h3>
-                        <button class="btn btn-warning" onclick="clearCacheData()" style="margin-bottom: 10px;">Clear Cache Data</button>
-                        <button class="btn btn-danger" onclick="clearAllData()">Clear All Data</button>
-                        <p style="font-size: 0.85em; color: #666; margin-top: 10px;">
-                            <strong>Clear Cache Data:</strong> Removes cached digests and articles. Preserves settings and API keys.<br>
-                            <strong>Clear All Data:</strong> Removes everything including settings and API keys.
-                        </p>
-                    </section>
+                    </div><!-- /settings-tab-sources -->
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
@@ -552,6 +591,29 @@
                     <button class="btn btn-danger" onclick="deleteCurrentSource()" id="delete-source-btn" style="display:none;">Delete</button>
                     <button class="btn btn-secondary" onclick="closeSourceEditor()">Cancel</button>
                     <button class="btn btn-primary" onclick="saveSource()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- WEEK CONTEXT EDITOR MODAL -->
+        <div id="week-context-modal" class="modal hidden">
+            <div class="modal-backdrop" onclick="closeWeekContextEditor()"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>📅 This Week's Context</h2>
+                    <button class="modal-close" onclick="closeWeekContextEditor()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="week-context-inline">Meetings, deals &amp; priorities this week</label>
+                        <textarea id="week-context-inline" rows="4"
+                            placeholder="e.g. Meeting DBS CTO Tuesday. Telstra deal review Thursday. Focus on ANZ sovereignty positioning."></textarea>
+                        <p class="form-hint">This context personalises Action Required prioritisation, Meeting Briefs, and Today's Brief synthesis.</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeWeekContextEditor()">Cancel</button>
+                    <button class="btn btn-primary" onclick="saveWeekContext()">Save</button>
                 </div>
             </div>
         </div>
