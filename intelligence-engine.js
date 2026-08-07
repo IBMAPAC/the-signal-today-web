@@ -2006,7 +2006,13 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                 
                 // Remove trailing commas before closing brackets
                 jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
-                
+
+                // Repair missing commas between adjacent objects/arrays in arrays.
+                // The model occasionally omits the comma between two consecutive
+                // objects in actionableInsights. }{  is never valid JSON so this
+                // substitution is always safe.
+                jsonStr = jsonStr.replace(/\}\s*\{/g, '},{');
+
                 // Remove newlines and carriage returns for cleaner parsing
                 jsonStr = jsonStr.replace(/\n/g, ' ').replace(/\r/g, '');
                 
@@ -2023,7 +2029,7 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                     const posMatch = parseError.message.match(/position (\d+)/);
                     const pos = posMatch ? parseInt(posMatch[1], 10) : 0;
                     console.error(`${this.provider} JSON parse error: ${parseError.message}`);
-                    console.error('Problematic JSON substring:', jsonStr.substring(Math.max(0, pos - 150), pos + 50));
+                    console.error('Problematic JSON substring:', jsonStr.substring(Math.max(0, pos - 40), pos + 40));
                     console.error('Full JSON (first 500 chars):', jsonStr.substring(0, 500));
                     throw new Error(`JSON parse failed: ${parseError.message}`);
                 }
