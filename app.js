@@ -9085,16 +9085,42 @@ function renderSignalFeedItem(article) {
             </div>
             
             ${article.intelligence ? renderIntelligenceBadges(article.intelligence) : ''}
-            
+
+            ${article.intelligence?.clientContext ? `<div class="signal-intelligence-client-context"><strong>🎯 YOUR CLIENT:</strong> ${escapeHtml(article.intelligence.clientContext)}</div>` : ''}
+
             ${article.intelligence?.reasoning ? `<div class="signal-intelligence-reasoning"><strong>Analysis:</strong> ${escapeHtml(article.intelligence.reasoning)}</div>` : ''}
+
+            ${article.intelligence?.soWhat ? `<div class="signal-intelligence-sowhat">${escapeHtml(article.intelligence.soWhat)}</div>` : ''}
             
             ${article.intelligence?.actionableInsights?.length > 0 ? `
                 <div class="signal-intelligence-actions">
                     <strong>Actions:</strong>
                     <ul>
-                        ${article.intelligence.actionableInsights.map(insight =>
-                            `<li>${escapeHtml(insight)}</li>`
-                        ).join('')}
+                        ${article.intelligence.actionableInsights.map(insight => {
+                            if (!insight || typeof insight === 'string') {
+                                return `<li>${escapeHtml(insight || '')}</li>`;
+                            }
+                            const urgencyMap = {
+                                'CRITICAL': 'action-escalate',
+                                'HIGH':     'action-brief',
+                                'MEDIUM':   'action-position',
+                                'LOW':      'action-monitor'
+                            };
+                            const urgencyClass = urgencyMap[insight.urgency] || 'action-monitor';
+                            const urgencyBadge = insight.urgency
+                                ? `<span class="action-required-badge ${urgencyClass}" style="font-size:0.65rem;padding:1px 6px;margin-right:6px;">${escapeHtml(insight.urgency)}</span>`
+                                : '';
+                            const timeline = insight.timeline
+                                ? `<span style="font-size:0.75rem;color:var(--cds-text-secondary);margin-left:6px;">${escapeHtml(insight.timeline)}</span>`
+                                : '';
+                            const ibmAngle = insight.ibmAngle
+                                ? `<div class="action-required-ibm" style="margin-top:4px;font-size:0.8rem;">${escapeHtml(insight.ibmAngle)}</div>`
+                                : '';
+                            return `<li style="margin-bottom:8px;">
+                                ${urgencyBadge}${escapeHtml(insight.action || '')}${timeline}
+                                ${ibmAngle}
+                            </li>`;
+                        }).join('')}
                     </ul>
                 </div>
             ` : ''}

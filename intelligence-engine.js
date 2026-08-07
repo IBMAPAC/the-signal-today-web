@@ -441,6 +441,8 @@ class HybridIntelligenceEngine {
                 analysis.affectedClients = tier3Result.affectedClients;
                 analysis.affectedMarkets = tier3Result.affectedMarkets;
                 analysis.competitorActivity = tier3Result.competitorActivity;
+                analysis.soWhat = tier3Result.soWhat;
+                analysis.clientContext = tier3Result.clientContext;
                 analysis.cost = estimatedCost;
                 analysis.modelTier = modelTier;
                 analysis.modelUsed = tier3Result.modelUsed;
@@ -1759,21 +1761,21 @@ OUTPUT FORMAT — respond with a single JSON object, nothing else, no markdown f
   "opportunityScore": 0,
   "confidence": 0.95,
   "conversationDoor": "Conv 1 or Conv 2 or Conv 3 or Conv 4 or Conv 5 or Conv L",
-  "reasoning": "One-sentence strategic context: what this signals for IBM APAC and why it matters NOW. Name the conversation door it opens. No client names here — use actionableInsights for that.",
-  "soWhat": "2-3 sentences explaining WHY this matters to the Field CTO. Connect event → conversation door → specific ATL action. Be specific about timing and stakes.",
+  "reasoning": "One sentence: what this signals and which conversation door it opens.",
+  "soWhat": "2 sentences max: why this matters to the Field CTO and what the ATL should do.",
   "actionableInsights": [
     {
-      "action": "Specific action using the five-step motion: who opens which conversation door, with which client, by when. Lead with Why Change.",
+      "action": "One sentence: who opens which conversation door, with which client, by when.",
       "urgency": "CRITICAL or HIGH or MEDIUM or LOW",
       "timeline": "Within 7 days or Within 30 days or Within 90 days or Monitor",
-      "ibmAngle": "Specific IBM product from the conversation door + the Why Change framing. Use competitive counter if a competitor is named.",
-      "context": "Why this action matters now (renewal date, regulatory deadline, competitive window)"
+      "ibmAngle": "IBM product from the conversation door + one Why Change clause.",
+      "context": "One clause: renewal date, regulatory deadline, or competitive window."
     }
   ],
   "affectedClients": [],
   "affectedMarkets": [],
-  "competitorActivity": "Name competitor, their move, IBM counter-position from the relevant conversation door",
-  "clientContext": "If article mentions YOUR managed clients, flag with 'YOUR Tier X client' and which conversation door to open with them"
+  "competitorActivity": "Competitor, their move, IBM counter in one sentence. Empty string if none.",
+  "clientContext": "Only populate if article explicitly names one of YOUR managed clients above. Format: YOUR Tier X client [name] — open Conv N."
 }`;
     }
 
