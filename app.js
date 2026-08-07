@@ -254,8 +254,8 @@ const AI_PROVIDERS = {
 // Provider-specific model mappings
 const PROVIDER_MODELS = {
     claude: {
-        HAIKU: 'claude-haiku-3-5-20241022',
-        SONNET: 'claude-sonnet-4-20250514'
+        HAIKU: 'claude-haiku-4-5-20251001',
+        SONNET: 'claude-sonnet-4-5-20250929'
     },
     openai: {
         HAIKU: 'gpt-4o-mini',  // Fast/Cheap tier
@@ -271,9 +271,9 @@ const PROVIDER_ENDPOINTS = {
 
 // Comprehensive pricing for all providers (per million tokens)
 const MODEL_PRICING = {
-    // Claude models
-    'claude-sonnet-4-20250514': { input: 3.00, output: 15.00 },
-    'claude-haiku-3-5-20241022': { input: 0.80, output: 4.00 },
+    // Claude models (pricing per million tokens as of 2025)
+    'claude-sonnet-4-5-20250929': { input: 3.00, output: 15.00 },
+    'claude-haiku-4-5-20251001':  { input: 1.00, output:  5.00 },
     
     // OpenAI models (current market rates as of 2026)
     'gpt-4o': { input: 2.50, output: 10.00 },
@@ -428,7 +428,7 @@ class AIRequestQueue {
         // Rate limits per provider (tokens per minute)
         // Note: Adjusted based on user's actual tier limits
         this.RATE_LIMITS = {
-            [AI_PROVIDERS.CLAUDE]: 7000,   // Buffer below 8,000 hard limit (claude-sonnet-4)
+            [AI_PROVIDERS.CLAUDE]: 7000,   // Buffer below 8,000 hard limit (claude-3-5-sonnet)
             [AI_PROVIDERS.OPENAI]: 28000   // Buffer below 30,000 TPM (user's Tier 2+)
         };
         
@@ -1688,8 +1688,25 @@ class SignalApp {
             
             // Categorize into daily/weekly
             this.categorizeArticles();
-            
-            // Generate AI digest if API key available (skip in quick mode)
+
+            // ── PROGRESSIVE RENDER STEP 1 ────────────────────────────────────
+            // Render immediately from scored articles so the user sees content
+            // right away (~20-30s) instead of waiting for all AI calls to finish.
+            // Sections that need AI will show a skeleton/updating state and update
+            // themselves in place when their AI call resolves.
+            localStorage.setItem(STORAGE_KEYS.LAST_REFRESH, new Date().toISOString());
+            this.saveToStorage();
+            if (!this.digest) this.digest = this.createBasicDigest();
+            this.renderDigest(true);
+            this.updateUI();
+            this.hideLoading();
+            this.isLoading = false;
+            console.log(`⚡ First render in ${Math.round(performance.now() - startTime)}ms`);
+            // ─────────────────────────────────────────────────────────────────
+
+            // ── PROGRESSIVE RENDER STEP 2 ────────────────────────────────────
+            // Fire all AI enrichment in the background. Each section already
+            // knows how to re-render itself when its data is ready.
             const settings = getAIProviderSettings();
             const apiKey = settings.apiKeys[settings.provider];
             if (apiKey && !quickMode) {
@@ -1702,8 +1719,6 @@ class SignalApp {
                 if (cachedFingerprint && fingerprint === cachedFingerprint && !contextChanged) {
                     // No new articles and context unchanged — reuse cached digest
                     console.log('💾 Digest cache hit — no new articles, skipping API call');
-                    this.showLoading('✅ Digest up to date (no new articles)');
-                    // digest already loaded from IDB in init(); nothing to do
                 } else {
                     // Identify new articles not seen in the last digest
                     const cachedIds = new Set(this.digest?.seenArticleIds || []);
@@ -1711,29 +1726,25 @@ class SignalApp {
                     const newCount = newArticles.length;
 
                     if (cachedFingerprint && newCount > 0 && newCount < 8 && !contextChanged) {
-                        // Delta mode: only a few new articles — merge into existing digest
                         console.log(`🔄 Delta refresh: ${newCount} new articles → merging into existing digest`);
-                        this.showLoading(`Updating digest with ${newCount} new articles...`);
                         await this.mergeDeltaDigest(apiKey, newArticles);
                     } else {
-                        // Full regeneration: first run, many new articles, or context changed
                         console.log(`🤖 Full digest generation (${newCount} new articles, contextChanged=${contextChanged})`);
-                        this.showLoading('Generating AI-powered digest...');
                         await this.generateAIDigest(apiKey);
                     }
+
+                    // Re-render the executive summary and market insights in place
+                    // now that the AI digest is ready. Signal Feed / Action Required
+                    // update themselves via renderTodaysSignals (already fired above).
+                    this.saveToStorage();
+                    renderExecutiveSummary(true);
+                    renderMarketInsights(true);
+                    renderDeepReads(true);
                 }
-            } else {
-                this.digest = this.createBasicDigest();
             }
-            
-            // Save and render (forceRefresh = true to regenerate AI synthesis)
-            localStorage.setItem(STORAGE_KEYS.LAST_REFRESH, new Date().toISOString());
-            this.saveToStorage();
-            this.renderDigest(true);
-            this.updateUI();
-            
+
             const totalTime = Math.round(performance.now() - startTime);
-            console.log(`✅ Refresh completed in ${totalTime}ms`);
+            console.log(`✅ Refresh fully complete in ${totalTime}ms`);
             
         } catch (error) {
             console.error('Refresh error:', error);
@@ -3225,7 +3236,7 @@ class SignalApp {
             ? `\nTHIS WEEK'S CONTEXT: ${this.settings.thisWeekContext}\n`
             : '';
 
-        const deltaPrompt = `You are the intelligence briefer for the Field CTO of IBM Asia Pacific.
+        const deltaPrompt = `You are the intelligence briefer for the IBM APAC Field CTO.
 ${contextBlock}
 EXISTING DIGEST (generated earlier today):
 Executive Summary: ${this.digest.executiveSummary}
@@ -3233,20 +3244,29 @@ Executive Summary: ${this.digest.executiveSummary}
 NEW ARTICLES SINCE LAST DIGEST (${newArticles.length} articles):
 ${newArticleList}
 
-TASK: Update the existing digest to incorporate the new articles.
-- If a new article adds a significant new signal, update executiveSummary and the relevant section
-- If a new article matches a watchlist client, surface it in executiveSummary
+TASK: Update the existing digest to incorporate the new articles. Apply the same five-conversation framework as the original digest.
+
+THE FIVE CONVERSATIONS (for context when updating):
+- Conv 1 · Govern Your Data (watsonx.data + Confluent)
+- Conv 2 · Connect & Automate (watsonx Orchestrate + webMethods)
+- Conv 3 · Trust Every Identity (Verify + Vault)
+- Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert)
+- Conv 5 · Build & Modernise (IBM Bob — on-premises GA target 30 Sep 2026, say "a path to", not "available today")
+
+UPDATE RULES:
+- If a new article opens a stronger conversation door, update executiveSummary to name it
+- If a new article matches a watchlist client, surface it in executiveSummary and name the conversation door to open with them
 - Keep all existing content that is still valid
-- Add new conversationStarters only if the new articles provide genuinely new talking points
-- Apply the same [AI WAVE] / [SOVEREIGNTY WAVE] tagging and citation rules as the original digest
+- Add new conversationStarters only if new articles provide genuinely new hypotheses to test with a client CTO
+- Apply the same [AI WAVE] / [SOVEREIGNTY WAVE] tagging, citation, and hypothesis-framing rules as the original digest
 - Return ONLY valid JSON with the same structure as the original digest
 
 Return ONLY valid JSON, no markdown fences:
 {
-    "executiveSummary": "Updated 3-4 sentences incorporating new signals",
+    "executiveSummary": "Updated 3-4 sentences incorporating new signals. Name conversation door.",
     "sections": [same structure as original, updated where relevant],
-    "conversationStarters": [updated list, max 3],
-    "industrySignals": [updated list, omit industries with no signal]
+    "conversationStarters": [updated list, max 3, hypothesis-framed],
+    "industrySignals": [updated list, omit industries with no signal, include conversationDoor field]
 }`;
 
         try {
@@ -3379,62 +3399,75 @@ Return ONLY valid JSON, no markdown fences:
             : 'a Tier 1 client';
         const sampleClient = tier1Clients.length > 0 ? tier1Clients[0] : 'a watchlist client';
 
-        const prompt = `You are the intelligence briefer for the Field CTO of IBM Asia Pacific.
+        const prompt = `You are the intelligence briefer for the IBM APAC Field CTO.
 ${contextBlock}
-YOUR JOB IS NOT TO SUMMARIZE NEWS. Answer these four questions:
-1. What should I BRING UP in client meetings today?
-2. What COMPETITIVE THREAT requires immediate attention?
-3. What REGULATORY CHANGE affects my clients?
-4. What OPPORTUNITY should I act on this week?
+YOUR JOB IS NOT TO SUMMARIZE NEWS. Map today's signals to the five client conversations the field runs. Lead with Why Change — the cost of standing still — not a product pitch.
 
 ROLE CONTEXT:
 - You lead 115 ATLs across 343 enterprise accounts in Asia Pacific (excluding Japan)
+- Joint cockpit model: TSL + ATL together at C-suite altitude
 - Dual-wave thesis: Tag EVERY insight as [AI WAVE] or [SOVEREIGNTY WAVE]
 - Priority industries: Financial Services, Government, Manufacturing, Energy, Retail
 - Competitors: Microsoft Azure, AWS, Google Cloud, Salesforce, SAP, Oracle, ServiceNow, Databricks, Snowflake
 
+THE FIVE CONVERSATIONS — map every signal to the strongest door:
+- Conv 1 · Govern Your Data (watsonx.data + Confluent): Open when AI ambition is slow to ship, data platform sprawl, residency/localisation exposure, or regulated data (bank, insurer, health, public sector). Why change: under 1% of enterprise data is AI-ready.
+- Conv 2 · Connect & Automate (watsonx Orchestrate + webMethods): Open when middleware sprawl or M&A integration debt, live agent pilots, or stalled RPA. Why change: agents proliferating with no central record of what acts or what it can reach.
+- Conv 3 · Trust Every Identity (Verify + Vault): Open when zero-trust/audit mandate, DORA-style regulation, IAM modernisation, or fast-growing machine/agent identities. Why change: non-human identities now outnumber humans and are the fastest-growing attack surface.
+- Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert): Open when multi-cloud or cloud-exit noise, board scrutiny on cloud cost, sovereignty/residency driving workload placement. Why change: "all-in on one provider" is a dependency, not a strategy.
+- Conv 5 · Build & Modernise (IBM Bob): Open when large legacy estate, stalled modernisation, ungoverned AI coding spend, or delivery pressure. Why change: legacy debt compounds and AI coding spend runs unmeasured until the quarter it doubles. CLAIM DISCIPLINE: IBM Bob on-premises GA target is 30 Sep 2026 — say "a path to on-premises", never "available today".
+
+COMPETITIVE COUNTERS (use in sections and starters):
+- vs Snowflake/Databricks → Conv 1: portability and governance across all data, not inside one estate
+- vs MuleSoft/Boomi → Conv 2: total estate cost and agent control plane, not one connector's features
+- vs Okta/Entra → Conv 3: human + non-human identity as one fabric; they keep their IAM, we close the machine/agent gap
+- vs hyperscaler native stack → Conv 4: portability and lock-in — can you run, govern, and prove the same way everywhere?
+- vs GitHub Copilot/Cursor → Conv 5: autocomplete speeds one slice; Bob governs the whole lifecycle and the bill
+
 RULES:
 - Citations: Use actual source names [MIT Tech Review](url), never generic "Source"
-- Framing: Frame insights as ACTIONS, not information summaries
-- Client signals: For Tier 1 clients (${tier1ClientList}), flag explicitly in executiveSummary. If thisWeekContext mentions a client, surface their signals first
+- Framing: Frame insights as ACTIONS not summaries. Lead with the cost of standing still
+- Client signals: For Tier 1 clients (${tier1ClientList}), flag explicitly in executiveSummary. If thisWeekContext mentions a client meeting, lead with that signal and name the conversation door to open
 - Industry signals: Only include if today's articles contain relevant signals. Name client if they're the evidence
-- Sections: Only include if articles contain relevant signals. Produce EXACTLY 3 conversationStarters
+- conversationStarters: EXACTLY 3 hypothesis-framed questions the ATL tests with the client CTO — "I've been thinking that [observation from today's articles] — is that consistent with what you're seeing?" Cite a source. Peer CTO tone, not a sales pitch. One per wave where possible.
+- Sections: Only include if articles contain relevant signals
 
 Return valid JSON:
 {
-    "executiveSummary": "3-4 ACTION-ORIENTED sentences. Tag each [AI WAVE] or [SOVEREIGNTY WAVE]. Cite sources. If thisWeekContext mentions a client meeting, lead with that signal.",
+    "executiveSummary": "3-4 ACTION-ORIENTED sentences. Tag each [AI WAVE] or [SOVEREIGNTY WAVE]. Cite sources. Name the strongest conversation door. If thisWeekContext mentions a client meeting, lead with that signal.",
     "sections": [
         {
             "title": "Competitive Alerts",
             "emoji": "🚨",
-            "summary": "Competitive threats with [Source Name](URL) citations. Tag [AI WAVE] or [SOVEREIGNTY WAVE]."
+            "summary": "Competitive threats with [Source Name](URL) citations. Tag wave. State IBM counter-position from the relevant conversation door. Do not claim IBM can replace — frame as the question the client should be asking."
         },
         {
-            "title": "Industry Opportunities",
-            "emoji": "💰",
-            "summary": "Opportunities with [Source Name](URL) citations. Tag [AI WAVE] or [SOVEREIGNTY WAVE]."
-        },
-        {
-            "title": "Regulatory Watch",
+            "title": "Regulatory & Sovereignty",
             "emoji": "🛡️",
-            "summary": "Regulatory updates with [Source Name](URL) citations. Tag [SOVEREIGNTY WAVE]."
+            "summary": "Regulatory and data-residency developments with citations. Tag [SOVEREIGNTY WAVE]. Map to Conv 1 (data residency), Conv 3 (audit/identity mandate), or Conv 4 (workload placement)."
         },
         {
             "title": "AI & Agentic",
             "emoji": "🤖",
-            "summary": "AI developments with [Source Name](URL) citations. Tag [AI WAVE]."
+            "summary": "AI and agent developments with citations. Tag [AI WAVE]. Map to Conv 2 (agent control plane), Conv 1 (data the agents need), or Conv 5 (AI coding/modernisation)."
+        },
+        {
+            "title": "Market Signals",
+            "emoji": "🌏",
+            "summary": "APAC market-specific signals with citations. Name market and matched client if applicable. Tag wave."
         }
     ],
     "conversationStarters": [
-        "Exactly 3 starters. Each must cite a source and demonstrate a point of view, not just a headline."
+        "EXACTLY 3 hypothesis-framed starters. Each: I've been thinking that [observation] — is that consistent with what you're seeing? Cite a source. Label which conversation door it opens."
     ],
     "industrySignals": [
         {
             "industry": "Financial Services",
             "emoji": "🏦",
             "headline": "One-sentence signal grounded in today's articles. Name a client if one was matched.",
-            "ibmAngle": "Specific IBM product: watsonx / Red Hat OpenShift / IBM Z / hybrid cloud.",
-            "salesAction": "Specific action for an ATL this week. Name a client account if relevant."
+            "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5",
+            "ibmAngle": "Specific IBM product from that conversation door + the Why Change framing for this industry.",
+            "salesAction": "Specific ATL action this week. Reference the five-step motion: Open with diagnostic → Why Change → Shape the architecture (product-blind) → Why IBM → agree a Progress step. Name a client account if relevant."
         }
     ]
 }
@@ -3499,35 +3532,26 @@ ${articleList}`;
     }
 
     renderDailyTab(forceRefresh = false) {
-        // PHASE 2 LAYOUT:
-        // 0. Action Required — Urgent ESCALATE/BRIEF_ATL items at top
-        // 1. Today's Brief — 3 key insights (AI-synthesized)
-        // 2. Market Insights — Market-specific briefs (collapsed)
-        // 3. Signal Feed — Unified view (replaces Client Radar + All Signals)
-        // 4. Deep Reads — Weekend reading (collapsed)
-        
-        // Generate signals first (async), then extract Action Required and build Signal Feed
-        // Pass forceRefresh to ensure Action Required updates on refresh
-        renderTodaysSignals(forceRefresh)
-            .then(() => {
-                renderActionRequired();
-                renderSignalFeed();
-                renderClientRisk(); // Sprint 5.2 — client risk based on scored articles
-            })
-            .catch((error) => {
-                console.error('Signal generation failed:', error);
-                // Still render Action Required and Signal Feed from cache
-                // This ensures the UI updates even if signal generation fails
-                renderActionRequired();
-                renderSignalFeed();
-                renderClientRisk();
-            });
-        
-        // These can render in parallel
+        // ── Render immediately from scored articles (no AI wait) ──────────────
+        // Action Required, Signal Feed, Client Watch and Client Risk all derive
+        // from locally-scored articles and render in <1s.
+        renderActionRequired();
+        renderSignalFeed();
+        renderClientRisk();
+
+        // ── AI-enriched sections ──────────────────────────────────────────────
+        // renderTodaysSignals fires an AI call that enriches the signal feed
+        // with synthesis. It updates the signal list in place when done.
+        renderTodaysSignals(forceRefresh).catch((error) => {
+            console.error('Signal synthesis failed (non-fatal):', error);
+        });
+
+        // Executive summary, market insights and deep reads each manage their
+        // own AI calls and update their own DOM sections when ready.
         renderExecutiveSummary(forceRefresh);
         renderMarketInsights(forceRefresh);
         renderDeepReads(forceRefresh);
-        
+
         // Update portfolio stats
         updateClientManagerCounts();
     }
@@ -4233,46 +4257,48 @@ ${clientContext}
 ${industryContext}
 ${signalContext}${weekContext}
 
-STRATEGIC FRAMEWORK:
-- Foundation: AI-Ready Data (watsonx.data, Confluent, watsonx.governance, Guardium)
-- Pillar 1: Enterprise AI Agents (watsonx Orchestrate, Project Bob, watsonx Code Assistant for Z)
-- Pillar 2: Sovereign Hybrid (Red Hat OpenShift, Terraform, Vault, Power, IBM Z)
-- Pillar 3: AgentOps (Concert, Instana, Turbonomic, webMethods)
+THE FIVE CLIENT CONVERSATIONS — assign the strongest door:
+- Conv 1 · Govern Your Data (watsonx.data + Confluent): data platform sprawl, residency/localisation, AI ambition stalled on data. Unconsidered need: governed access is control over where data lives, not just a platform.
+- Conv 2 · Connect & Automate (watsonx Orchestrate + webMethods): agent sprawl, middleware debt, M&A integration, stalled RPA. Unconsidered need: one control plane to govern agents already in production, not another way to build them.
+- Conv 3 · Trust Every Identity (Verify + Vault): zero-trust/audit mandate, DORA-style regulation, fast-growing machine/agent identities. Unconsidered need: IAM stacks cover people — machines, secrets, and agents are the gap.
+- Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert): cloud cost, multi-cloud, workload sovereignty/residency. Unconsidered need: "all-in on one provider" is a dependency, not a strategy.
+- Conv 5 · Build & Modernise (IBM Bob): legacy estate, ungoverned AI coding spend, stalled modernisation. Unconsidered need: a coding assistant speeds one slice — planning, testing, modernisation, security, and the bill stay manual. CLAIM: on-premises GA target 30 Sep 2026.
 
-KEY INSIGHT: Only 16% of AI reaches enterprise scale. The bottleneck is data readiness, not AI capability. This is the "unconsidered need" we surface.
+COMPETITIVE COUNTERS — use in ibmAngle:
+- vs Snowflake/Databricks → Conv 1: portability + governance across all data, not inside one estate
+- vs MuleSoft/Boomi → Conv 2: agent control plane + total estate cost, not a connector's features
+- vs Okta/Entra → Conv 3: human + non-human identity as one fabric; they keep their IAM, we close the machine/agent gap
+- vs hyperscaler native stack → Conv 4: can you run, govern, and prove the same way everywhere?
+- vs GitHub Copilot/Cursor → Conv 5: whole lifecycle and governed spend, not just autocomplete
 
 FIELD DEFINITIONS:
 
-- keyFacts: 3 facts extracted directly. One sentence each. No interpretation.
+- keyFacts: 3 facts extracted directly from the article. One sentence each. No interpretation.
 
-- soWhat: The market shift this signals. Why it matters NOW in APAC. Be specific about timing, geography, or competitive dynamics. Frame as "unconsidered need" if applicable. Do NOT mention IBM here.
+- soWhat: The market shift this signals. Why it matters NOW in APAC. Frame the unconsidered need — what the client has not yet realised they need. Do NOT mention IBM here.
 
-- pillarMapping: Which IBM pillar is most relevant? (Foundation / Pillar 1 / Pillar 2 / Pillar 3)
+- conversationDoor: Which of the five conversations does this article most strongly open? (Conv 1 / Conv 2 / Conv 3 / Conv 4 / Conv 5)
 
 - waveClassification: Tag as [AI WAVE] or [SOVEREIGNTY WAVE] or [BOTH]
 
-- ibmAngle: Based on pillarMapping, name the SPECIFIC IBM product and why NOW is the right moment:
-  * Foundation → watsonx.data, Confluent, watsonx.governance, Guardium
-  * Pillar 1 → watsonx Orchestrate, Project Bob, watsonx Code Assistant for Z
-  * Pillar 2 → Red Hat OpenShift, Terraform, Vault, Power, IBM Z
-  * Pillar 3 → Concert, Instana, Turbonomic, webMethods
+- ibmAngle: Name the SPECIFIC IBM product from the conversationDoor and frame the Why Change — the cost of standing still. Use the competitive counter if a competitor is named in the article.
 
 - clientImplication: Two parts:
-  1. For matched clients: What broader trend does this reveal for their next meeting?
-  2. What should the ATL aligned to that client do THIS WEEK?
+  1. For matched clients: What broader trend does this reveal for their next meeting? Which conversation door does it open?
+  2. What should the ATL aligned to that client do THIS WEEK using the five-step motion: Open with diagnostic → Why Change → Shape architecture (product-blind) → Why IBM → Progress step.
   If no clients matched: Describe the APAC enterprise type most affected.
 
-- competitiveWatch: Name competitor (AWS, Azure, Google, Salesforce, SAP, Oracle, ServiceNow, Accenture, Alibaba Cloud, Huawei Cloud) whose position strengthens or weakens. Include IBM counter-position. Empty string if not applicable.
+- competitiveWatch: Name competitor (AWS, Azure, Google, Salesforce, SAP, Oracle, ServiceNow, Accenture, Databricks, Snowflake, GitHub, MuleSoft, Okta) whose position strengthens or weakens. State the IBM counter-position from the relevant conversation. Empty string if not applicable.
 
-- conversationOpener: Frame as HYPOTHESIS to test with a peer CTO:
-  "I've been thinking that [observation from article]—is that consistent with what you're seeing?"
-  Peer CTO tone. Not a sales pitch. Not an open-ended probe.
+- conversationOpener: Hypothesis for the ATL to test with the client CTO:
+  "I've been thinking that [observation from article] — is that consistent with what you're seeing?"
+  Peer CTO tone. Not a sales pitch. Not an open-ended probe. Cites the article signal.
 
 Return ONLY valid JSON:
 {
     "keyFacts": ["string", "string", "string"],
     "soWhat": "string",
-    "pillarMapping": "Foundation" | "Pillar 1" | "Pillar 2" | "Pillar 3",
+    "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5",
     "waveClassification": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
     "ibmAngle": "string",
     "clientImplication": "string",
@@ -4298,10 +4324,10 @@ Return ONLY valid JSON:
                         <div class="deep-read-label">⚡ So What</div>
                         <div class="deep-read-text">${this.escapeHtml(result.soWhat || '')}</div>
                     </div>
-                    ${result.pillarMapping ? `
+                    ${(result.conversationDoor || result.pillarMapping) ? `
                     <div class="deep-read-section">
-                        <div class="deep-read-label">🏛️ Strategic Pillar</div>
-                        <div class="deep-read-text"><strong>${this.escapeHtml(result.pillarMapping)}</strong></div>
+                        <div class="deep-read-label">🗣️ Conversation Door</div>
+                        <div class="deep-read-text"><strong>${this.escapeHtml(result.conversationDoor || result.pillarMapping)}</strong></div>
                     </div>` : ''}
                     ${result.waveClassification ? `
                     <div class="deep-read-section">
@@ -4432,7 +4458,7 @@ Frame all talking points through ${clientIndustry} challenges and priorities.
 ` : '';
         
         const prompt = `You are preparing a meeting brief for the IBM APAC Field CTO.
-Goal: Position ATL as "Client CTO"—a trusted strategic advisor, not a vendor.
+Goal: Position ATL as "Client CTO" — trusted strategic advisor, not a vendor. The product comes last, discovered never led with.
 
 Brief Purpose: ${briefPurpose}
 Client: ${clientName}
@@ -4442,54 +4468,66 @@ ${contextBlock}${industryBlock}
 Recent news about ${clientName}:
 ${articleList || 'No recent news found.'}
 
-STRATEGIC FRAMEWORK:
-- Foundation: AI-Ready Data — "Only 16% of AI reaches scale; data is the bottleneck"
-- Pillar 1: Enterprise AI Agents — "Perceive, reason, act, trace—not chatbots"
-- Pillar 2: Sovereign Hybrid — "AI comes to your data"
-- Pillar 3: AgentOps — "End-to-end governance where agents run"
+THE FIVE CONVERSATIONS — choose the strongest door for this client based on the signals above:
+- Conv 1 · Govern Your Data (watsonx.data + Confluent): AI ambition slow to ship, data platform sprawl, residency/localisation exposure, regulated data. Account signals: talks AI but ships slowly; several data platforms; data-residency exposure; bank/insurer/health/public sector.
+- Conv 2 · Connect & Automate (watsonx Orchestrate + webMethods): middleware sprawl, M&A integration debt, live agent pilots, stalled RPA. Account signals: visible middleware sprawl; M&A systems still unwired; public agentic ambition; stalled automation programme.
+- Conv 3 · Trust Every Identity (Verify + Vault): zero-trust or audit mandate, DORA-style regulation, IAM modernisation, fast-growing agent/machine identities. Account signals: board-level security mandate; regulatory deadline; IAM on the roadmap; agents scaling fast.
+- Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert): multi-cloud or cloud-exit noise, board scrutiny on cloud cost, sovereignty/residency driving workload placement. Account signals: cloud cost has become a board question; concentration-risk regulation; multi-cloud or repatriation noise.
+- Conv 5 · Build & Modernise (IBM Bob): large legacy estate, stalled modernisation, ungoverned AI coding spend, delivery pressure. Account signals: mainframe/COBOL/ageing core; modernisation announced or stalled; AI coding adoption with unclear governance. CLAIM DISCIPLINE: IBM Bob on-premises GA target 30 Sep 2026 — say "a path to on-premises", never "available today".
 
-PATTERN SELECTION (choose ONE based on signals):
-- Data/AI readiness issues → Foundation
-- AI pilots stuck, chatbots not working → Pillar 1
-- Sovereignty/cloud constraints → Pillar 2
-- Operations overload → Pillar 3
+COMPETITIVE COUNTERS (use in talkingPoints if a competitor is active at this account):
+- vs Snowflake/Databricks → Conv 1: portability + governance across all data, not inside one estate
+- vs MuleSoft/Boomi → Conv 2: agent control plane + total estate cost, not one connector's features
+- vs Okta/Entra → Conv 3: they keep their IAM for humans; the gap is machines, secrets, and agents
+- vs hyperscaler native stack → Conv 4: can you run, govern, and prove the same way everywhere?
+- vs GitHub Copilot/Cursor → Conv 5: whole lifecycle + governed spend, not just autocomplete
+
+THE FIVE-STEP MOTION — structure the ATL's approach:
+1. OPEN: TSL + ATL together at C-suite altitude. Lead with a diagnostic question, not a pitch.
+2. WHY CHANGE: Surface the cost of standing still. The unconsidered need the client has not yet named.
+3. SHAPE: Draw the product-blind architecture bottom-to-top. Hand the pen to the client. Name no product until they point at a layer.
+4. WHY IBM: Control built, not granted. IBM delivers the architecture as something the client owns.
+5. PROGRESS: Agree a client step — a review, workshop, or PoC. TSL structures the path.
 
 BRIEF STRUCTURE:
 
-1. situationSummary: 2-3 sentences. Lead with client's most pressing challenge based on signals. Frame using "Why Change" language—surface unconsidered needs.
+1. situationSummary: 2-3 sentences. Lead with the client's most pressing challenge based on the signals. Frame using Why Change language — the cost of standing still. Surface the unconsidered need.
 
-2. leadPillar: Which pillar to lead with based on client signals.
+2. conversationDoor: Which of the five conversations to open. State the door and one sentence on why these signals point there.
 
-3. talkingPoints: EXACTLY 3 points, each structured as:
-   - ${clientIndustry || 'enterprise'} challenge + specific IBM product from leadPillar + why NOW
-   - Must sound like peer CTO conversation, not vendor pitch
+3. whyChange: The specific cost of standing still for THIS client. One or two sentences. Do not mention IBM.
 
-4. proofPoint: ONE relevant proof point:
-   - "9,000+ IBM developers using AI agents daily, 45% productivity gains"
-   - "$11B Confluent—80% of Fortune 100 use Kafka for real-time data"
-   - "Only 16% of AI reaches enterprise scale—data readiness is the bottleneck"
+4. talkingPoints: EXACTLY 3 points. Each structured as: [${clientIndustry || 'enterprise'} challenge] + [why this matters NOW] + [IBM product from the conversation door — named last, after the challenge is clear]. Peer CTO tone. Not a vendor pitch.
 
-5. riskFlags: Specific risks only—reputational, competitive, regulatory, C-suite changes. Omit if none.
+5. proofPoint: ONE stat grounded in the runbook or IBM evidence:
+   - Conv 1: "Under 1% of enterprise data is AI-ready — the bottleneck is governed access, not the model"
+   - Conv 2: "Agents are proliferating across teams with no central record of what acts or what it can reach"
+   - Conv 3: "Non-human identities now outnumber humans and grow with every agent deployed"
+   - Conv 4: "Where you run decides what you can prove, move, and pay"
+   - Conv 5: "A coding assistant speeds one slice — planning, testing, modernisation, and the bill stay manual"
 
-6. openingQuestion: Frame as HYPOTHESIS:
-   "I've been thinking that [observation]—is that consistent with what you're seeing?"
-   Peer CTO tone. Tests a point of view, doesn't probe.
+6. riskFlags: Specific risks only — reputational, competitive, regulatory, C-suite changes relevant to this client. Omit if none.
 
-7. atlNote: One sentence for the ATL—what to watch for or act on this week.
+7. openingQuestion: Hypothesis for the ATL to test with the client CTO at the Open step:
+   "I've been thinking that [observation grounded in today's signals] — is that consistent with what you're seeing?"
+   Peer CTO tone. Tests a point of view. Does not probe or pitch.
 
-8. slackMessage: Under 280 characters. Format:
-   *${clientName}—Signal Alert*
+8. atlNote: One sentence for the ATL — what to watch for or act on this week using the five-step motion.
+
+9. slackMessage: Under 280 characters. Format:
+   *${clientName} — Signal Alert*
    📊 [situation] 💡 [talking point] ⚡ [IBM angle] 💬 Q: [opener]
 
 Return ONLY valid JSON:
 {
-    "situationSummary": "2-3 sentences, 'Why Change' framing",
-    "leadPillar": "Foundation | Pillar 1 | Pillar 2 | Pillar 3",
-    "talkingPoints": ["3 points, each: challenge + product + why now"],
-    "proofPoint": "One memorable stat",
-    "riskFlags": ["Specific risks only"],
-    "openingQuestion": "Hypothesis-framed, peer CTO tone",
-    "atlNote": "One sentence for ATL action",
+    "situationSummary": "2-3 sentences, Why Change framing, unconsidered need",
+    "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5 — one sentence on why",
+    "whyChange": "Cost of standing still for this client, no IBM mention",
+    "talkingPoints": ["3 points: challenge + why now + IBM product last"],
+    "proofPoint": "One stat from the runbook proof points above",
+    "riskFlags": ["Specific risks only, omit array if none"],
+    "openingQuestion": "Hypothesis-framed, peer CTO tone, grounded in today's signals",
+    "atlNote": "One sentence, five-step motion reference",
     "slackMessage": "Under 280 chars"
 }`;
         
@@ -4513,11 +4551,16 @@ Return ONLY valid JSON:
                         <div class="meeting-brief-label">📊 Situation</div>
                         <div class="meeting-brief-text">${this.escapeHtml(brief.situationSummary || '')}</div>
                     </div>
-                    ${brief.leadPillar ? `
+                    ${(brief.conversationDoor || brief.leadPillar) ? `
                     <div class="meeting-brief-section">
-                        <div class="meeting-brief-label">🎯 Lead Pillar</div>
-                        <div class="meeting-brief-text"><strong>${this.escapeHtml(brief.leadPillar)}</strong></div>
-                    </div>` : ''}
+                        <div class="meeting-brief-label">🗣️ Conversation Door</div>
+                        <div class="meeting-brief-text"><strong>${this.escapeHtml(brief.conversationDoor || brief.leadPillar)}</strong></div>
+                    </div>
+                    ${brief.whyChange ? `
+                    <div class="meeting-brief-section">
+                        <div class="meeting-brief-label">⚡ Why Change</div>
+                        <div class="meeting-brief-text">${this.escapeHtml(brief.whyChange)}</div>
+                    </div>` : ''}` : ''}
                     ${brief.proofPoint ? `
                     <div class="meeting-brief-section">
                         <div class="meeting-brief-label">📊 Proof Point</div>
@@ -7196,7 +7239,7 @@ async function generateMarketSynthesis(activeMarkets, apiKey, listEl) {
 ${articleSummaries}`;
         }).join('\n\n---\n\n');
         
-        const batchedPrompt = `You are briefing IBM APAC leaders on market intelligence.
+        const batchedPrompt = `You are briefing IBM APAC leaders on market intelligence. Lead with Why Change — the cost of standing still — not a product pitch.
 
 TODAY'S SIGNALS BY MARKET:
 ${marketPrompts}
@@ -7208,22 +7251,23 @@ MARKET CONTEXT:
 - ISA: RBI/SEBI/IRDAI frameworks, Digital India acceleration, manufacturing transformation
 - KOREA: FSC oversight, semiconductor leadership, chaebols driving enterprise AI
 
-STRATEGIC FRAMEWORK:
-- Foundation: AI-Ready Data — "Agents are only as good as the data"
-- Pillar 1: Enterprise AI Agents — "Perceive, reason, act, trace"
-- Pillar 2: Sovereign Hybrid — "AI comes to your data"
-- Pillar 3: AgentOps — "Governance where agents run"
+THE FIVE CONVERSATIONS — assign conversationDoor per market:
+- Conv 1 · Govern Your Data (watsonx.data + Confluent): AI ambition stalled on data, platform sprawl, residency exposure
+- Conv 2 · Connect & Automate (watsonx Orchestrate + webMethods): agent sprawl, middleware debt, M&A integration, stalled RPA
+- Conv 3 · Trust Every Identity (Verify + Vault): zero-trust/audit mandate, DORA-style regulation, machine/agent identity growth
+- Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert): cloud cost, multi-cloud, workload sovereignty
+- Conv 5 · Build & Modernise (IBM Bob): legacy estate, ungoverned AI coding spend [on-premises GA target 30 Sep 2026]
 
 For EACH market, write ONE synthesized paragraph (3-4 sentences):
-1. Open with the key theme affecting that market this week
-2. Connect 2-3 articles into a coherent narrative
-3. Recommend which IBM pillar to lead with in that market
-4. End with specific IBM positioning or action
+1. Open with the key market theme — the cost of standing still for enterprises in that market
+2. Connect 2-3 articles into a coherent narrative grounded in that market's regulatory/competitive context
+3. State the conversation door to open with accounts showing these signals
+4. End with a specific ATL action using the five-step motion: Open (diagnostic question) → Why Change → Shape (product-blind architecture) → Why IBM → Progress (agree a client step)
 
 RULES:
-- Sound like a senior technical leader, not news aggregator
-- Reference specific regulators/companies from articles
-- Focus ONLY on each market's implications
+- Sound like a senior technical leader, not a news aggregator
+- Reference specific regulators and companies from the articles
+- Focus ONLY on each market's implications — do not apply signals from one market to another
 - Include ONE actionable ATL takeaway per market
 - CRITICAL VALIDATION: Verify geographic accuracy before synthesis:
   * Hong Kong, Taiwan, China, Macau → GCG market ONLY
@@ -7237,11 +7281,10 @@ Return JSON:
 {
   "markets": {
     "ANZ": {
-      "synthesis": "...",
-      "leadPillar": "Foundation | Pillar 1 | Pillar 2 | Pillar 3",
-      "keyMessage": "..."
+      "synthesis": "3-4 sentence market brief",
+      "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5",
+      "keyMessage": "One-sentence ATL action using the five-step motion"
     }
-    // ... other markets
   }
 }
 
@@ -7263,7 +7306,7 @@ Only include markets that were provided in the input above.`;
                         const brief = {
                             market,
                             synthesis: marketResult.synthesis,
-                            leadPillar: marketResult.leadPillar,
+                            conversationDoor: marketResult.conversationDoor || marketResult.leadPillar,
                             keyMessage: marketResult.keyMessage,
                             sources: signals.map(s => ({
                                 title: s.article.title,
@@ -7363,7 +7406,7 @@ function renderMarketBriefCard(brief) {
                 ${hasSignals ? `<button class="market-brief-copy" onclick="copyMarketBrief(this, '${brief.market}')" title="Copy to clipboard">📋</button>` : ''}
             </div>
             <div class="market-brief-synthesis">${escapeHtml(brief.synthesis || '')}</div>
-            ${brief.leadPillar ? `<div class="market-brief-lead-pillar">🎯 <strong>Lead Pillar:</strong> ${escapeHtml(brief.leadPillar)}</div>` : ''}
+            ${brief.conversationDoor ? `<div class="market-brief-lead-pillar">🗣️ <strong>Conversation Door:</strong> ${escapeHtml(brief.conversationDoor)}</div>` : ''}
             ${brief.keyMessage ? `<div class="market-brief-key-message">💡 <strong>Key Message:</strong> ${escapeHtml(brief.keyMessage)}</div>` : ''}
             ${hasSignals ? `
             <div class="market-brief-sources">
@@ -8181,51 +8224,56 @@ CONTEXT:
 - Tier 1 clients: ${tier1Clients || 'See watchlist'}
 - Markets with signals: ${marketsInSignals.length > 0 ? marketsInSignals.join(', ') : 'All markets'}
 - Dual-wave thesis: AI/Agentic + Sovereignty/Regulation
-- Goal: Earn "Client CTO" posture
+- Goal: Earn "Client CTO" posture — trusted strategic advisor, not a vendor
 - APAC Geographic Scope: ANZ (Australia/New Zealand), ASEAN (Singapore/Malaysia/Indonesia/Thailand/Philippines/Vietnam), GCG (Hong Kong/Taiwan/China), ISA (India/Sri Lanka/Bangladesh), KOREA (South Korea)
 
-ACTION TYPES:
-- ESCALATE: Contact TSL/client exec within 48h (C-suite change, competitive threat, deal signal)
-- BRIEF_ATL: Prepare talking points for ATL team (industry trend, regulatory change)
-- POSITION: Develop IBM counter-positioning (competitor move, market shift)
-- MONITOR: Track for pattern/escalation (early signal, emerging trend)
+THE FIVE CLIENT CONVERSATIONS — assign conversationDoor to each signal:
+- Conv 1 · Govern Your Data (watsonx.data + Confluent): data platform sprawl, residency, AI ambition stalled on data
+- Conv 2 · Connect & Automate (watsonx Orchestrate + webMethods): agent sprawl, middleware debt, M&A integration, stalled RPA
+- Conv 3 · Trust Every Identity (Verify + Vault): zero-trust/audit mandate, DORA-style regulation, machine/agent identity growth
+- Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert): cloud cost, multi-cloud, workload sovereignty/residency
+- Conv 5 · Build & Modernise (IBM Bob): legacy estate, modernisation debt, ungoverned AI coding spend [NOTE: on-premises GA 30 Sep 2026]
+
+ACTION TYPES — use the runbook definitions:
+- ESCALATE: Contact TSL + client exec within 48h (C-suite change, competitive threat to a named account, deal signal)
+- BRIEF_ATL: Prepare ATL team with talking points (industry trend, regulatory change, competitive move)
+- POSITION: Develop IBM counter-positioning (competitor wins a deal or announces capability)
+- MONITOR: Track for escalation (early signal, pattern forming, geography outside matched client markets)
+
+COMPETITIVE COUNTERS — use in ibmAngle:
+- vs Snowflake/Databricks → Conv 1: portability + governance across the whole estate, not inside one platform
+- vs MuleSoft/Boomi → Conv 2: agent control plane + total estate cost, not one connector's features
+- vs Okta/Entra → Conv 3: human + non-human identity as one fabric; the gap is machines, secrets, and agents
+- vs hyperscaler native stack → Conv 4: run, govern, and prove the same way everywhere, not just on one provider
+- vs GitHub Copilot/Cursor → Conv 5: whole lifecycle and governed spend, not just autocomplete
 
 CRITICAL GEOGRAPHIC VALIDATION RULES:
 1. ONLY suggest actions for clients whose PRIMARY market matches the event location:
    - Europe events → Do NOT suggest ANZ/ASEAN/GCG/ISA/KOREA clients
    - Americas events → Do NOT suggest APAC clients
    - ANZ events → ONLY suggest Australian/New Zealand clients (e.g., Telstra, ANZ Bank, Westpac)
-   - ASEAN events → ONLY suggest Singapore/Malaysia/Indonesia/Thailand/Philippines/Vietnam clients (e.g., DBS, Starhub, PLDT)
+   - ASEAN events → ONLY suggest Singapore/Malaysia/Indonesia/Thailand/Philippines/Vietnam clients (e.g., DBS, Singtel, PLDT)
    - GCG events → ONLY suggest Hong Kong/Taiwan/China clients
    - ISA events → ONLY suggest India/Sri Lanka/Bangladesh clients
    - KOREA events → ONLY suggest South Korean clients
 
-2. Client-Location Validation Examples:
-   ✅ CORRECT: "KubeCon Europe" → Suggest European clients OR mark as MONITOR for APAC
-   ❌ WRONG: "KubeCon Europe" → Do NOT suggest Ergon Energy (Queensland, Australia)
-   ✅ CORRECT: "Kuala Lumpur Summit" → Suggest Starhub (Singapore), PLDT (Philippines)
-   ❌ WRONG: "Kuala Lumpur Summit" → Do NOT suggest Queensland Transport (Australia)
-   ✅ CORRECT: "Sydney Conference" → Suggest Telstra, ANZ Bank, Westpac
-   ❌ WRONG: "Sydney Conference" → Do NOT suggest DBS (Singapore)
-
-3. If event location doesn't match any client markets:
+2. If event location doesn't match any client markets:
    - Set actionType to MONITOR
    - Note "Event outside client markets" in context
    - Do NOT fabricate client connections
-
-4. Prioritize signals with clear APAC client/market impact where geography aligns
 
 Analyze each signal IN ORDER. Return JSON array with one entry per signal in SAME ORDER:
 [
   {
     "headline": "Action verb + 10 words max",
-    "context": "2-3 sentences: what happened, who affected, why matters for APAC",
+    "context": "2-3 sentences: what happened, who is affected, why it matters for APAC now",
     "wave": "AI or SOVEREIGNTY or COMPETITIVE",
     "actionType": "ESCALATE or BRIEF_ATL or POSITION or MONITOR",
-    "action": "Specific action (who, what, when)",
+    "action": "Specific action using runbook motion: who does what, by when. Reference the conversation door.",
     "affectedMarkets": ["ANZ", "ASEAN", "GCG", "ISA", "KOREA"],
-    "ibmAngle": "Specific IBM solution: watsonx, Red Hat OpenShift, IBM Z, Instana",
-    "talkingPoint": "Conversational sentence for ATL to use with client CTO",
+    "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5",
+    "ibmAngle": "Specific IBM product from the conversation door + the Why Change framing. Use competitive counter if a competitor is named.",
+    "talkingPoint": "Hypothesis for ATL to test with client CTO: 'I've been thinking that [observation] — is that consistent with what you're seeing?' Peer CTO tone, not a pitch.",
     "competitive": "Competitor name or null"
   }
 ]

@@ -62,8 +62,8 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Dataconomy",
-        url: "https://dataconomy.com/feed",
+        name: "The Next Platform",
+        url: "https://www.nextplatform.com/feed/",
         category: "AI & Agentic",
         priority: 2,
         credibilityScore: 0.82,
@@ -120,8 +120,8 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "CSO Online",
-        url: "https://www.csoonline.com/feed/",
+        name: "Computerworld",
+        url: "https://www.computerworld.com/feed/",
         category: "Cybersecurity & Sovereignty",
         priority: 1,
         credibilityScore: 0.86,
@@ -187,11 +187,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Tech in Asia",
-        url: "https://www.techinasia.com/feed",
+        name: "TechCrunch Southeast Asia",
+        url: "https://techcrunch.com/tag/southeast-asia/feed/",
         category: "APAC Regional",
         priority: 1,
-        credibilityScore: 0.86,
+        credibilityScore: 0.88,
         digestType: "daily",
         enabled: true
     },
@@ -295,11 +295,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "BusinessWorld Philippines",
-        url: "https://www.bworldonline.com/feed/",
+        name: "TechCrunch Asia",
+        url: "https://techcrunch.com/tag/asia/feed/",
         category: "APAC Regional",
         priority: 2,
-        credibilityScore: 0.80,
+        credibilityScore: 0.88,
         digestType: "daily",
         enabled: true
     },
@@ -313,11 +313,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "e27",
-        url: "https://e27.co/news/rss",
+        name: "TechCrunch ASEAN",
+        url: "https://techcrunch.com/tag/asean/feed/",
         category: "APAC Regional",
         priority: 2,
-        credibilityScore: 0.82,
+        credibilityScore: 0.88,
         digestType: "daily",
         enabled: true
     },
@@ -403,17 +403,8 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "ChinaTechNews",
-        url: "https://www.chinatechnews.com/feed",
-        category: "APAC Regional",
-        priority: 2,
-        credibilityScore: 0.78,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "Korea Tech Desk",
-        url: "https://koreatechdesk.com/feed",
+        name: "PanDaily",
+        url: "https://pandaily.com/feed/",
         category: "APAC Regional",
         priority: 2,
         credibilityScore: 0.80,
@@ -421,12 +412,21 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Korea Tech Today",
-        url: "https://koreatechtoday.com/feed",
+        name: "The Diplomat",
+        url: "https://thediplomat.com/feed/",
+        category: "APAC Regional",
+        priority: 2,
+        credibilityScore: 0.88,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "Strategy+Business",
+        url: "https://www.strategy-business.com/rss",
         category: "APAC Regional",
         priority: 3,
-        credibilityScore: 0.78,
-        digestType: "daily",
+        credibilityScore: 0.88,
+        digestType: "weekly",
         enabled: true
     },
     {
@@ -470,8 +470,8 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "CIO.com",
-        url: "https://www.cio.com/index.rss",
+        name: "InformationWeek",
+        url: "https://www.informationweek.com/rss.xml",
         category: "Enterprise Tech",
         priority: 1,
         credibilityScore: 0.88,
@@ -480,7 +480,7 @@ const DEFAULT_SOURCES = [
     },
     {
         name: "InfoWorld",
-        url: "https://www.infoworld.com/index.rss",
+        url: "https://www.infoworld.com/feed/",
         category: "Enterprise Tech",
         priority: 1,
         credibilityScore: 0.86,
@@ -533,11 +533,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "CloudTech",
-        url: "https://cloudcomputing-news.net/feed",
+        name: "The Register Cloud",
+        url: "https://www.theregister.com/Tag/cloud/feed.atom",
         category: "Enterprise Tech",
         priority: 2,
-        credibilityScore: 0.80,
+        credibilityScore: 0.85,
         digestType: "daily",
         enabled: true
     },
@@ -591,8 +591,8 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Azure Blog",
-        url: "https://azure.microsoft.com/en-us/blog/feed/",
+        name: "Azure DevOps Blog",
+        url: "https://devblogs.microsoft.com/devops/feed/",
         category: "Competitive Landscape",
         priority: 2,
         credibilityScore: 0.88,
@@ -645,11 +645,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "AWS Insider",
-        url: "https://awsinsider.net/rss-feeds/awsinsider-net.aspx",
+        name: "AWS Enterprise Strategy",
+        url: "https://aws.amazon.com/blogs/enterprise-strategy/feed/",
         category: "Competitive Landscape",
         priority: 3,
-        credibilityScore: 0.78,
+        credibilityScore: 0.82,
         digestType: "weekly",
         enabled: true
     },
@@ -734,11 +734,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Deloitte Tech Trends",
-        url: "https://www2.deloitte.com/us/en/pages/technology/articles/tech-trends.html.rss",
+        name: "Strategy+Business (PwC)",
+        url: "https://www.strategy-business.com/rss",
         category: "Strategic Analysis",
         priority: 2,
-        credibilityScore: 0.86,
+        credibilityScore: 0.88,
         digestType: "weekly",
         enabled: true
     },
