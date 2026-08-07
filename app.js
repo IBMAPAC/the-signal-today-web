@@ -1611,9 +1611,15 @@ class SignalApp {
         document.getElementById('loading').classList.remove('hidden');
         document.getElementById('loading-status').textContent = message;
         document.getElementById('empty-state').classList.add('hidden');
-        document.getElementById('digest-content').classList.add('hidden');
         document.getElementById('error').classList.add('hidden');
         document.getElementById('refresh-btn').disabled = true;
+        // Only hide digest-content on the very first load (when it's already hidden).
+        // During a refresh where content is already visible, keep it showing so the
+        // user sees the previous digest rather than a blank screen while fetching.
+        const digestContent = document.getElementById('digest-content');
+        if (digestContent.classList.contains('hidden')) {
+            digestContent.classList.add('hidden');
+        }
     }
 
     hideLoading() {
@@ -1705,47 +1711,53 @@ class SignalApp {
             // ─────────────────────────────────────────────────────────────────
 
             // ── PROGRESSIVE RENDER STEP 2 ────────────────────────────────────
-            // Fire all AI enrichment in the background. Each section already
-            // knows how to re-render itself when its data is ready.
+            // Fire AI enrichment as a detached promise so any failure CANNOT
+            // bubble into the outer try/catch and call showError() — which would
+            // hide the digest content that Step 1 already rendered above.
             const settings = getAIProviderSettings();
             const apiKey = settings.apiKeys[settings.provider];
             if (apiKey && !quickMode) {
-                // Phase 7: compute article fingerprint to detect new articles since last digest
-                const fingerprint = this.computeArticleFingerprint(this.dailyArticles);
-                const cachedFingerprint = this.digest?.articleFingerprint;
-                const cachedContext = this.digest?.thisWeekContext;
-                const contextChanged = this.settings.thisWeekContext !== (cachedContext || '');
+                (async () => {
+                    try {
+                        // Compute article fingerprint to detect new articles since last digest
+                        const fingerprint = this.computeArticleFingerprint(this.dailyArticles);
+                        const cachedFingerprint = this.digest?.articleFingerprint;
+                        const cachedContext = this.digest?.thisWeekContext;
+                        const contextChanged = this.settings.thisWeekContext !== (cachedContext || '');
 
-                if (cachedFingerprint && fingerprint === cachedFingerprint && !contextChanged) {
-                    // No new articles and context unchanged — reuse cached digest
-                    console.log('💾 Digest cache hit — no new articles, skipping API call');
-                } else {
-                    // Identify new articles not seen in the last digest
-                    const cachedIds = new Set(this.digest?.seenArticleIds || []);
-                    const newArticles = this.dailyArticles.filter(a => !cachedIds.has(a.id));
-                    const newCount = newArticles.length;
+                        if (cachedFingerprint && fingerprint === cachedFingerprint && !contextChanged) {
+                            // No new articles and context unchanged — reuse cached digest
+                            console.log('💾 Digest cache hit — no new articles, skipping API call');
+                        } else {
+                            // Identify new articles not seen in the last digest
+                            const cachedIds = new Set(this.digest?.seenArticleIds || []);
+                            const newArticles = this.dailyArticles.filter(a => !cachedIds.has(a.id));
+                            const newCount = newArticles.length;
 
-                    if (cachedFingerprint && newCount > 0 && newCount < 8 && !contextChanged) {
-                        console.log(`🔄 Delta refresh: ${newCount} new articles → merging into existing digest`);
-                        await this.mergeDeltaDigest(apiKey, newArticles);
-                    } else {
-                        console.log(`🤖 Full digest generation (${newCount} new articles, contextChanged=${contextChanged})`);
-                        await this.generateAIDigest(apiKey);
+                            if (cachedFingerprint && newCount > 0 && newCount < 8 && !contextChanged) {
+                                console.log(`🔄 Delta refresh: ${newCount} new articles → merging into existing digest`);
+                                await this.mergeDeltaDigest(apiKey, newArticles);
+                            } else {
+                                console.log(`🤖 Full digest generation (${newCount} new articles, contextChanged=${contextChanged})`);
+                                await this.generateAIDigest(apiKey);
+                            }
+
+                            // Re-render AI-enriched sections in place
+                            this.saveToStorage();
+                            renderExecutiveSummary(true);
+                            renderMarketInsights(true);
+                            renderDeepReads(true);
+                        }
+
+                        const totalTime = Math.round(performance.now() - startTime);
+                        console.log(`✅ AI enrichment complete in ${totalTime}ms`);
+                    } catch (aiError) {
+                        // Log but do NOT call showError() — the digest is already visible
+                        console.warn('⚠️ Background AI enrichment failed (digest still shown):', aiError.message);
                     }
-
-                    // Re-render the executive summary and market insights in place
-                    // now that the AI digest is ready. Signal Feed / Action Required
-                    // update themselves via renderTodaysSignals (already fired above).
-                    this.saveToStorage();
-                    renderExecutiveSummary(true);
-                    renderMarketInsights(true);
-                    renderDeepReads(true);
-                }
+                })();
             }
 
-            const totalTime = Math.round(performance.now() - startTime);
-            console.log(`✅ Refresh fully complete in ${totalTime}ms`);
-            
         } catch (error) {
             console.error('Refresh error:', error);
             this.showError(`Failed to refresh: ${error.message}`);
@@ -1760,31 +1772,22 @@ class SignalApp {
     // ==========================================
 
     async fetchArticles(sources) {
+        const fetchTimeout = 10000; // 10 second timeout per source (generous for slow feeds)
+
+        // Fetch ALL sources in parallel — each has its own AbortController timeout inside
+        // fetchFeedWithTimeout, so worst-case wall-clock time is 10s regardless of source count.
+        // Previously used serial 15-source batches which meant up to 6 × 10s = 60s worst case.
+        this.showLoading(`Fetching ${sources.length} feeds...`);
+        const results = await Promise.allSettled(
+            sources.map(source => this.fetchFeedWithTimeout(source, fetchTimeout))
+        );
+
         const articles = [];
-        const batchSize = 15; // Parallel batch size for speed
-        const fetchTimeout = 10000; // 10 second timeout (generous for slow feeds)
-        
-        // Process in parallel batches
-        for (let i = 0; i < sources.length; i += batchSize) {
-            const batch = sources.slice(i, i + batchSize);
-            
-            // Fetch all in batch simultaneously with timeout
-            const results = await Promise.allSettled(
-                batch.map(source => this.fetchFeedWithTimeout(source, fetchTimeout))
-            );
-            
-            // Collect successful results
-            for (const result of results) {
-                if (result.status === 'fulfilled' && result.value) {
-                    articles.push(...result.value);
-                }
+        for (const result of results) {
+            if (result.status === 'fulfilled' && result.value) {
+                articles.push(...result.value);
             }
-            
-            // Update progress
-            const progress = Math.min(100, Math.round((i + batchSize) / sources.length * 100));
-            this.showLoading(`Fetching feeds... ${progress}% (${articles.length} articles)`);
         }
-        
         return articles;
     }
 
@@ -3416,6 +3419,7 @@ THE FIVE CONVERSATIONS — map every signal to the strongest door:
 - Conv 3 · Trust Every Identity (Verify + Vault): Open when zero-trust/audit mandate, DORA-style regulation, IAM modernisation, or fast-growing machine/agent identities. Why change: non-human identities now outnumber humans and are the fastest-growing attack surface.
 - Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert): Open when multi-cloud or cloud-exit noise, board scrutiny on cloud cost, sovereignty/residency driving workload placement. Why change: "all-in on one provider" is a dependency, not a strategy.
 - Conv 5 · Build & Modernise (IBM Bob): Open when large legacy estate, stalled modernisation, ungoverned AI coding spend, or delivery pressure. Why change: legacy debt compounds and AI coding spend runs unmeasured until the quarter it doubles. CLAIM DISCIPLINE: IBM Bob on-premises GA target is 30 Sep 2026 — say "a path to on-premises", never "available today".
+- Conv L · Lightwell (QUALIFYING PATH — never open cold): Surfaces from inside the five when articles name open-source CVE exposure a client owns but cannot fix. Qualifying signals: cannot take an upgrade, carrying a security exception or private fork, community Kafka/Terraform/Ansible in production, patch-to-production cycle over 45 days. Two qualifying questions: (1) Can they move to the remediated version? If not → Lightwell backport; if yes → Concert pull-request. (2) How long to production? Under 14 days safe, 15–45 caution, over 45 high risk. Claim discipline: no SLAs, no trial, no pricing; Clearinghouse Premier is gated; scope today is Java/Maven + Python/PyPI only.
 
 COMPETITIVE COUNTERS (use in sections and starters):
 - vs Snowflake/Databricks → Conv 1: portability and governance across all data, not inside one estate
@@ -3423,6 +3427,7 @@ COMPETITIVE COUNTERS (use in sections and starters):
 - vs Okta/Entra → Conv 3: human + non-human identity as one fabric; they keep their IAM, we close the machine/agent gap
 - vs hyperscaler native stack → Conv 4: portability and lock-in — can you run, govern, and prove the same way everywhere?
 - vs GitHub Copilot/Cursor → Conv 5: autocomplete speeds one slice; Bob governs the whole lifecycle and the bill
+- vs Snyk/Chainguard/Athena → Conv L: scanning is not fixing; Lightwell supplies the signed fix at the version they already run
 
 RULES:
 - Citations: Use actual source names [MIT Tech Review](url), never generic "Source"
@@ -3465,7 +3470,7 @@ Return valid JSON:
             "industry": "Financial Services",
             "emoji": "🏦",
             "headline": "One-sentence signal grounded in today's articles. Name a client if one was matched.",
-            "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5",
+            "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5 | Conv L",
             "ibmAngle": "Specific IBM product from that conversation door + the Why Change framing for this industry.",
             "salesAction": "Specific ATL action this week. Reference the five-step motion: Open with diagnostic → Why Change → Shape the architecture (product-blind) → Why IBM → agree a Progress step. Name a client account if relevant."
         }
@@ -4263,6 +4268,7 @@ THE FIVE CLIENT CONVERSATIONS — assign the strongest door:
 - Conv 3 · Trust Every Identity (Verify + Vault): zero-trust/audit mandate, DORA-style regulation, fast-growing machine/agent identities. Unconsidered need: IAM stacks cover people — machines, secrets, and agents are the gap.
 - Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert): cloud cost, multi-cloud, workload sovereignty/residency. Unconsidered need: "all-in on one provider" is a dependency, not a strategy.
 - Conv 5 · Build & Modernise (IBM Bob): legacy estate, ungoverned AI coding spend, stalled modernisation. Unconsidered need: a coding assistant speeds one slice — planning, testing, modernisation, security, and the bill stay manual. CLAIM: on-premises GA target 30 Sep 2026.
+- Conv L · Lightwell (QUALIFYING PATH — never open cold): Route here from inside the five when a client names open-source CVE exposure they own but cannot fix. Qualifying signals: pinned dependency they cannot upgrade, security exception, private fork, community Kafka/Terraform/Ansible, patch-to-production over 45 days. Claim discipline: no SLAs, no trial, no pricing; Premier is gated; Java/Maven + Python/PyPI scope today.
 
 COMPETITIVE COUNTERS — use in ibmAngle:
 - vs Snowflake/Databricks → Conv 1: portability + governance across all data, not inside one estate
@@ -4270,6 +4276,7 @@ COMPETITIVE COUNTERS — use in ibmAngle:
 - vs Okta/Entra → Conv 3: human + non-human identity as one fabric; they keep their IAM, we close the machine/agent gap
 - vs hyperscaler native stack → Conv 4: can you run, govern, and prove the same way everywhere?
 - vs GitHub Copilot/Cursor → Conv 5: whole lifecycle and governed spend, not just autocomplete
+- vs Snyk/Chainguard/Athena → Conv L: scanning is not fixing; Lightwell supplies the signed fix at the version they already run
 
 FIELD DEFINITIONS:
 
@@ -4298,7 +4305,7 @@ Return ONLY valid JSON:
 {
     "keyFacts": ["string", "string", "string"],
     "soWhat": "string",
-    "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5",
+    "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5 | Conv L",
     "waveClassification": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
     "ibmAngle": "string",
     "clientImplication": "string",
@@ -4474,6 +4481,7 @@ THE FIVE CONVERSATIONS — choose the strongest door for this client based on th
 - Conv 3 · Trust Every Identity (Verify + Vault): zero-trust or audit mandate, DORA-style regulation, IAM modernisation, fast-growing agent/machine identities. Account signals: board-level security mandate; regulatory deadline; IAM on the roadmap; agents scaling fast.
 - Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert): multi-cloud or cloud-exit noise, board scrutiny on cloud cost, sovereignty/residency driving workload placement. Account signals: cloud cost has become a board question; concentration-risk regulation; multi-cloud or repatriation noise.
 - Conv 5 · Build & Modernise (IBM Bob): large legacy estate, stalled modernisation, ungoverned AI coding spend, delivery pressure. Account signals: mainframe/COBOL/ageing core; modernisation announced or stalled; AI coding adoption with unclear governance. CLAIM DISCIPLINE: IBM Bob on-premises GA target 30 Sep 2026 — say "a path to on-premises", never "available today".
+- Conv L · Lightwell (QUALIFYING PATH — never open cold): Surfaces when this account names open-source CVE exposure they own but cannot fix. Account signals: pinned dependencies they cannot upgrade; security exceptions being renewed; community Kafka/Terraform/Ansible; patch-to-production over 45 days; scanner output with no remediation owner. Two qualifying questions: (1) Can you move to the remediated version or do you need a fix at your current version? (2) How long does a fix take to reach production? Claim discipline: no SLAs, no trial, no pricing; Clearinghouse Premier is gated; Java/Maven + Python/PyPI scope today; route to your Red Hat counterpart.
 
 COMPETITIVE COUNTERS (use in talkingPoints if a competitor is active at this account):
 - vs Snowflake/Databricks → Conv 1: portability + governance across all data, not inside one estate
@@ -4481,6 +4489,7 @@ COMPETITIVE COUNTERS (use in talkingPoints if a competitor is active at this acc
 - vs Okta/Entra → Conv 3: they keep their IAM for humans; the gap is machines, secrets, and agents
 - vs hyperscaler native stack → Conv 4: can you run, govern, and prove the same way everywhere?
 - vs GitHub Copilot/Cursor → Conv 5: whole lifecycle + governed spend, not just autocomplete
+- vs Snyk/Chainguard/Athena → Conv L: scanning is not fixing; Lightwell supplies the signed fix at the version they already run; treat as complementary, not either/or
 
 THE FIVE-STEP MOTION — structure the ATL's approach:
 1. OPEN: TSL + ATL together at C-suite altitude. Lead with a diagnostic question, not a pitch.
@@ -7257,6 +7266,7 @@ THE FIVE CONVERSATIONS — assign conversationDoor per market:
 - Conv 3 · Trust Every Identity (Verify + Vault): zero-trust/audit mandate, DORA-style regulation, machine/agent identity growth
 - Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert): cloud cost, multi-cloud, workload sovereignty
 - Conv 5 · Build & Modernise (IBM Bob): legacy estate, ungoverned AI coding spend [on-premises GA target 30 Sep 2026]
+- Conv L · Lightwell (QUALIFYING PATH — never open cold): open-source CVE exposure the client owns and cannot fix; pinned dependency, private fork, community open-source in production, patch-to-production over 45 days
 
 For EACH market, write ONE synthesized paragraph (3-4 sentences):
 1. Open with the key market theme — the cost of standing still for enterprises in that market
@@ -7282,7 +7292,7 @@ Return JSON:
   "markets": {
     "ANZ": {
       "synthesis": "3-4 sentence market brief",
-      "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5",
+      "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5 | Conv L",
       "keyMessage": "One-sentence ATL action using the five-step motion"
     }
   }
@@ -8233,6 +8243,7 @@ THE FIVE CLIENT CONVERSATIONS — assign conversationDoor to each signal:
 - Conv 3 · Trust Every Identity (Verify + Vault): zero-trust/audit mandate, DORA-style regulation, machine/agent identity growth
 - Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert): cloud cost, multi-cloud, workload sovereignty/residency
 - Conv 5 · Build & Modernise (IBM Bob): legacy estate, modernisation debt, ungoverned AI coding spend [NOTE: on-premises GA 30 Sep 2026]
+- Conv L · Lightwell (QUALIFYING PATH — never open cold): open-source CVE exposure the client owns and cannot fix; pinned dependency, private fork, community Kafka/Terraform/Ansible, patch-to-production over 45 days; scanner with no remediation owner
 
 ACTION TYPES — use the runbook definitions:
 - ESCALATE: Contact TSL + client exec within 48h (C-suite change, competitive threat to a named account, deal signal)
@@ -8271,7 +8282,7 @@ Analyze each signal IN ORDER. Return JSON array with one entry per signal in SAM
     "actionType": "ESCALATE or BRIEF_ATL or POSITION or MONITOR",
     "action": "Specific action using runbook motion: who does what, by when. Reference the conversation door.",
     "affectedMarkets": ["ANZ", "ASEAN", "GCG", "ISA", "KOREA"],
-    "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5",
+    "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5 | Conv L",
     "ibmAngle": "Specific IBM product from the conversation door + the Why Change framing. Use competitive counter if a competitor is named.",
     "talkingPoint": "Hypothesis for ATL to test with client CTO: 'I've been thinking that [observation] — is that consistent with what you're seeing?' Peer CTO tone, not a pitch.",
     "competitive": "Competitor name or null"

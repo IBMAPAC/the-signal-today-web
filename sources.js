@@ -1051,7 +1051,11 @@ const CROSS_REFERENCE_THEMES = {
     // === RISK SIGNALS ===
     'Cybersecurity Threats': ['ransomware', 'cyber attack', 'data breach', 'zero trust', 'security vulnerability', 'threat actor', 'apt', 'supply chain attack'],
     'Economic Headwinds': ['cost cutting', 'layoffs', 'restructuring', 'budget reduction', 'hiring freeze', 'downsizing'],
-    'Talent & Skills': ['ai talent', 'tech talent', 'skills gap', 'upskilling', 'workforce transformation', 'hiring challenge']
+    'Talent & Skills': ['ai talent', 'tech talent', 'skills gap', 'upskilling', 'workforce transformation', 'hiring challenge'],
+
+    // === OPEN-SOURCE VULNERABILITY GAP (Conv L — Lightwell qualifier) ===
+    // These signals route to a qualifying question, never opened cold
+    'Open Source Vulnerability': ['cve', 'vulnerability', 'open source risk', 'dependency risk', 'software supply chain', 'sbom', 'software bill of materials', 'pinned dependency', 'cannot upgrade', 'patch backport', 'open source exposure', 'community kafka', 'community terraform', 'community ansible', 'patch to production', 'remediation cycle', 'security exception', 'private fork']
 };
 
 // ============================================
@@ -1137,6 +1141,8 @@ const DEAL_RELEVANCE_SIGNALS = {
         'ibm z', 'ibm power', 'linuxone', 'ibm storage', 'ibm spectrum', 'ibm flashsystem',
         // Observability & FinOps
         'instana', 'turbonomic', 'apptio', 'cloudability',
+        // Lightwell (Conv L — open-source vulnerability remediation, Red Hat + IBM)
+        'lightwell', 'lightwell network', 'clearinghouse premier',
         // Other
         'ibm quantum', 'ibm research', 'ibm institute', 'ibm garage',
         'ibm consulting', 'ibm automation', 'sterling', 'aspera', 'databand',
@@ -1207,8 +1213,8 @@ const FIELD_CTO_ACTION_TRIGGERS = {
 const COMPETITIVE_POSITIONING = {
     // AI & ML - Microsoft
     'azure openai': { ibm: 'watsonx.ai', angle: 'Enterprise AI governance + data privacy' },
-    'copilot': { ibm: 'watsonx Code Assistant', angle: 'Enterprise security + on-prem deployment' },
-    'github copilot': { ibm: 'watsonx Code Assistant', angle: 'Enterprise governance + IP protection' },
+    'copilot': { ibm: 'IBM Bob', angle: 'Whole lifecycle + governed spend + on-premises path (GA target 30 Sep 2026)' },
+    'github copilot': { ibm: 'IBM Bob', angle: 'Whole lifecycle + governed spend; who owns the bill and can the code stay on your ground' },
     'microsoft copilot': { ibm: 'watsonx Orchestrate', angle: 'Process automation + enterprise integration' },
     'dynamics 365 copilot': { ibm: 'watsonx Orchestrate', angle: 'Open ecosystem + hybrid deployment' },
     
@@ -1223,7 +1229,7 @@ const COMPETITIVE_POSITIONING = {
     'vertex ai': { ibm: 'watsonx.ai', angle: 'Open models + enterprise integration' },
     'gemini': { ibm: 'watsonx.ai', angle: 'Enterprise governance + data residency' },
     'google gemini': { ibm: 'watsonx.ai', angle: 'Hybrid deployment + regulatory compliance' },
-    'duet ai': { ibm: 'watsonx Code Assistant', angle: 'Enterprise security + audit trail' },
+    'duet ai': { ibm: 'IBM Bob', angle: 'Whole lifecycle + governed spend + on-premises path' },
     
     // AI & ML - Others
     'openai': { ibm: 'watsonx.ai', angle: 'Enterprise governance + data privacy + hybrid' },
@@ -1253,8 +1259,8 @@ const COMPETITIVE_POSITIONING = {
     'servicenow': { ibm: 'watsonx Orchestrate', angle: 'Deep integration + process mining' },
     'uipath': { ibm: 'watsonx Orchestrate', angle: 'AI-first automation + enterprise' },
     'automation anywhere': { ibm: 'watsonx Orchestrate', angle: 'Intelligent automation + scale' },
-    'mulesoft': { ibm: 'IBM Integration', angle: 'Hybrid deployment + API management' },
-    'workato': { ibm: 'IBM Integration', angle: 'Enterprise governance + security' },
+    'mulesoft': { ibm: 'webMethods', angle: 'Agent control plane + total estate cost, not one connector\'s features' },
+    'workato': { ibm: 'webMethods', angle: 'Governed fabric the agents act on, not connectivity rented inside a platform' },
     
     // Security
     'sentinel': { ibm: 'QRadar SIEM', angle: 'AI-powered threat intelligence' },

@@ -174,19 +174,17 @@ class HybridIntelligenceEngine {
             },
             openai: {
                 endpoint: 'https://api.openai.com/v1/chat/completions',
-                model: 'gpt-5.4-mini',
+                model: 'gpt-4o',
                 // PHASE 2 TASK 2.2: Model tiers for cost optimization
-                // Updated with GPT-5.4 series (March 2026)
                 models: {
-                    premium: 'gpt-5.4-mini',                  // GPT-5.4 Mini (best balance)
-                    midTier: 'gpt-5.4-mini',                  // GPT-5.4 Mini (same as premium)
-                    budget: 'gpt-5.4-nano'                    // GPT-5.4 Nano (cheapest)
+                    premium: 'gpt-4o',                        // GPT-4o - $2.50/$10 per M tokens
+                    midTier: 'gpt-4o',                        // GPT-4o
+                    budget: 'gpt-4o-mini'                     // GPT-4o Mini - $0.15/$0.60 per M tokens
                 },
                 costs: {
-                    // Estimated pricing - please verify with official OpenAI pricing page
-                    premium: { input: 0.0002, output: 0.0008 },
-                    midTier: { input: 0.0002, output: 0.0008 },
-                    budget: { input: 0.00005, output: 0.0002 }
+                    premium: { input: 0.0025, output: 0.010 },
+                    midTier: { input: 0.0025, output: 0.010 },
+                    budget: { input: 0.00015, output: 0.0006 }
                 },
                 headers: (apiKey) => ({
                     'Content-Type': 'application/json',
@@ -292,7 +290,7 @@ class HybridIntelligenceEngine {
      * @param {Array} existingArticles - Previous articles for context
      * @returns {Object} Enhanced article with intelligence metadata
      */
-    async analyzeArticle(article, clients, existingArticles = [], skipTier3 = false) {
+    async analyzeArticle(article, clients, existingArticles = []) {
         const startTime = Date.now();
         
         // PHASE 1 TASK 1.3: Emit analysis start event
@@ -307,23 +305,17 @@ class HybridIntelligenceEngine {
             const cachedResult = await this.cacheManager.get(cacheKey);
             
             if (cachedResult) {
-                // Only use cache if it has the tier we need
-                // If skipTier3=false (need Tier 3) but cache only has Tier 2, continue to fresh analysis
-                if (skipTier3 || cachedResult.tier === 3) {
-                    this.stats.cacheHits++;
-                    cachedResult.processingTime = Date.now() - startTime;
-                    cachedResult.fromCache = true;
-                    
-                    // PHASE 1 TASK 1.3: Emit cache hit event
-                    this.emit('cacheHit', {
-                        article: { id: article.id, title: article.title },
-                        result: cachedResult
-                    });
-                    
-                    return { ...article, intelligence: cachedResult };
-                }
-                // Cache has Tier 2 but we need Tier 3 - continue to fresh analysis
-                console.log(`📊 Cache has Tier ${cachedResult.tier}, need Tier 3 for: ${article.title.substring(0, 50)}...`);
+                this.stats.cacheHits++;
+                cachedResult.processingTime = Date.now() - startTime;
+                cachedResult.fromCache = true;
+                
+                // PHASE 1 TASK 1.3: Emit cache hit event
+                this.emit('cacheHit', {
+                    article: { id: article.id, title: article.title },
+                    result: cachedResult
+                });
+                
+                return { ...article, intelligence: cachedResult };
             }
             this.stats.cacheMisses++;
         }
@@ -332,23 +324,16 @@ class HybridIntelligenceEngine {
         const articleHash = `${article.id}-${article.title}-${article.publishedDate}`;
         if (this.analysisCache.has(articleHash)) {
             const cached = this.analysisCache.get(articleHash);
+            cached.processingTime = Date.now() - startTime;
+            cached.fromCache = true;
             
-            // Only use cache if it has the tier we need
-            // If skipTier3=false (need Tier 3) but cache only has Tier 2, continue to fresh analysis
-            if (skipTier3 || cached.tier === 3) {
-                cached.processingTime = Date.now() - startTime;
-                cached.fromCache = true;
-                
-                // PHASE 1 TASK 1.3: Emit cache hit event
-                this.emit('cacheHit', {
-                    article: { id: article.id, title: article.title },
-                    result: cached
-                });
-                
-                return { ...article, intelligence: cached };
-            }
-            // Cache has Tier 2 but we need Tier 3 - continue to fresh analysis
-            console.log(`📊 In-memory cache has Tier ${cached.tier}, need Tier 3 for: ${article.title.substring(0, 50)}...`);
+            // PHASE 1 TASK 1.3: Emit cache hit event
+            this.emit('cacheHit', {
+                article: { id: article.id, title: article.title },
+                result: cached
+            });
+            
+            return { ...article, intelligence: cached };
         }
         
         // Initialize analysis result
@@ -428,8 +413,7 @@ class HybridIntelligenceEngine {
         }
 
         // TIER 3: Semantic analysis (~10% of articles - only high-value)
-        // Skip if skipTier3 flag is set (for fast initial scoring)
-        if (!skipTier3 && this.shouldRunSemanticAnalysis(article, tier2Result, clients)) {
+        if (this.shouldRunSemanticAnalysis(article, tier2Result, clients)) {
             try {
                 const tier3Result = await this.tier3_semanticAnalysis(
                     article,
@@ -1699,22 +1683,34 @@ Return a JSON array with ${articles.length} objects, one for each article in ord
      * @returns {string} Static system prompt (~1500 tokens)
      */
     getSystemPrompt() {
-        return `You are the intelligence analyst for the IBM APAC Field CTO who leads 115 ATLs across 343 enterprise accounts.
+        return `You are the intelligence analyst for the IBM APAC Field CTO who leads 115 ATLs across 343 enterprise accounts. Your role is to map every signal to the five client conversations the field runs. Lead with Why Change — the cost of standing still — not a product pitch.
 
-STRATEGIC CONTEXT (Foundation + Three Pillars):
-- Foundation: AI-Ready Data (watsonx.data, Confluent, watsonx.governance, Guardium)
-- Pillar 1: Enterprise AI Agents (watsonx Orchestrate, Project Bob, watsonx Code Assistant for Z)
-- Pillar 2: Sovereign Hybrid (Red Hat OpenShift, Terraform, Vault, Power, IBM Z)
-- Pillar 3: AgentOps (Concert, Instana, Turbonomic, webMethods)
+THE FIVE CLIENT CONVERSATIONS:
+- Conv 1 · Govern Your Data (watsonx.data + Confluent): data platform sprawl, residency/localisation exposure, AI ambition stalled on data. Unconsidered need: governed access is control over where data lives, not just a platform. Why change: under 1% of enterprise data is AI-ready.
+- Conv 2 · Connect & Automate (watsonx Orchestrate + webMethods): middleware sprawl, M&A integration debt, agent sprawl, stalled RPA. Unconsidered need: one control plane to govern agents already in production, not another way to build them. Why change: agents proliferating with no central record of what acts or what it can reach.
+- Conv 3 · Trust Every Identity (Verify + Vault): zero-trust/audit mandate, DORA-style regulation, fast-growing machine/agent identities. Unconsidered need: IAM stacks cover people — machines, secrets, and agents are the gap. Why change: non-human identities now outnumber humans and are the fastest-growing attack surface.
+- Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert): cloud cost, multi-cloud, workload sovereignty/residency. Unconsidered need: "all-in on one provider" is a dependency, not a strategy. Why change: where you run decides what you can prove, move, and pay.
+- Conv 5 · Build & Modernise (IBM Bob): legacy estate, ungoverned AI coding spend, stalled modernisation. Unconsidered need: a coding assistant speeds one slice — planning, testing, modernisation, security, and the bill stay manual. Why change: legacy debt compounds and AI coding spend runs unmeasured until the quarter it doubles.
+- Conv L · Lightwell (QUALIFYING PATH ONLY — never open cold): Reached from inside the five when a client names open-source CVE exposure they own but cannot fix. Qualifying signals: "we cannot take the upgrade", carrying a security exception or private fork, community Kafka/Terraform/Ansible in production, patch-to-production cycle over 45 days, scanner coverage with no remediation owner. Two qualifying questions: (1) "Can you safely move to the remediated version, or do you need a fix for the version already running?" — if they cannot move, route to Lightwell; if they can, route to Concert pull-request remediation. (2) "How long does it take to get a fix into production?" — under 14 days safe, 15–45 caution, over 45 high risk. Claim discipline: no SLAs, no trial, no pricing; Clearinghouse Premier is gated and unlikely for APAC; scope today is Java/Maven + Python/PyPI only; eligibility is validated by the programme team, not by you.
+
+COMPETITIVE COUNTERS (use in ibmAngle and competitorActivity):
+- vs Snowflake/Databricks → Conv 1: portability + governance across the whole estate, not inside one platform
+- vs MuleSoft/Boomi → Conv 2: agent control plane + total estate cost, not one connector's features
+- vs Okta/Entra → Conv 3: human + non-human identity as one fabric; the gap is machines, secrets, and agents
+- vs hyperscaler native stack → Conv 4: run, govern, and prove the same way everywhere, not just on one provider
+- vs GitHub Copilot/Cursor → Conv 5: whole lifecycle and governed spend, not just autocomplete
+- vs Snyk/Chainguard/Athena → Conv L: scanning is not fixing; Lightwell supplies the signed fix at the version they already run; do not treat as either/or
 
 DUAL-WAVE THESIS:
-- AI/Agentic Wave: Agents that perceive, reason, act, and trace—not chatbots
-- Sovereignty Wave: Data localization, regulatory compliance, operational control
+- [AI WAVE]: AI and agentic transformation — agents that act, not chatbots
+- [SOVEREIGNTY WAVE]: Data residency, regulatory compliance, operational control
 
 KEY PROOF POINTS:
-- Only 16% of AI reaches enterprise scale—bottleneck is data readiness, not AI capability
-- 9,000+ IBM developers using AI agents daily, 45% productivity gains
-- $11B Confluent (80% Fortune 100), $6.4B HashiCorp (85% Fortune 500)
+- Conv 1: Under 1% of enterprise data is AI-ready — governed access is the bottleneck, not the model
+- Conv 2: Agents proliferating across teams with no central record of what acts or what it can reach
+- Conv 3: Non-human identities now outnumber humans and grow with every agent deployed
+- Conv 4: Where you run decides what you can prove, move, and pay
+- Conv 5: A coding assistant speeds one slice — planning, testing, modernisation, and the bill stay manual
 
 ANALYSIS FRAMEWORK:
 
@@ -1725,32 +1721,37 @@ ANALYSIS FRAMEWORK:
 
 2. OPPORTUNITY SCORE (0-100):
    - Competitor setback/issue = 80+
-   - Client signaling AI/sovereignty challenge = 75+
-   - Market shift favoring IBM positioning = 70+
+   - Client signaling a conversation door signal = 75+
+   - Market shift favouring IBM positioning = 70+
 
-3. WAVE CLASSIFICATION: Tag as "AI_WAVE" or "SOVEREIGNTY_WAVE" or "BOTH"
+3. WAVE CLASSIFICATION: Tag as [AI WAVE] or [SOVEREIGNTY WAVE] or [BOTH]
 
-4. PILLAR MAPPING: Which IBM pillar is most relevant?
-   - Data readiness issue → Foundation
-   - AI pilot stuck → Pillar 1
-   - Cloud/sovereignty constraint → Pillar 2
-   - Operations overwhelmed → Pillar 3
+4. CONVERSATION DOOR: Which conversation does this signal most strongly open?
+   - Data platform sprawl, residency, AI stalled on data → Conv 1
+   - Agent sprawl, middleware debt, M&A integration, stalled RPA → Conv 2
+   - Zero-trust/audit mandate, identity growth, DORA-style regulation → Conv 3
+   - Cloud cost, multi-cloud, workload sovereignty → Conv 4
+   - Legacy estate, ungoverned AI coding spend, stalled modernisation → Conv 5
+   - Open-source CVE exposure the client owns and cannot fix, pinned dependency, private fork, community open-source in production, patch-to-production cycle → Conv L (qualifying path — never open cold; route here only when these words appear explicitly)
 
 5. CLIENT MATCHING RULES (CRITICAL):
-   - ONLY match clients whose INDUSTRY matches article topic
-   - ONLY match clients whose MARKET/GEOGRAPHY matches article location
+   - ONLY match clients whose INDUSTRY matches the article topic
+   - ONLY match clients whose MARKET/GEOGRAPHY matches the article location
    - If no match on BOTH criteria: affectedClients = [], lower opportunityScore to 30-50
 
-6. ACTION ITEMS must be:
-   - Specific: Name client, IBM product, timeframe
-   - Framed as "Why Change": Surface unconsidered needs, not just answer questions
-   - Example: "Position watsonx.governance with [Client] before their Q2 audit deadline"
+6. ACTION ITEMS must follow the five-step motion:
+   - OPEN: Diagnostic question, not a pitch — TSL + ATL together at C-suite altitude
+   - WHY CHANGE: Surface the cost of standing still and the unconsidered need
+   - SHAPE: Draw the product-blind architecture. Name no product until the client points at a layer
+   - WHY IBM: Control built, not granted
+   - PROGRESS: Agree a client step (review, workshop, PoC)
+   - Example: "Open with DBS on Conv 3 — ask 'Can you list every non-human identity with credentials in your environment?' before their MAS audit deadline. Shape the identity fabric (product-blind). When they point at secrets/agents, position Vault."
 
-7. "SO WHAT?" ANALYSIS (CRITICAL - Make it INSIGHTFUL):
-   - Don't just report what happened—explain WHY IT MATTERS to the Field CTO
-   - Connect the dots: Event → Impact on IBM → Specific action needed
-   - Add urgency context: renewal dates, competitive windows, regulatory deadlines
-   - Example: "Microsoft wins DBS deal" → "Competitor now has foothold in payments at YOUR Tier 1 client. Renewal in 90 days. Position watsonx.data for real-time fraud detection before they lock in 3-year Microsoft contract."
+7. "SO WHAT?" ANALYSIS (CRITICAL — make it insightful):
+   - Don't just report what happened — explain WHY IT MATTERS to the Field CTO
+   - Connect the dots: Event → conversation door it opens → specific ATL action
+   - Add urgency context: renewal dates, regulatory deadlines, competitive windows
+   - Example: "Microsoft wins DBS deal" → "Competitor has foothold in payments at YOUR Tier 1 client. Open Conv 2 — ask who governs the agents and integrations Microsoft will now deploy. Renewal in 90 days."
 
 8. URGENCY LEVELS:
    - CRITICAL: Act within 7 days (client renewal, competitive threat, regulatory deadline)
@@ -1758,29 +1759,29 @@ ANALYSIS FRAMEWORK:
    - MEDIUM: Act within 90 days (strategic positioning, relationship building)
    - LOW: Monitor (background intelligence, long-term trends)
 
-OUTPUT FORMAT (strict JSON, no markdown, no brackets in values):
+OUTPUT FORMAT (JSON only):
 {
-  "threatLevel": 85,
-  "opportunityScore": 20,
+  "threatLevel": 0-100,
+  "opportunityScore": 0-100,
   "confidence": 0.95,
-  "waveClassification": "AI_WAVE",
-  "pillarMapping": "Foundation",
-  "reasoning": "One-sentence strategic context",
-  "soWhat": "2-3 sentences explaining WHY this matters and WHAT to do",
-  "actionableInsights": ["Action 1 with urgency and timeline", "Action 2 with urgency and timeline"],
-  "affectedClients": ["ClientName"],
-  "affectedMarkets": ["ASEAN"],
-  "competitorActivity": "Competitor move and IBM counter",
-  "clientContext": "YOUR Tier 1 client if applicable"
-}
-
-CRITICAL JSON RULES:
-- Return ONLY the JSON object (no markdown, no code blocks, no extra text)
-- waveClassification must be: "AI_WAVE" or "SOVEREIGNTY_WAVE" or "BOTH" (no brackets)
-- pillarMapping must be: "Foundation" or "Pillar_1" or "Pillar_2" or "Pillar_3" (no spaces)
-- All string values must use proper escaping for quotes
-- Arrays must have proper comma separation
-- No trailing commas`;
+  "waveClassification": "[AI WAVE]" | "[SOVEREIGNTY WAVE]" | "[BOTH]",
+  "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5 | Conv L",
+  "reasoning": "One-sentence strategic context: what this signals for IBM APAC and why it matters NOW. Name the conversation door it opens. No client names here — use actionableInsights for that.",
+  "soWhat": "2-3 sentences explaining WHY this matters to the Field CTO. Connect event → conversation door → specific ATL action. Be specific about timing and stakes.",
+  "actionableInsights": [
+    {
+      "action": "Specific action using the five-step motion: who opens which conversation door, with which client, by when. Lead with Why Change.",
+      "urgency": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
+      "timeline": "Within 7 days" | "Within 30 days" | "Within 90 days" | "Monitor",
+      "ibmAngle": "Specific IBM product from the conversation door + the Why Change framing. Use competitive counter if a competitor is named.",
+      "context": "Why this action matters now (renewal date, regulatory deadline, competitive window)"
+    }
+  ],
+  "affectedClients": [],
+  "affectedMarkets": [],
+  "competitorActivity": "Name competitor, their move, IBM counter-position from the relevant conversation door",
+  "clientContext": "If article mentions YOUR managed clients, flag with 'YOUR Tier X client' and which conversation door to open with them"
+}`;
     }
 
     /**
@@ -1813,28 +1814,7 @@ YOUR MANAGED CLIENTS (with tier/market/industry): ${enhancedClientList}
 
 IMPORTANT: If article mentions any of YOUR clients above, flag with "YOUR Tier X client" in clientContext field for immediate attention.
 
-Analyze this article using the framework above. Remember: ONLY suggest clients that match BOTH industry AND geography.
-
-CRITICAL OUTPUT FORMAT (must follow exactly):
-{
-  "threatLevel": 85,
-  "opportunityScore": 20,
-  "confidence": 0.95,
-  "waveClassification": "AI_WAVE",
-  "pillarMapping": "Foundation",
-  "reasoning": "One sentence",
-  "soWhat": "2-3 sentences",
-  "actionableInsights": ["Action 1", "Action 2"],
-  "affectedClients": ["Client"],
-  "affectedMarkets": ["Market"],
-  "competitorActivity": "Brief",
-  "clientContext": "YOUR Tier X client or empty"
-}
-
-RULES:
-- waveClassification MUST be: "AI_WAVE" or "SOVEREIGNTY_WAVE" or "BOTH" (NO BRACKETS!)
-- pillarMapping MUST be: "Foundation" or "Pillar_1" or "Pillar_2" or "Pillar_3"
-- Return ONLY valid JSON, no markdown, no code blocks`;
+Analyze this article using the framework above. Remember: ONLY suggest clients that match BOTH industry AND geography.`;
     }
 
     /**
@@ -1993,8 +1973,7 @@ RULES:
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 // PHASE 2 TASK 2.3: Use caching-aware request format
-                // Increased from 600 to 1200 tokens to accommodate enhanced response format with soWhat, actionableInsights, etc.
-                const requestBody = this.formatRequestWithCaching(selectedModel, 1200, systemPrompt, userContent);
+                const requestBody = this.formatRequestWithCaching(selectedModel, 600, systemPrompt, userContent);
                 
                 const response = await fetch(endpoint, {
                     method: 'POST',
@@ -2021,68 +2000,16 @@ RULES:
                 // Clean response: remove markdown code blocks if present
                 text = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
                 
-                // Try to extract valid JSON by finding matching braces
-                let jsonStr = '';
-                let startIdx = text.indexOf('{');
+                // Try to extract JSON (object or array)
+                let jsonMatch = text.match(/\{[\s\S]*\}/) || text.match(/\[[\s\S]*\]/);
                 
-                if (startIdx === -1) {
-                    // Try array format
-                    startIdx = text.indexOf('[');
-                    if (startIdx === -1) {
-                        console.error(`${this.provider} response parsing failed. Raw response:`, text.substring(0, 500));
-                        throw new Error(`Could not parse ${this.provider} response - no valid JSON found`);
-                    }
+                if (!jsonMatch) {
+                    console.error(`${this.provider} response parsing failed. Raw response:`, text.substring(0, 500));
+                    throw new Error(`Could not parse ${this.provider} response - no valid JSON found`);
                 }
                 
-                // Find matching closing brace/bracket
-                let braceCount = 0;
-                let inString = false;
-                let escapeNext = false;
-                const startChar = text[startIdx];
-                const endChar = startChar === '{' ? '}' : ']';
-                
-                for (let i = startIdx; i < text.length; i++) {
-                    const char = text[i];
-                    
-                    if (escapeNext) {
-                        escapeNext = false;
-                        continue;
-                    }
-                    
-                    if (char === '\\') {
-                        escapeNext = true;
-                        continue;
-                    }
-                    
-                    if (char === '"' && !escapeNext) {
-                        inString = !inString;
-                        continue;
-                    }
-                    
-                    if (!inString) {
-                        if (char === startChar) {
-                            braceCount++;
-                        } else if (char === endChar) {
-                            braceCount--;
-                            if (braceCount === 0) {
-                                jsonStr = text.substring(startIdx, i + 1);
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                if (!jsonStr) {
-                    console.error(`${this.provider} response parsing failed. Could not find matching braces.`);
-                    console.error('Raw response (first 500 chars):', text.substring(0, 500));
-                    console.error('Raw response (last 500 chars):', text.substring(Math.max(0, text.length - 500)));
-                    throw new Error(`Could not parse ${this.provider} response - incomplete JSON`);
-                }
-                
-                // DEBUG: Log extracted JSON for inspection
-                console.log('📋 Extracted JSON length:', jsonStr.length);
-                console.log('📋 First 200 chars:', jsonStr.substring(0, 200));
-                console.log('📋 Last 200 chars:', jsonStr.substring(Math.max(0, jsonStr.length - 200)));
+                // Clean up JSON before parsing
+                let jsonStr = jsonMatch[0];
                 
                 // Remove trailing commas before closing brackets
                 jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
@@ -2100,47 +2027,10 @@ RULES:
                 try {
                     analysis = JSON.parse(jsonStr);
                 } catch (parseError) {
-                    console.error(`❌ ${this.provider} JSON parse error:`, parseError.message);
-                    
-                    // Try to identify the problematic area
-                    const errorMatch = parseError.message.match(/position (\d+)/);
-                    if (errorMatch) {
-                        const pos = parseInt(errorMatch[1]);
-                        const start = Math.max(0, pos - 150);
-                        const end = Math.min(jsonStr.length, pos + 150);
-                        const context = jsonStr.substring(start, end);
-                        const errorChar = jsonStr[pos];
-                        const errorCharCode = errorChar ? errorChar.charCodeAt(0) : 'EOF';
-                        
-                        console.error('📍 Context around error position:', context);
-                        console.error(`📍 Error at character: "${errorChar}" (code: ${errorCharCode})`);
-                        console.error(`📍 Position ${pos} of ${jsonStr.length} total chars`);
-                        
-                        // Show surrounding characters for better debugging
-                        const before = jsonStr.substring(Math.max(0, pos - 5), pos);
-                        const after = jsonStr.substring(pos + 1, Math.min(jsonStr.length, pos + 6));
-                        console.error(`📍 Surrounding: ...${before}[${errorChar}]${after}...`);
-                    }
-                    
-                    // Try to fix common JSON issues
-                    console.warn('Attempting to fix common JSON issues...');
-                    try {
-                        // Remove trailing commas
-                        let fixedJson = jsonStr.replace(/,(\s*[}\]])/g, '$1');
-                        // Fix unescaped quotes in strings
-                        fixedJson = fixedJson.replace(/: "([^"]*)"([^,}\]]*)/g, (match, p1, p2) => {
-                            if (p2 && !p2.match(/^\s*[,}\]]/)) {
-                                return `: "${p1}\\"${p2}`;
-                            }
-                            return match;
-                        });
-                        analysis = JSON.parse(fixedJson);
-                        console.warn('Successfully fixed JSON!');
-                    } catch (fixError) {
-                        console.error('Could not auto-fix JSON');
-                        console.error('Full JSON (first 1000 chars):', jsonStr.substring(0, 1000));
-                        throw new Error(`JSON parse failed: ${parseError.message}`);
-                    }
+                    console.error(`${this.provider} JSON parse error at position ${parseError.message}`);
+                    console.error('Problematic JSON substring:', jsonStr.substring(Math.max(0, 280), 320));
+                    console.error('Full JSON (first 500 chars):', jsonStr.substring(0, 500));
+                    throw new Error(`JSON parse failed: ${parseError.message}`);
                 }
                 
                 // Handle array response (some models might return array instead of object)
@@ -2157,42 +2047,16 @@ RULES:
                     this.budgetManager.recordUsage(actualTokens, actualCost);
                 }
                 
-                // Normalize actionableInsights to handle both old and new formats
-                let normalizedInsights = analysis.actionableInsights || [];
-                if (normalizedInsights.length > 0) {
-                    // If first element is a string (old format), keep as is
-                    // If first element is an object (new format), keep as is
-                    // This provides backward compatibility
-                    if (typeof normalizedInsights[0] === 'string') {
-                        // Old format: array of strings
-                        normalizedInsights = normalizedInsights;
-                    } else if (typeof normalizedInsights[0] === 'object') {
-                        // New format: array of objects with action, urgency, timeline, etc.
-                        // Validate structure
-                        normalizedInsights = normalizedInsights.map(insight => ({
-                            action: insight.action || insight,
-                            urgency: insight.urgency || 'MEDIUM',
-                            timeline: insight.timeline || 'Within 30 days',
-                            ibmAngle: insight.ibmAngle || '',
-                            context: insight.context || ''
-                        }));
-                    }
-                }
-                
                 // Success! Return the result with model tier info
                 return {
                     threatLevel: analysis.threatLevel || 0,
                     opportunityScore: analysis.opportunityScore || 0,
                     confidence: analysis.confidence || 0.95,
                     reasoning: analysis.reasoning || '',
-                    soWhat: analysis.soWhat || analysis.reasoning || '',
-                    actionableInsights: normalizedInsights,
+                    actionableInsights: analysis.actionableInsights || [],
                     affectedClients: analysis.affectedClients || [],
                     affectedMarkets: analysis.affectedMarkets || [],
                     competitorActivity: analysis.competitorActivity || '',
-                    clientContext: analysis.clientContext || '',
-                    waveClassification: analysis.waveClassification || '',
-                    pillarMapping: analysis.pillarMapping || '',
                     relatedArticles: relatedArticles.map(a => a.id),
                     // PHASE 2 TASK 2.2: Add model tier information
                     modelTier: modelTier,
