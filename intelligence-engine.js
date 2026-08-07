@@ -5,6 +5,56 @@
 // =============================================
 
 /**
+ * Repair a JSON string that was truncated mid-structure by the LLM API.
+ *
+ * Strategy:
+ * 1. Walk the string character-by-character tracking open string/object/array state.
+ * 2. If we end inside a string, close it with `"`.
+ * 3. Drain the bracket stack from innermost to outermost, appending `}` or `]`.
+ *
+ * This is intentionally conservative — it only closes what is structurally open.
+ * Partial key-value pairs (e.g. a key with no value) are left; JSON.parse will
+ * then surface a more specific error that we can log and discard safely.
+ *
+ * @param {string} s - Raw JSON string, possibly truncated
+ * @returns {string} Repaired JSON string
+ */
+function repairTruncatedJson(s) {
+    const stack = [];
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+        if (ch === '\\' && inString) {
+            escaped = true;
+            continue;
+        }
+        if (ch === '"') {
+            inString = !inString;
+            continue;
+        }
+        if (inString) continue;
+
+        if (ch === '{') stack.push('}');
+        else if (ch === '[') stack.push(']');
+        else if (ch === '}' || ch === ']') stack.pop();
+    }
+
+    // Close open string if the response was cut off inside a value
+    let suffix = inString ? '"' : '';
+    // Close open objects/arrays innermost-first
+    while (stack.length > 0) suffix += stack.pop();
+
+    return s + suffix;
+}
+
+/**
  * HybridIntelligenceEngine
  * 
  * Analyzes articles using a 3-tier approach:
@@ -2015,12 +2065,11 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
 
                 // Remove newlines and carriage returns for cleaner parsing
                 jsonStr = jsonStr.replace(/\n/g, ' ').replace(/\r/g, '');
-                
-                // Remove any text after the last closing bracket
-                const lastBracket = Math.max(jsonStr.lastIndexOf('}'), jsonStr.lastIndexOf(']'));
-                if (lastBracket >= 0 && lastBracket < jsonStr.length - 1) {
-                    jsonStr = jsonStr.substring(0, lastBracket + 1);
-                }
+
+                // Truncation recovery: if the response was cut off mid-structure
+                // (mid-string, mid-object, mid-array), close all open structures
+                // so JSON.parse has a valid document to work with.
+                jsonStr = repairTruncatedJson(jsonStr);
                 
                 let analysis;
                 try {
