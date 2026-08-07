@@ -1429,18 +1429,6 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
     font-weight: 600;
 }
 
-/* So what — secondary strategic context below reasoning */
-.signal-intelligence-sowhat {
-    margin-top: 8px;
-    padding: 8px 12px;
-    background: var(--cds-layer-02, #f4f4f4);
-    border-left: 3px solid var(--cds-border-subtle-02, #c6c6c6);
-    border-radius: 4px;
-    font-size: 12px;
-    line-height: 1.5;
-    color: var(--cds-text-secondary, #525252);
-}
-
 .signal-intelligence-actions {
     margin-top: 12px;
     padding: 10px 12px;

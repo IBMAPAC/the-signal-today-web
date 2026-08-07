@@ -7684,7 +7684,7 @@ Return JSON array, no markdown fences:
   {
     "headline": "Sharp, memorable (8 words max)",
     "synthesis": "2-3 sentences: what's happening, why it matters for IBM APAC, what to do",
-    "conversationDoor": "Conv 1 or Conv 2 or Conv 3 or Conv 4 or Conv 5",
+    "conversationDoor": "Conv 1 or Conv 2 or Conv 3 or Conv 4 or Conv 5 or Conv L",
     "sourceIndices": [1, 3, 5]
   }
 ]
@@ -9090,8 +9090,6 @@ function renderSignalFeedItem(article) {
 
             ${article.intelligence?.reasoning ? `<div class="signal-intelligence-reasoning"><strong>Analysis:</strong> ${escapeHtml(article.intelligence.reasoning)}</div>` : ''}
 
-            ${article.intelligence?.soWhat ? `<div class="signal-intelligence-sowhat">${escapeHtml(article.intelligence.soWhat)}</div>` : ''}
-            
             ${article.intelligence?.actionableInsights?.length > 0 ? `
                 <div class="signal-intelligence-actions">
                     <strong>Actions:</strong>
