@@ -1950,7 +1950,7 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
         if (this.budgetManager) {
             // Estimate tokens and cost
             const estimatedTokens = Math.ceil((systemPrompt.length + userContent.length) / 4); // ~4 chars per token
-            const estimatedCost = (modelCosts.input * estimatedTokens / 1000) + (modelCosts.output * 500 / 1000); // Estimate 500 output tokens
+            const estimatedCost = (modelCosts.input * estimatedTokens / 1000) + (modelCosts.output * 800 / 1000); // Estimate 800 output tokens (consistent with 1000 max_tokens cap)
             
             const budgetCheck = this.budgetManager.checkBudget(estimatedTokens, estimatedCost);
             if (!budgetCheck.allowed) {
@@ -1966,7 +1966,7 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             try {
                 // PHASE 2 TASK 2.3: Use caching-aware request format
-                const requestBody = this.formatRequestWithCaching(selectedModel, 600, systemPrompt, userContent);
+                const requestBody = this.formatRequestWithCaching(selectedModel, 1000, systemPrompt, userContent);
                 
                 const response = await fetch(endpoint, {
                     method: 'POST',
@@ -2020,8 +2020,10 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                 try {
                     analysis = JSON.parse(jsonStr);
                 } catch (parseError) {
-                    console.error(`${this.provider} JSON parse error at position ${parseError.message}`);
-                    console.error('Problematic JSON substring:', jsonStr.substring(Math.max(0, 280), 320));
+                    const posMatch = parseError.message.match(/position (\d+)/);
+                    const pos = posMatch ? parseInt(posMatch[1], 10) : 0;
+                    console.error(`${this.provider} JSON parse error: ${parseError.message}`);
+                    console.error('Problematic JSON substring:', jsonStr.substring(Math.max(0, pos - 30), pos + 30));
                     console.error('Full JSON (first 500 chars):', jsonStr.substring(0, 500));
                     throw new Error(`JSON parse failed: ${parseError.message}`);
                 }
