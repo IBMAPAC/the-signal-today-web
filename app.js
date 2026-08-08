@@ -1747,6 +1747,7 @@ class SignalApp {
                             renderExecutiveSummary(true);
                             renderMarketInsights(true);
                             renderDeepReads(true);
+                            renderClientRisk(); // Fix A: re-render after tier-3 threat scores are populated
                         }
 
                         const totalTime = Math.round(performance.now() - startTime);
@@ -10161,7 +10162,9 @@ function calculateClientRiskScores() {
     const scores = {};
     const now = Date.now();
     const ONE_DAY = 86400000;
-    const allArticles = [...(app?.dailyArticles || []), ...(app?.articles || [])];
+    // Fix B: use app.articles only — dailyArticles is a subset of articles so
+    // combining both causes every article to be counted twice per client.
+    const allArticles = app?.articles || [];
     const seen = new Set();
 
     (app?.clients || []).forEach(client => {
@@ -10186,19 +10189,20 @@ function calculateClientRiskScores() {
             weightedSum += threat * weight;
             totalWeight += weight;
         });
-        const score = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
-        if (score > 0) {
-            const counts = {};
-            matched.forEach(a => { const t = a.signalType || 'background'; counts[t] = (counts[t]||0)+1; });
-            const dominant = Object.entries(counts).sort((x,y)=>y[1]-x[1])[0]?.[0] || 'background';
-            scores[name] = {
-                score,
-                level: score >= 81 ? 'critical' : score >= 61 ? 'elevated' : score >= 31 ? 'watch' : 'stable',
-                emoji: score >= 81 ? '🔴' : score >= 61 ? '🟠' : score >= 31 ? '🟡' : '🟢',
-                signalCount: matched.length,
-                dominantType: dominant
-            };
-        }
+        const rawScore = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
+        // Fix C: floor score at 1 for clients with matched articles but no threat signal yet
+        // (tier-3 may not have run; client still has coverage worth showing as stable)
+        const score = rawScore > 0 ? rawScore : 1;
+        const counts = {};
+        matched.forEach(a => { const t = a.signalType || 'background'; counts[t] = (counts[t]||0)+1; });
+        const dominant = Object.entries(counts).sort((x,y)=>y[1]-x[1])[0]?.[0] || 'background';
+        scores[name] = {
+            score,
+            level: score >= 81 ? 'critical' : score >= 61 ? 'elevated' : score >= 31 ? 'watch' : 'stable',
+            emoji: score >= 81 ? '🔴' : score >= 61 ? '🟠' : score >= 31 ? '🟡' : '🟢',
+            signalCount: matched.length,
+            dominantType: dominant
+        };
     });
     return scores;
 }
