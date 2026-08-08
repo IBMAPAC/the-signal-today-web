@@ -1261,13 +1261,21 @@ const COMPETITIVE_POSITIONING = {
     'automation anywhere': { ibm: 'watsonx Orchestrate', angle: 'Intelligent automation + scale' },
     'mulesoft': { ibm: 'webMethods', angle: 'Agent control plane + total estate cost, not one connector\'s features' },
     'workato': { ibm: 'webMethods', angle: 'Governed fabric the agents act on, not connectivity rented inside a platform' },
-    
+
+    // AI Coding (Conv 5 — IBM Bob)
+    'cursor': { ibm: 'IBM Bob', angle: 'Whole lifecycle + governed spend; who owns the bill and can the code stay on your ground' },
+
     // Security
     'sentinel': { ibm: 'QRadar SIEM', angle: 'AI-powered threat intelligence' },
     'microsoft sentinel': { ibm: 'QRadar SIEM', angle: 'Hybrid SIEM + threat intelligence' },
     'crowdstrike': { ibm: 'IBM Security', angle: 'Managed detection + response' },
     'palo alto': { ibm: 'IBM Security', angle: 'Integrated security + consulting' },
     'zscaler': { ibm: 'IBM Security', angle: 'Zero trust + enterprise integration' },
+
+    // Open-source vulnerability remediation (Conv L — Lightwell qualifier)
+    'snyk': { ibm: 'Lightwell / Concert', angle: 'Scanning is not fixing; Lightwell supplies the signed fix at the version they already run — treat as complementary, not either/or' },
+    'chainguard': { ibm: 'Lightwell / Concert', angle: 'Scanning is not fixing; Lightwell supplies the signed fix at the version they already run — treat as complementary, not either/or' },
+    'athena security': { ibm: 'Lightwell / Concert', angle: 'Scanning is not fixing; Lightwell supplies the signed fix at the version they already run — treat as complementary, not either/or' },
     
     // Consulting & SI
     'accenture': { ibm: 'IBM Consulting', angle: 'Technology depth + IBM stack expertise' },
