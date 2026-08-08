@@ -909,6 +909,11 @@ Return a JSON array with ${articles.length} objects, one for each article in ord
      * @private
      */
     async _performTier3Analysis(article, clients, existingArticles, tier2Result) {
+        // Guard: this path calls _makeAPICall and _parseAPIResponse which are not
+        // implemented on this class. The app uses analyzeArticle → analyzeWithAI instead.
+        // Log a warning if this path is ever reached unexpectedly.
+        console.warn('_performTier3Analysis: called — _makeAPICall/_parseAPIResponse are not implemented; prefer analyzeWithAI path via analyzeArticle()');
+
         // PHASE 2 TASK 2.4: Check budget before API call
         if (this.budgetManager) {
             const canProceed = await this.budgetManager.checkBudget('tier3');
@@ -2099,6 +2104,10 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                 }
                 
                 // Success! Return the result with model tier info
+                // Compute a numeric cost from the rates object — do NOT return the rates
+                // object itself or stats accumulation will coerce it to a string.
+                const callCost = (modelCosts.input * (systemPrompt.length + userContent.length) / 4000) +
+                                 (modelCosts.output * text.length / 4000);
                 return {
                     threatLevel: analysis.threatLevel || 0,
                     opportunityScore: analysis.opportunityScore || 0,
@@ -2109,10 +2118,9 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                     affectedMarkets: analysis.affectedMarkets || [],
                     competitorActivity: analysis.competitorActivity || '',
                     relatedArticles: relatedArticles.map(a => a.id),
-                    // PHASE 2 TASK 2.2: Add model tier information
                     modelTier: modelTier,
                     modelUsed: selectedModel,
-                    estimatedCost: modelCosts
+                    estimatedCost: callCost
                 };
                 
             } catch (error) {

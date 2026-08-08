@@ -2544,7 +2544,7 @@ class SignalApp {
         
         // Get intelligence stats
         if (this.intelligenceEngine) {
-            this.intelligenceStats = this.intelligenceEngine.getStats();
+            this.intelligenceStats = await this.intelligenceEngine.getStats();
             console.log('📊 Intelligence Stats:', this.intelligenceStats);
         }
         
@@ -9190,12 +9190,12 @@ function renderIntelligenceBadges(intelligence) {
  * Update intelligence stats display in header
  * Shows threat count, opportunity count, and API cost
  */
-function updateIntelligenceStats() {
+async function updateIntelligenceStats() {
     const statsContainer = document.getElementById('intelligence-stats');
     if (!statsContainer) return;
     
     // Get intelligence engine stats
-    const stats = app.intelligenceEngine?.getStats();
+    const stats = await app.intelligenceEngine?.getStats();
     if (!stats) {
         statsContainer.classList.add('hidden');
         return;
