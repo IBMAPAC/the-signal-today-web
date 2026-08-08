@@ -2079,6 +2079,7 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
                     const pos = posMatch ? parseInt(posMatch[1], 10) : 0;
                     console.error(`${this.provider} JSON parse error: ${parseError.message}`);
                     console.error('Problematic JSON substring:', jsonStr.substring(Math.max(0, pos - 40), pos + 40));
+                    console.error('Repaired JSON tail (last 100 chars):', jsonStr.slice(-100));
                     console.error('Full JSON (first 500 chars):', jsonStr.substring(0, 500));
                     throw new Error(`JSON parse failed: ${parseError.message}`);
                 }
