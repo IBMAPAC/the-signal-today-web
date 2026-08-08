@@ -4441,8 +4441,16 @@ Return ONLY valid JSON, no markdown fences:
             : '';
 
         // Determine if this is a live meeting brief or ATL enablement brief
+        // Determine live meeting mode: client name or any alias must appear in context
+        const resolvedCtx = resolveContextMatches(this.settings.thisWeekContext, this.clients);
+        const clientAliases = clientObj?.aliases || [];
+        const allClientTerms = [clientName, ...clientAliases];
         const isMeetingThisWeek = !!(this.settings.thisWeekContext &&
-            this.settings.thisWeekContext.toLowerCase().includes(clientName.toLowerCase()));
+            allClientTerms.some(term =>
+                resolvedCtx.clientNames.some(resolved =>
+                    resolved.toLowerCase() === term.toLowerCase()
+                )
+            ));
         const briefPurpose = isMeetingThisWeek
             ? `LIVE MEETING BRIEF — you are meeting ${clientName} this week`
             : `ATL ENABLEMENT BRIEF — for the ATL aligned to ${clientName}`;
@@ -5852,7 +5860,7 @@ function saveSettings() {
     
     // Save to storage
     app.saveToStorage();
-    
+    updateWeekContextWidget();
     closeSettings();
     app.updateUI();
     
@@ -8380,6 +8388,108 @@ function cacheSignals(signals, rawSignals) {
 }
 
 // ==========================================
+// CONTEXT MATCHING — resolveContextMatches
+// Resolves free-text week context against client names/aliases,
+// market geography synonyms, and industry keywords.
+// Returns { clientNames: [], markets: [], industries: [] }
+// Called once per render pass; result passed into per-signal checks.
+// ==========================================
+
+/**
+ * Resolve a free-text context string against the client list.
+ * Returns canonical client names, market codes, and industry names
+ * that appear in the context text.
+ *
+ * @param {string} contextText - Raw thisWeekContext string
+ * @param {Array}  clients     - app.clients array
+ * @returns {{ clientNames: string[], markets: string[], industries: string[] }}
+ */
+function resolveContextMatches(contextText, clients) {
+    if (!contextText) return { clientNames: [], markets: [], industries: [] };
+
+    const ctx = contextText.toLowerCase();
+
+    // Exclusion patterns replicated from detectAllClients to avoid false positives
+    const CLIENT_EXCLUSIONS = {
+        'anz': ['organization', 'anzac', 'bonanza', 'stanza', 'extravaganza'],
+        'sk':  ['risk', 'ask', 'task', 'desk', 'mask', 'skate', 'brisk', 'whisk', 'dusk'],
+        'dbs': ['jobs', 'mobs', 'verbs', 'absorbs', 'disturbs'],
+        'cba': ['cuba', 'combat', 'acrobat', 'scuba'],
+        'axa': ['taxa', 'coaxial', 'relaxation', 'taxation'],
+        'aia': ['gaia', 'playa'],
+        'ocbc': ['abc', 'cbc']
+    };
+
+    // Helper: word-boundary test (safe for special chars)
+    const wbTest = (text, term) => {
+        try {
+            return new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(text);
+        } catch (e) {
+            return text.toLowerCase().includes(term.toLowerCase());
+        }
+    };
+
+    // --- Pass 1: Client name + alias matching ---
+    const clientNames = [];
+    for (const client of (clients || [])) {
+        if (typeof client !== 'object' || !client.name) continue;
+        const nameLower = client.name.toLowerCase();
+
+        // Check exclusions first
+        const exclusions = CLIENT_EXCLUSIONS[nameLower] || [];
+        if (exclusions.some(excl => ctx.includes(excl))) continue;
+
+        const namesToCheck = [client.name, ...(client.aliases || [])];
+        if (namesToCheck.some(n => wbTest(ctx, n))) {
+            clientNames.push(client.name);
+        }
+    }
+
+    // --- Pass 2: Geography synonym → market code ---
+    const MARKET_SYNONYMS = {
+        ANZ:   ['australia', 'sydney', 'melbourne', 'brisbane', 'perth', 'canberra',
+                'new zealand', 'auckland', 'wellington', 'nz', 'au'],
+        ASEAN: ['singapore', 'sg', 'malaysia', 'kl', 'kuala lumpur', 'thailand', 'bangkok',
+                'indonesia', 'jakarta', 'philippines', 'manila', 'vietnam', 'hanoi',
+                'ho chi minh', 'myanmar', 'asean', 'sea'],
+        GCG:   ['china', 'beijing', 'shanghai', 'shenzhen', 'hong kong', 'hk', 'taiwan',
+                'taipei', 'greater china', 'gcg'],
+        ISA:   ['india', 'mumbai', 'delhi', 'bangalore', 'bengaluru', 'chennai',
+                'hyderabad', 'south asia', 'bangladesh', 'sri lanka', 'isa'],
+        KOREA: ['korea', 'korean', 'seoul', 'busan']
+    };
+
+    const markets = [];
+    for (const [market, synonyms] of Object.entries(MARKET_SYNONYMS)) {
+        if (synonyms.some(s => wbTest(ctx, s))) {
+            markets.push(market);
+        }
+    }
+
+    // --- Pass 3: Industry keyword matching ---
+    const INDUSTRY_SYNONYMS = {
+        'Financial Services':   ['banking', 'bank', 'fintech', 'financial'],
+        'Telecommunications':   ['telco', 'telecom', 'telecommunications'],
+        'Manufacturing':        ['manufacturing', 'factory', 'industrial'],
+        'Government':           ['government', 'govt', 'public sector', 'ministry'],
+        'Energy':               ['energy', 'utilities', 'power', 'oil', 'gas'],
+        'Retail':               ['retail', 'consumer'],
+        'Healthcare':           ['healthcare', 'health', 'hospital', 'pharma'],
+        'Technology':           ['technology', 'tech', 'software', 'saas']
+    };
+
+    const industries = [];
+    for (const [industry, synonyms] of Object.entries(INDUSTRY_SYNONYMS)) {
+        if (synonyms.some(s => wbTest(ctx, s))) {
+            industries.push(industry);
+        }
+    }
+
+    return { clientNames, markets, industries };
+}
+
+
+// ==========================================
 // ACTION REQUIRED - 3-Tier Priority System
 // ==========================================
 
@@ -8406,35 +8516,29 @@ function renderActionRequired() {
     // Get This Week's Context for meeting detection
     const weekContext = app.settings?.thisWeekContext || '';
     const contextLower = weekContext.toLowerCase();
-    
+
+    // Resolve context once against client list (aliases, geography, industry)
+    const resolved = resolveContextMatches(weekContext, app.clients || []);
+
     // Helper: Check if signal is related to This Week's Context
     const isContextRelated = (signal) => {
         if (!weekContext) return false;
-        
+
         const searchText = `${signal.headline} ${signal.context} ${signal.action}`.toLowerCase();
-        
-        // Check for client mentions
-        const clients = app.clients || [];
-        for (const client of clients) {
-            const clientName = client.name.toLowerCase();
-            if (contextLower.includes(clientName) && searchText.includes(clientName)) {
-                return true;
-            }
-        }
-        
-        // Check for market mentions
-        const markets = ['anz', 'asean', 'gcg', 'isa', 'korea', 'australia', 'singapore', 'hong kong', 'india'];
-        for (const market of markets) {
-            if (contextLower.includes(market) && searchText.includes(market)) {
-                return true;
-            }
-        }
-        
-        // Check for keyword overlap (at least 2 significant words)
+
+        // 1. Resolved client names (canonical + aliases)
+        if (resolved.clientNames.some(name => searchText.includes(name.toLowerCase()))) return true;
+
+        // 2. Resolved market codes and geography
+        if (resolved.markets.some(market => searchText.includes(market.toLowerCase()))) return true;
+
+        // 3. Resolved industry keywords
+        if (resolved.industries.some(ind => searchText.includes(ind.toLowerCase()))) return true;
+
+        // 4. Fallback: keyword overlap (at least 2 significant words > 4 chars)
         const contextWords = contextLower.split(/\s+/).filter(w => w.length > 4);
         const signalWords = searchText.split(/\s+/).filter(w => w.length > 4);
         const matches = contextWords.filter(w => signalWords.includes(w));
-        
         return matches.length >= 2;
     };
     
@@ -9985,7 +10089,25 @@ function openWeekContextEditor() {
     const modal = document.getElementById('week-context-modal');
     if (!modal) return;
     const ta = document.getElementById('week-context-inline');
-    if (ta) ta.value = app?.settings?.thisWeekContext || '';
+    if (ta) {
+        ta.value = app?.settings?.thisWeekContext || '';
+        // Live detection hint as user types
+        ta.oninput = () => {
+            const hint = document.getElementById('week-context-hint');
+            if (!hint) return;
+            const r = resolveContextMatches(ta.value, app?.clients || []);
+            const parts = [];
+            if (r.clientNames.length > 0) parts.push(r.clientNames.map(n => {
+                const c = (app?.clients || []).find(cl => cl.name === n);
+                return c?.market ? `${n} (${c.market})` : n;
+            }).join(', '));
+            if (r.markets.length > 0 && r.clientNames.length === 0) parts.push(r.markets.join(', '));
+            if (r.industries.length > 0 && r.clientNames.length === 0) parts.push(r.industries.join(', '));
+            hint.textContent = parts.length > 0 ? `Detected: ${parts.join(' · ')}` : '';
+        };
+        // Run once on open to show current state
+        ta.oninput();
+    }
     modal.classList.remove('hidden');
     setTimeout(() => ta?.focus(), 50);
 }
@@ -9996,6 +10118,9 @@ function saveWeekContext() {
     const ta = document.getElementById('week-context-inline');
     if (!ta) return;
     app.settings.thisWeekContext = ta.value.trim();
+    // Clear live hint before closing
+    const hint = document.getElementById('week-context-hint');
+    if (hint) hint.textContent = '';
     // Sync to settings modal textarea if open
     const settingsTa = document.getElementById('week-context');
     if (settingsTa) settingsTa.value = app.settings.thisWeekContext;
@@ -10013,9 +10138,20 @@ function updateWeekContextWidget() {
     const label = document.getElementById('week-context-label');
     if (!label) return;
     const ctx = app?.settings?.thisWeekContext || '';
-    label.textContent = ctx
-        ? (ctx.length > 55 ? ctx.substring(0, 52) + '…' : ctx)
-        : "Set this week's context";
+    if (!ctx) {
+        label.textContent = "Set this week's context";
+        return;
+    }
+    // Show resolved matches if any, else raw text
+    const resolved = resolveContextMatches(ctx, app?.clients || []);
+    if (resolved.clientNames.length > 0 || resolved.markets.length > 0) {
+        const parts = [];
+        if (resolved.clientNames.length > 0) parts.push(resolved.clientNames.slice(0, 2).join(' · '));
+        if (resolved.markets.length > 0 && resolved.clientNames.length === 0) parts.push(resolved.markets.slice(0, 2).join(' · '));
+        label.textContent = parts.join(' · ');
+    } else {
+        label.textContent = ctx.length > 55 ? ctx.substring(0, 52) + '…' : ctx;
+    }
 }
 
 // ==========================================
@@ -10034,10 +10170,12 @@ function calculateClientRiskScores() {
         const matched = allArticles.filter(a => {
             if (seen.has(a.id + name)) return false;
             const clients = a.matchedClients || [];
-            return clients.some(c => {
+            const isMatch = clients.some(c => {
                 const cn = typeof c === 'string' ? c : c.name;
                 return cn?.toLowerCase() === name.toLowerCase();
             });
+            if (isMatch) seen.add(a.id + name);
+            return isMatch;
         });
         if (matched.length === 0) return;
         let weightedSum = 0, totalWeight = 0;
