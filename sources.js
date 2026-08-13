@@ -1,11 +1,11 @@
 // =============================================
 // The Signal Today - Optimized Sources Configuration
-// Version 3.3 - 76 Working Feeds
+// Version 3.4 - 87 Working Feeds
 // =============================================
 
 const DEFAULT_SOURCES = [
     // ============================================
-    // 🤖 AI & AGENTIC (9 sources)
+    // 🤖 AI & AGENTIC (9 sources — replaced RTInsights MLOps + ClearML with Anthropic + LangChain)
     // ============================================
     {
         name: "MIT Tech Review",
@@ -71,26 +71,26 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "RTInsights MLOps",
-        url: "https://rtinsights.com/tag/mlops/feed",
+        name: "Anthropic News",
+        url: "https://www.anthropic.com/news/rss",
         category: "AI & Agentic",
-        priority: 2,
-        credibilityScore: 0.80,
-        digestType: "weekly",
+        priority: 1,
+        credibilityScore: 0.90,
+        digestType: "daily",
         enabled: true
     },
     {
-        name: "ClearML Blog",
-        url: "https://clear.ml/feed",
+        name: "LangChain Blog",
+        url: "https://blog.langchain.dev/rss/",
         category: "AI & Agentic",
-        priority: 3,
-        credibilityScore: 0.78,
+        priority: 2,
+        credibilityScore: 0.85,
         digestType: "weekly",
         enabled: true
     },
 
     // ============================================
-    // 🛡️ CYBERSECURITY & SOVEREIGNTY (6 sources)
+    // 🛡️ CYBERSECURITY & SOVEREIGNTY (7 sources — replaced Computer Weekly Security + Cyber Security Hub with Krebs + CISA + CSA Singapore)
     // ============================================
     {
         name: "NIST Cybersecurity",
@@ -111,12 +111,12 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Computer Weekly Security",
-        url: "https://www.computerweekly.com/rss/IT-security.xml",
+        name: "Krebs on Security",
+        url: "https://krebsonsecurity.com/feed/",
         category: "Cybersecurity & Sovereignty",
         priority: 1,
-        credibilityScore: 0.88,
-        digestType: "both",
+        credibilityScore: 0.92,
+        digestType: "daily",
         enabled: true
     },
     {
@@ -138,17 +138,26 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Cyber Security Hub",
-        url: "https://www.cshub.com/rss-feeds",
+        name: "CISA Alerts",
+        url: "https://www.cisa.gov/sites/default/files/feeds/alerts.xml",
         category: "Cybersecurity & Sovereignty",
-        priority: 3,
-        credibilityScore: 0.78,
+        priority: 1,
+        credibilityScore: 0.95,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "CSA Singapore",
+        url: "https://www.csa.gov.sg/news-articles/rss",
+        category: "Cybersecurity & Sovereignty",
+        priority: 2,
+        credibilityScore: 0.90,
         digestType: "daily",
         enabled: true
     },
 
     // ============================================
-    // 🌏 APAC REGIONAL (25 sources)
+    // 🌏 APAC REGIONAL (27 sources — added Nikkei Asia, GovInsider, Business Times SG, Fintech News SG, e27; removed TechCrunch SEA/ASEAN duplicates, ASEAN News Today, Strategy+Business duplicate)
     // ============================================
     {
         name: "Rest of World",
@@ -187,11 +196,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "TechCrunch Southeast Asia",
-        url: "https://techcrunch.com/tag/southeast-asia/feed/",
+        name: "Nikkei Asia Tech",
+        url: "https://asia.nikkei.com/rss/feed/technology",
         category: "APAC Regional",
         priority: 1,
-        credibilityScore: 0.88,
+        credibilityScore: 0.92,
         digestType: "daily",
         enabled: true
     },
@@ -313,11 +322,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "TechCrunch ASEAN",
-        url: "https://techcrunch.com/tag/asean/feed/",
+        name: "GovInsider",
+        url: "https://govinsider.asia/feed/",
         category: "APAC Regional",
         priority: 2,
-        credibilityScore: 0.88,
+        credibilityScore: 0.85,
         digestType: "daily",
         enabled: true
     },
@@ -385,11 +394,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "ASEAN News Today",
-        url: "https://aseannewstoday.com/feed/",
+        name: "e27",
+        url: "https://e27.co/feed/",
         category: "APAC Regional",
         priority: 2,
-        credibilityScore: 0.78,
+        credibilityScore: 0.82,
         digestType: "daily",
         enabled: true
     },
@@ -421,12 +430,21 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Strategy+Business",
-        url: "https://www.strategy-business.com/rss",
+        name: "The Business Times SG",
+        url: "https://www.businesstimes.com.sg/rss/all",
         category: "APAC Regional",
-        priority: 3,
+        priority: 2,
         credibilityScore: 0.88,
-        digestType: "weekly",
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "Fintech News Singapore",
+        url: "https://fintechnews.sg/feed/",
+        category: "APAC Regional",
+        priority: 2,
+        credibilityScore: 0.82,
+        digestType: "daily",
         enabled: true
     },
     {
@@ -440,7 +458,7 @@ const DEFAULT_SOURCES = [
     },
 
     // ============================================
-    // 🏢 ENTERPRISE TECH (15 sources)
+    // 🏢 ENTERPRISE TECH (14 sources — added Gartner + IDC; removed ZDNet, The Register Cloud, 3x TechRepublic → 1)
     // ============================================
     {
         name: "MIT Sloan Review",
@@ -497,12 +515,21 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "ZDNet Enterprise",
-        url: "https://www.zdnet.com/topic/enterprise-software/rss.xml",
+        name: "Gartner Newsroom",
+        url: "https://www.gartner.com/en/newsroom/press-releases/feed",
         category: "Enterprise Tech",
-        priority: 2,
-        credibilityScore: 0.85,
-        digestType: "daily",
+        priority: 1,
+        credibilityScore: 0.93,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "IDC Blog",
+        url: "https://blogs.idc.com/feed/",
+        category: "Enterprise Tech",
+        priority: 1,
+        credibilityScore: 0.90,
+        digestType: "weekly",
         enabled: true
     },
     {
@@ -533,38 +560,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "The Register Cloud",
-        url: "https://www.theregister.com/Tag/cloud/feed.atom",
-        category: "Enterprise Tech",
-        priority: 2,
-        credibilityScore: 0.85,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "TechRepublic Cloud",
-        url: "https://www.techrepublic.com/rssfeeds/topic/cloud/",
-        category: "Enterprise Tech",
-        priority: 3,
-        credibilityScore: 0.82,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "TechRepublic DevOps",
-        url: "https://www.techrepublic.com/rssfeeds/topic/devops/",
-        category: "Enterprise Tech",
-        priority: 3,
-        credibilityScore: 0.82,
-        digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "TechRepublic Articles",
+        name: "TechRepublic",
         url: "https://www.techrepublic.com/rssfeeds/articles/",
         category: "Enterprise Tech",
         priority: 3,
-        credibilityScore: 0.80,
+        credibilityScore: 0.82,
         digestType: "daily",
         enabled: true
     },
@@ -579,7 +579,7 @@ const DEFAULT_SOURCES = [
     },
 
     // ============================================
-    // ⚔️ COMPETITIVE LANDSCAPE (8 sources)
+    // ⚔️ COMPETITIVE LANDSCAPE (8 sources — replaced unofficial Azure Feeds with official Azure Blog)
     // ============================================
     {
         name: "AWS Blog",
@@ -636,11 +636,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Azure Feeds",
-        url: "https://azurefeeds.com/feed",
+        name: "Azure Blog",
+        url: "https://azure.microsoft.com/en-us/blog/feed/",
         category: "Competitive Landscape",
-        priority: 3,
-        credibilityScore: 0.80,
+        priority: 2,
+        credibilityScore: 0.88,
         digestType: "weekly",
         enabled: true
     },
@@ -713,7 +713,7 @@ const DEFAULT_SOURCES = [
     },
 
     // ============================================
-    // 📊 STRATEGIC ANALYSIS (5 sources)
+    // 📊 STRATEGIC ANALYSIS (6 sources — added McKinsey, BCG, HBR; removed duplicate Strategy+Business + Wavestone)
     // ============================================
     {
         name: "Stratechery",
@@ -734,11 +734,29 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Strategy+Business (PwC)",
-        url: "https://www.strategy-business.com/rss",
+        name: "McKinsey Insights",
+        url: "https://www.mckinsey.com/insights/rss/",
         category: "Strategic Analysis",
-        priority: 2,
-        credibilityScore: 0.88,
+        priority: 1,
+        credibilityScore: 0.95,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "BCG Insights",
+        url: "https://www.bcg.com/rss",
+        category: "Strategic Analysis",
+        priority: 1,
+        credibilityScore: 0.93,
+        digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "HBR Technology",
+        url: "https://hbr.org/topic/technology/feed",
+        category: "Strategic Analysis",
+        priority: 1,
+        credibilityScore: 0.93,
         digestType: "weekly",
         enabled: true
     },
@@ -751,18 +769,9 @@ const DEFAULT_SOURCES = [
         digestType: "weekly",
         enabled: true
     },
-    {
-        name: "Wavestone",
-        url: "https://www.wavestone.com/en/feed/",
-        category: "Strategic Analysis",
-        priority: 2,
-        credibilityScore: 0.85,
-        digestType: "weekly",
-        enabled: true
-    },
 
     // ============================================
-    // 🔵 IBM & PARTNERS (3 sources)
+    // 🔵 IBM & PARTNERS (5 sources — added IBM Newsroom + IBM Think Blog)
     // ============================================
     {
         name: "IBM Research",
@@ -789,6 +798,24 @@ const DEFAULT_SOURCES = [
         priority: 2,
         credibilityScore: 0.86,
         digestType: "weekly",
+        enabled: true
+    },
+    {
+        name: "IBM Newsroom",
+        url: "https://newsroom.ibm.com/feed",
+        category: "IBM & Partners",
+        priority: 1,
+        credibilityScore: 0.92,
+        digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "IBM Think Blog",
+        url: "https://www.ibm.com/blog/feed/",
+        category: "IBM & Partners",
+        priority: 1,
+        credibilityScore: 0.90,
+        digestType: "both",
         enabled: true
     }
 ];
@@ -1342,21 +1369,20 @@ const APAC_MARKET_CONTEXT = {
 // Used by renderDeepReads() for source selection
 // ============================================
 const DEEP_READS_SOURCES = {
-    // Primary strategic sources (always include)
+    // Primary strategic sources (always include) — names match DEFAULT_SOURCES
     PRIMARY: [
-        'McKinsey', 'BCG', 'Bain', 'HBR', 'MIT Sloan', 'Wharton',
-        'a]16z', 'Andreessen Horowitz', 'Sequoia', 'Benedict Evans',
-        'Stratechery', 'Not Boring', 'Platformer'
+        'McKinsey Insights', 'BCG Insights', 'HBR Technology', 'MIT Sloan Review',
+        'Ben Evans', 'Stratechery', 'SemiAnalysis', 'Capgemini Insights'
     ],
     // Research & Analysis (high quality, include when relevant)
     RESEARCH: [
-        'Gartner', 'Forrester', 'IDC', 'MIT Tech Review', 'The Information',
-        'Protocol', 'Rest of World', 'Economist', 'FT', 'WSJ'
+        'Gartner Newsroom', 'Forrester', 'IDC Blog', 'MIT Tech Review',
+        'Rest of World', 'Import AI', 'AI Snake Oil'
     ],
     // IBM & Industry (include for IBM-relevant topics)
     IBM_ADJACENT: [
-        'IBM Newsroom', 'IBM Research', 'Red Hat Blog', 'Think Blog',
-        'IBM Institute', 'The Register', 'Computer Weekly'
+        'IBM Newsroom', 'IBM Think Blog', 'IBM Research', 'Red Hat Blog',
+        'OpenShift Blog', 'The Register', 'Computer Weekly All'
     ],
     // Categories that indicate strategic content
     STRATEGIC_CATEGORIES: [
