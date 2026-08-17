@@ -1766,14 +1766,18 @@ class SignalApp {
     // ==========================================
 
     async fetchArticles(sources) {
-        const fetchTimeout = 10000; // 10 second timeout per source (generous for slow feeds)
+        const fetchTimeout = 7000; // 7s timeout — auto-disable after 3 failures protects against slow sources
 
         // Fetch ALL sources in parallel — each has its own AbortController timeout inside
-        // fetchFeedWithTimeout, so worst-case wall-clock time is 10s regardless of source count.
+        // fetchFeedWithTimeout, so worst-case wall-clock time is 7s regardless of source count.
         // Previously used serial 15-source batches which meant up to 6 × 10s = 60s worst case.
+
+        // Read source failures once here — avoids one localStorage read + JSON.parse per source
+        const sourceFailures = this.getSourceFailures();
+
         this.showLoading(`Fetching ${sources.length} feeds...`);
         const results = await Promise.allSettled(
-            sources.map(source => this.fetchFeedWithTimeout(source, fetchTimeout))
+            sources.map(source => this.fetchFeedWithTimeout(source, fetchTimeout, sourceFailures))
         );
 
         const articles = [];
@@ -1785,9 +1789,9 @@ class SignalApp {
         return articles;
     }
 
-    async fetchFeedWithTimeout(source, timeout) {
-        // Check if source is auto-disabled
-        const failures = this.getSourceFailures();
+    async fetchFeedWithTimeout(source, timeout, failures = null) {
+        // Check if source is auto-disabled (failures pre-read by fetchArticles; fallback for direct calls)
+        if (failures === null) failures = this.getSourceFailures();
         if (failures[source.url]?.disabled) {
             console.log(`⏭️ Skipping auto-disabled source: ${source.name}`);
             return [];
@@ -1800,41 +1804,62 @@ class SignalApp {
             return cached.articles;
         }
         
-        // Try all proxies in parallel, use first successful response
-        const fetchPromises = CORS_PROXIES.map(async (proxy) => {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), timeout);
-            
-            try {
-                const response = await fetch(proxy + encodeURIComponent(source.url), {
-                    headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' },
-                    signal: controller.signal
-                });
-                
-                clearTimeout(timeoutId);
-                
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
-                const text = await response.text();
-                return this.parseFeed(text, source);
-            } catch (error) {
-                clearTimeout(timeoutId);
-                throw error; // Let Promise.any handle it
-            }
+        // Hedged request pattern — stagger proxy launches instead of firing all 5 at once.
+        // Proxy 1 starts immediately. If it hasn't responded after HEDGE_DELAY ms, proxy 2
+        // launches alongside it, and so on. The moment any proxy succeeds, all others are
+        // aborted immediately via a shared AbortController — no wasted connections.
+        //
+        // Fast proxies (respond < 1s):   only 1 request ever fires.
+        // Slow/dead proxy 1:             proxy 2 launches after HEDGE_DELAY, no latency penalty.
+        const HEDGE_DELAY = 1500; // ms before launching the next proxy if the previous hasn't won
+
+        // One shared controller — aborting it cancels every in-flight request at once
+        const sharedController = new AbortController();
+        const overallTimeout = setTimeout(() => sharedController.abort(), timeout);
+
+        const fetchPromises = CORS_PROXIES.map((proxy, i) => {
+            return new Promise((resolve, reject) => {
+                // Stagger each proxy launch by i × HEDGE_DELAY
+                const hedgeTimer = setTimeout(async () => {
+                    // Bail immediately if a winner already aborted the controller
+                    if (sharedController.signal.aborted) { reject(new Error('aborted')); return; }
+                    try {
+                        const response = await fetch(proxy + encodeURIComponent(source.url), {
+                            headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' },
+                            signal: sharedController.signal
+                        });
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        const text = await response.text();
+                        resolve(this.parseFeed(text, source));
+                    } catch (error) {
+                        reject(error);
+                    }
+                }, i * HEDGE_DELAY);
+
+                // If the shared controller is aborted before this proxy's hedge timer fires,
+                // clean up the timer and reject so Promise.any sees a rejection, not a hang.
+                sharedController.signal.addEventListener('abort', () => {
+                    clearTimeout(hedgeTimer);
+                    reject(new Error('aborted'));
+                }, { once: true });
+            });
         });
-        
+
         try {
-            // Promise.any returns first successful result
+            // Promise.any resolves with the first successful result
             const articles = await Promise.any(fetchPromises);
-            
+            clearTimeout(overallTimeout);
+            sharedController.abort(); // cancel any still-running proxy requests immediately
+
             // ✅ Success - reset failure count
             this.resetSourceFailure(source.url);
-            
+
             // Cache successful result
             feedCache.set(cacheKey, { articles, timestamp: Date.now() });
-            
+
             return articles;
         } catch (error) {
+            clearTimeout(overallTimeout);
             // All proxies failed — record for source health badge
             console.warn(`❌ All proxies failed for ${source.name}`);
             
@@ -2487,19 +2512,45 @@ class SignalApp {
     async scoreArticles(articles) {
         // Compute and cache cross-references once; reused in rendering to avoid double computation
         this.crossRefs = this.detectCrossReferences(articles);
-        
-        // Run intelligence analysis if engine available
-        console.log(`🧠 Analyzing ${articles.length} articles with Hybrid Intelligence...`);
+
+        // Pre-compile client regexes once for this scoring pass — reused across every article
+        // instead of constructing a new RegExp per client per article (~137k → 343 compilations)
+        this._clientRegexCache = this.clients.map(clientEntry => {
+            const clientName = typeof clientEntry === 'string' ? clientEntry : clientEntry.name;
+            const aliases = (typeof clientEntry === 'object' && clientEntry.aliases) ? clientEntry.aliases : [];
+            const namesToCheck = [clientName, ...aliases];
+            return {
+                clientEntry,
+                clientName,
+                regexes: namesToCheck.map(name => ({
+                    name,
+                    regex: name.length <= 3
+                        ? new RegExp(`\\b${this.escapeRegex(name.toLowerCase())}\\b`, 'i')
+                        : new RegExp(`\\b${this.escapeRegex(name.toLowerCase())}`, 'i')
+                }))
+            };
+        });
+
+        // Split articles into new (need full scoring) vs already-scored (loaded from IDB corpus).
+        // IDB articles already have relevanceScore, matchedClients, signalType etc — no need to
+        // re-run intelligence analysis or regex matching on them every refresh.
+        const idbIds = new Set((await this.db.loadArticles()).map(a => a.id));
+        const toScore   = articles.filter(a => !a.relevanceScore || !idbIds.has(a.id));
+        const preScored = articles.filter(a =>  a.relevanceScore &&  idbIds.has(a.id));
+        console.log(`📊 Scoring ${toScore.length} new articles, reusing ${preScored.length} pre-scored from IDB`);
+
+        // Run intelligence analysis on new articles only
+        console.log(`🧠 Analyzing ${toScore.length} articles with Hybrid Intelligence...`);
         const analyzedArticles = [];
-        
+
         // PERFORMANCE OPTIMIZATION: Process articles in parallel batches instead of sequentially
         // This provides 3-5x speedup (10s → 2-3s for 200 articles)
         const BATCH_SIZE = 30; // Process 30 articles simultaneously (increased from 20)
         const startTime = performance.now();
-        
-        for (let i = 0; i < articles.length; i += BATCH_SIZE) {
-            const batch = articles.slice(i, i + BATCH_SIZE);
-            
+
+        for (let i = 0; i < toScore.length; i += BATCH_SIZE) {
+            const batch = toScore.slice(i, i + BATCH_SIZE);
+
             // Process batch in parallel using Promise.allSettled for error resilience
             const batchResults = await Promise.allSettled(
                 batch.map(article => {
@@ -2513,7 +2564,7 @@ class SignalApp {
                     return Promise.resolve(article);
                 })
             );
-            
+
             // Collect results with error handling
             for (let j = 0; j < batchResults.length; j++) {
                 const result = batchResults[j];
@@ -2524,24 +2575,25 @@ class SignalApp {
                     analyzedArticles.push(batch[j]); // Fallback to original article
                 }
             }
-            
+
             // Update progress indicator
-            const progress = Math.min(100, Math.round((i + BATCH_SIZE) / articles.length * 100));
-            this.showLoading(`Analyzing articles... ${progress}% (${analyzedArticles.length}/${articles.length})`);
+            const progress = Math.min(100, Math.round((i + BATCH_SIZE) / toScore.length * 100));
+            this.showLoading(`Analyzing articles... ${progress}% (${analyzedArticles.length}/${toScore.length})`);
         }
-        
+
         const analysisTime = Math.round(performance.now() - startTime);
-        console.log(`⚡ Intelligence analysis completed in ${analysisTime}ms (${Math.round(articles.length / (analysisTime / 1000))} articles/sec)`);
-        
+        console.log(`⚡ Intelligence analysis completed in ${analysisTime}ms for ${toScore.length} new articles`);
+
         // Get intelligence stats
         if (this.intelligenceEngine) {
             this.intelligenceStats = await this.intelligenceEngine.getStats();
             console.log('📊 Intelligence Stats:', this.intelligenceStats);
         }
-        
-        return analyzedArticles.map(article => {
+
+        // Score new articles, then combine with pre-scored IDB articles
+        const newlyScored = analyzedArticles.map(article => {
             const text = `${article.title} ${article.summary}`.toLowerCase();
-            
+
             // Calculate scores
             const industryMatch = this.detectIndustry(text);
             // Use detectAllClients() directly (detectClient() was a duplicate wrapper)
@@ -2662,18 +2714,26 @@ class SignalApp {
             
             // Signal type classification
             article.signalType = this.classifySignalType(text, allClients);
-            
+
             // Estimate reading time
             const wordCount = (article.summary || '').split(/\s+/).length;
             article.estimatedReadingMinutes = Math.max(1, Math.min(10, Math.ceil(wordCount / 150)));
-            
+
             // Normalize property names for rendering consistency
             article.source = article.sourceName; // Alias for rendering
             article.date = article.publishedDate; // Alias for filtering
-            
+
             article.relevanceScore = bd.total;
             return article;
         });
+
+        // Ensure pre-scored articles also have rendering aliases set
+        preScored.forEach(a => {
+            if (!a.source) a.source = a.sourceName;
+            if (!a.date)   a.date   = a.publishedDate;
+        });
+
+        return [...newlyScored, ...preScored];
     }
 
     // ==========================================
@@ -2851,10 +2911,13 @@ class SignalApp {
         // Works with both structured objects {name, tier, aliases} and legacy strings.
         // Uses word boundary matching to avoid false positives
         // e.g., "SK" shouldn't match "risk", "ANZ" shouldn't match "organization"
-        
+        //
+        // Uses pre-compiled regexes from this._clientRegexCache when called from scoreArticles()
+        // (set once per scoring pass), falling back to on-demand compilation otherwise.
+
         const matches = [];
         const textLower = text.toLowerCase();
-        
+
         // Client-specific exclusion patterns (Phase 2 enhancement)
         const CLIENT_EXCLUSIONS = {
             'anz': ['organization', 'anzac', 'bonanza', 'stanza', 'extravaganza'],
@@ -2865,59 +2928,51 @@ class SignalApp {
             'aia': ['gaia', 'playa'],
             'ocbc': ['abc', 'cbc']
         };
-        
-        for (const clientEntry of this.clients) {
+
+        // Use pre-compiled cache if available (set by scoreArticles), else compile on demand
+        const clientList = this._clientRegexCache || this.clients.map(clientEntry => {
             const clientName = typeof clientEntry === 'string' ? clientEntry : clientEntry.name;
-            const clientNameLower = clientName.toLowerCase();
             const aliases = (typeof clientEntry === 'object' && clientEntry.aliases) ? clientEntry.aliases : [];
-            
-            // Check exclusions first (Phase 2 enhancement)
-            const exclusions = CLIENT_EXCLUSIONS[clientNameLower] || [];
-            if (exclusions.some(excl => textLower.includes(excl))) {
-                continue; // Skip this client - exclusion pattern matched
-            }
-            
-            // Check main name and all aliases
             const namesToCheck = [clientName, ...aliases];
+            return {
+                clientEntry,
+                clientName,
+                regexes: namesToCheck.map(name => ({
+                    name,
+                    regex: name.length <= 3
+                        ? new RegExp(`\\b${this.escapeRegex(name.toLowerCase())}\\b`, 'i')
+                        : new RegExp(`\\b${this.escapeRegex(name.toLowerCase())}`, 'i')
+                }))
+            };
+        });
+
+        for (const { clientEntry, clientName, regexes } of clientList) {
+            const clientNameLower = clientName.toLowerCase();
+
+            // Check exclusions first
+            const exclusions = CLIENT_EXCLUSIONS[clientNameLower] || [];
+            if (exclusions.some(excl => textLower.includes(excl))) continue;
+
+            // Test pre-compiled regexes
             let isMatch = false;
             let matchedName = null;
-            
-            for (const name of namesToCheck) {
-                const nameLower = name.toLowerCase();
-                
-                if (name.length <= 3) {
-                    // Short names need exact word boundary
-                    const regex = new RegExp(`\\b${this.escapeRegex(nameLower)}\\b`, 'i');
-                    if (regex.test(textLower)) {
-                        isMatch = true;
-                        matchedName = name;
-                        break;
-                    }
-                } else {
-                    // Longer names just need word start boundary
-                    const regex = new RegExp(`\\b${this.escapeRegex(nameLower)}`, 'i');
-                    if (regex.test(textLower)) {
-                        isMatch = true;
-                        matchedName = name;
-                        break;
-                    }
+            for (const { name, regex } of regexes) {
+                if (regex.test(textLower)) {
+                    isMatch = true;
+                    matchedName = name;
+                    break;
                 }
             }
-            
+
             // Phase 2: Context validation for matched clients
             if (isMatch && useContextValidation) {
                 const confidence = this.validateClientContext(textLower, clientEntry, matchedName);
-                
-                // Only include if confidence threshold met
-                if (confidence >= 0.6 && !matches.includes(clientName)) {
-                    matches.push(clientName);
-                }
+                if (confidence >= 0.6 && !matches.includes(clientName)) matches.push(clientName);
             } else if (isMatch && !matches.includes(clientName)) {
-                // Legacy mode: no context validation
                 matches.push(clientName);
             }
         }
-        
+
         return matches;
     }
     
