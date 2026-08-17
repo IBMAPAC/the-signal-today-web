@@ -114,7 +114,7 @@ async function backgroundFetchFeeds() {
 // ── Feed fetching ─────────────────────────────────────────────────────────────
 
 async function fetchFeedForSource(source, cache) {
-    const cacheKey = new Request(`signal://feed?url=${encodeURIComponent(source.url)}`);
+    const cacheKey = new Request(`https://signal.internal/feed?url=${encodeURIComponent(source.url)}`);
 
     // Skip if cached entry is less than 30 minutes old (avoid redundant fetches if
     // the OS fires the periodic sync more frequently than expected)
@@ -180,9 +180,9 @@ self.addEventListener('notificationclick', (event) => {
 
 // ── Helpers: source storage (via Cache API — localStorage not available in SW) ──
 
-const META_CACHE  = 'signal-sw-meta-v1';
-const SOURCES_KEY = 'signal://meta/sources';
-const BG_FETCH_KEY = 'signal://meta/last-bg-fetch';
+const META_CACHE   = 'signal-sw-meta-v1';
+const SOURCES_KEY  = 'https://signal.internal/meta/sources';
+const BG_FETCH_KEY = 'https://signal.internal/meta/last-bg-fetch';
 
 async function storeSources(sources) {
     try {
