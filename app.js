@@ -1483,135 +1483,52 @@ class SignalApp {
     // ==========================================
 
     initAutoRefresh() {
-        // Request notification permission early (needed for both SW and fallback timer)
+        if (!this.settings.autoRefreshTime) return;
+        
+        const scheduleNext = () => {
+            const now = new Date();
+            const [hours, minutes] = this.settings.autoRefreshTime.split(':').map(Number);
+            
+            const next = new Date(now);
+            next.setHours(hours, minutes, 0, 0);
+            
+            // If the time has already passed today, schedule for tomorrow
+            if (next <= now) next.setDate(next.getDate() + 1);
+            
+            const msUntilRefresh = next.getTime() - now.getTime();
+            console.log(`⏰ Auto-refresh scheduled in ${Math.round(msUntilRefresh / 60000)} minutes`);
+            
+            this.autoRefreshTimer = setTimeout(async () => {
+                console.log('⏰ Auto-refresh triggered');
+                await this.refresh();
+                
+                if (Notification.permission === 'granted') {
+                    new Notification('📡 Signal Today Updated', {
+                        body: `Your daily digest is ready — ${this.dailyArticles.length} articles`,
+                        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📡</text></svg>'
+                    });
+                }
+                
+                scheduleNext();
+            }, msUntilRefresh);
+        };
+        
         if (Notification.permission === 'default') {
             Notification.requestPermission();
         }
+        
+        scheduleNext();
 
-        // ── Register Service Worker + Periodic Background Sync ────────────────
-        // The SW pre-fetches RSS feeds in the background (when the app is
-        // backgrounded or the screen is locked) so data is warm on re-open.
-        // No AI/Claude calls are made by the SW — zero extra token cost.
-        this._registerServiceWorker();
-
-        // ── Fallback: in-page setTimeout timer ────────────────────────────────
-        // Still useful on desktop or when the app tab is the active foreground
-        // tab (SW periodic sync has a minimum ~1 hour granularity on mobile).
-        if (this.settings.autoRefreshTime) {
-            const scheduleNext = () => {
-                const now = new Date();
-                const [hours, minutes] = this.settings.autoRefreshTime.split(':').map(Number);
-
-                const next = new Date(now);
-                next.setHours(hours, minutes, 0, 0);
-
-                // If the time has already passed today, schedule for tomorrow
-                if (next <= now) next.setDate(next.getDate() + 1);
-
-                const msUntilRefresh = next.getTime() - now.getTime();
-                console.log(`⏰ Auto-refresh scheduled in ${Math.round(msUntilRefresh / 60000)} minutes`);
-
-                this.autoRefreshTimer = setTimeout(async () => {
-                    console.log('⏰ Auto-refresh triggered');
-                    await this.refresh();
-                    scheduleNext();
-                }, msUntilRefresh);
-            };
-
-            scheduleNext();
-        }
-
-        // ── Visibility change: refresh on re-open if stale ────────────────────
+        // Auto-refresh when tab becomes visible after 2+ hours of inactivity
         document.addEventListener('visibilitychange', () => {
             if (document.hidden || this.isLoading) return;
-
-            // If the SW pre-fetched feeds while we were away, refresh now
-            // regardless of the 2h threshold — feeds are already warm so it's fast.
-            const swReady = localStorage.getItem('signal_sw_feeds_ready');
-            if (swReady) {
-                localStorage.removeItem('signal_sw_feeds_ready');
-                console.log('👁 SW pre-fetched feeds are ready — refreshing on re-open');
-                this.refresh();
-                return;
-            }
-
             const last = localStorage.getItem(STORAGE_KEYS.LAST_REFRESH);
-            const age  = last ? Date.now() - new Date(last).getTime() : Infinity;
+            const age = last ? Date.now() - new Date(last).getTime() : Infinity;
             if (age > 2 * 3600 * 1000) {
                 console.log('👁 Tab refocused after >2h — refreshing stale content');
                 this.refresh();
             }
         });
-
-        // ── SW message: background fetch completed ────────────────────────────
-        // The SW posts BG_FEEDS_READY when it has pre-fetched feeds.
-        // If the app is open but in the background we just log it; the next
-        // visibilitychange will trigger a refresh using the warm cached feeds.
-        navigator.serviceWorker?.addEventListener('message', (event) => {
-            if (event.data?.type === 'BG_FEEDS_READY') {
-                console.log(`📡 SW: ${event.data.fetchedCount} feeds pre-fetched in background`);
-                // Store a flag so visibilitychange knows fresh data is waiting
-                localStorage.setItem('signal_sw_feeds_ready', Date.now().toString());
-            }
-        });
-    }
-
-    async _registerServiceWorker() {
-        if (!('serviceWorker' in navigator)) {
-            console.log('⚠️ Service Worker not supported — background fetch unavailable');
-            return;
-        }
-
-        try {
-            const reg = await navigator.serviceWorker.register('./service-worker.js');
-            console.log('✅ Service Worker registered:', reg.scope);
-
-            // Keep a reference so settings-save can re-sync sources later
-            this._swRegistration = reg;
-
-            // Send current sources to the SW so it knows what to fetch
-            this._syncSourcesToSW(reg);
-
-            // Register (or re-register) Periodic Background Sync
-            await this._registerPeriodicSync(reg);
-
-        } catch (err) {
-            console.warn('⚠️ Service Worker registration failed:', err);
-        }
-    }
-
-    _syncSourcesToSW(registration) {
-        const sw = registration.active || registration.installing || registration.waiting;
-        if (!sw) return;
-        sw.postMessage({
-            type: 'UPDATE_SOURCES',
-            payload: { sources: this.sources }
-        });
-    }
-
-    async _registerPeriodicSync(registration) {
-        if (!('periodicSync' in registration)) {
-            console.log('ℹ️ Periodic Background Sync not supported on this platform');
-            return;
-        }
-
-        try {
-            // Check permission
-            const status = await navigator.permissions.query({ name: 'periodic-background-sync' });
-            if (status.state !== 'granted') {
-                console.log('ℹ️ Periodic Background Sync permission not granted — background fetch unavailable');
-                return;
-            }
-
-            // Minimum interval: 1 hour (browser may fire less often to conserve battery)
-            await registration.periodicSync.register('signal-bg-fetch', {
-                minInterval: 60 * 60 * 1000  // 1 hour in ms
-            });
-            console.log('✅ Periodic Background Sync registered (min interval: 1h)');
-
-        } catch (err) {
-            console.warn('⚠️ Periodic Background Sync registration failed:', err);
-        }
     }
 
     // ==========================================
@@ -5944,8 +5861,6 @@ function saveSettings() {
     
     // Save to storage
     app.saveToStorage();
-    // Re-sync sources to SW in case they changed
-    if (app._swRegistration) app._syncSourcesToSW(app._swRegistration);
     updateWeekContextWidget();
     closeSettings();
     app.updateUI();
