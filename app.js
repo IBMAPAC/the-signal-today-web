@@ -628,9 +628,6 @@ const aiRequestQueue = new AIRequestQueue();
 
 
 /**
- * Unified AI API caller - supports Claude and OpenAI
- */
-/**
  * Call AI provider with automatic retry logic and exponential backoff.
  * Retries on transient failures (overload, timeout, network issues).
  * 
@@ -1372,16 +1369,12 @@ class SignalApp {
     bindEvents() {
         const refreshBtn = document.getElementById('refresh-btn');
         const settingsBtn = document.getElementById('settings-btn');
-        const exportBtn = document.getElementById('export-btn');
-        
+
         if (refreshBtn) {
             refreshBtn.addEventListener('click', () => this.refresh());
         }
         if (settingsBtn) {
             settingsBtn.addEventListener('click', () => this.openSettings());
-        }
-        if (exportBtn) {
-            exportBtn.addEventListener('click', () => this.exportBrief());
         }
     }
 
@@ -1859,9 +1852,6 @@ class SignalApp {
         }
     }
 
-    // ==========================================
-    // Deduplication
-    // ==========================================
     // ==========================================
     // Source Failure Tracking (Phase 8)
     // ==========================================
@@ -3577,7 +3567,7 @@ ${articleList}`;
             'it','its','this','that','these','those','by','as','from','into',
             'how','why','what','when','where','who','which','new','says','said',
             'report','reports','via','over','up','out','about','after','before',
-            'more','than','than','just','also','now','all','one','two','three',
+            'more','than','just','also','now','all','one','two','three',
         ]);
         const tokens = title.toLowerCase()
             .replace(/[^a-z0-9\s-]/g, ' ')
@@ -6291,7 +6281,7 @@ function selectDigestType(type) {
 }
 
 function updateDigestTypeButtons() {
-    document.querySelectorAll('.digest-btn').forEach(btn => {
+    document.querySelectorAll('.digest-type-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.type === selectedDigestType);
     });
 }
@@ -6489,6 +6479,7 @@ function updateBulkActionsVisibility() {
 }
 
 function bulkSetTier(tier) {
+    const count = app.selectedClients.size;
     app.selectedClients.forEach(idx => {
         if (app.clients[idx]) app.clients[idx].tier = tier;
     });
@@ -6497,7 +6488,7 @@ function bulkSetTier(tier) {
     document.getElementById('cm-select-all').checked = false;
     updateBulkActionsVisibility();
     renderClientTable();
-    showToast(`Updated ${app.selectedClients.size} clients to Tier ${tier}`);
+    showToast(`Updated ${count} client${count !== 1 ? 's' : ''} to Tier ${tier}`);
 }
 
 function bulkDeleteClients() {
@@ -9996,7 +9987,7 @@ function renderSynthesizedDeepRead(insight, article) {
     return `
         <div class="deep-read-item" onclick="openArticle('${article.id || ''}')">
             <div class="deep-read-item-header">
-                <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source)}</a>
+                <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source || article.sourceName || '')}</a>
                 <span class="deep-read-item-time">${escapeHtml(insight.timeHorizon)} horizon</span>
             </div>
             <div class="deep-read-item-title">${escapeHtml(insight.title)}</div>
@@ -10044,7 +10035,7 @@ function renderBasicDeepRead(article) {
     return `
         <div class="deep-read-item" onclick="openArticle('${article.id || ''}')">
             <div class="deep-read-item-header">
-                <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source)}</a>
+                <a class="deep-read-item-source" href="${article.url || '#'}" target="_blank" onclick="event.stopPropagation()">${escapeHtml(article.source || article.sourceName || '')}</a>
                 <span class="deep-read-item-time">${article.readingTime || '5'} min</span>
             </div>
             <div class="deep-read-item-title">${escapeHtml(article.title)}</div>
