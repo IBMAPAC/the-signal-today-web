@@ -1563,7 +1563,7 @@ class SignalApp {
         }
 
         try {
-            const reg = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+            const reg = await navigator.serviceWorker.register('./service-worker.js');
             console.log('✅ Service Worker registered:', reg.scope);
 
             // Keep a reference so settings-save can re-sync sources later
