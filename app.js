@@ -4038,11 +4038,24 @@ ${articleList}`;
             const dominantSignal = Object.entries(signalCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'background';
             const badge = this.getSignalTypeBadge(dominantSignal);
             
+            // Derive dominant conversation door from Tier 3 intelligence
+            const convDoorCounts = {};
+            for (const a of articles) {
+                const door = a.intelligence?.conversationDoor;
+                if (a.intelligence?.tier === 3 && door) {
+                    convDoorCounts[door] = (convDoorCounts[door] || 0) + 1;
+                }
+            }
+            const dominantConvDoor = Object.keys(convDoorCounts).length > 0
+                ? Object.entries(convDoorCounts).sort((a, b) => b[1] - a[1])[0][0]
+                : null;
+            
             return `
                 <div class="client-group">
                     <div class="client-group-signal-strip client-signal-${dominantSignal}">
                         ${badge.emoji} ${badge.label} · ${articles.length} signal${articles.length !== 1 ? 's' : ''}
                     </div>
+                    ${dominantConvDoor ? `<div class="client-conv-door">🗣️ ${this.escapeHtml(dominantConvDoor)}</div>` : ''}
                     <div class="client-name-row">
                         ${tierLabel}
                         <span class="client-name">${this.escapeHtml(clientName)}</span>
@@ -4251,36 +4264,88 @@ ${articleList}`;
         
         if (!article) {
             console.error('Article not found:', id);
-            alert('Article not found. Please refresh and try again.');
+            if (buttonEl) alert('Article not found. Please refresh and try again.');
+            return;
+        }
+        
+        // Check session cache first — render immediately without an API call
+        if (deepReadAnalysisCache.has(id)) {
+            const cached = deepReadAnalysisCache.get(id);
+            // Find the card's analysis container by article id attribute or button proximity
+            const deepReadItem = buttonEl
+                ? buttonEl.closest('.deep-read-item')
+                : document.querySelector(`.deep-read-item[onclick*="${id}"]`);
+            const container = deepReadItem?.querySelector('.deep-read-analysis');
+            if (container) {
+                container.innerHTML = `
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">📌 Key Facts</div>
+                        <ul class="deep-read-facts">
+                            ${(cached.keyFacts || []).map(f => `<li>${this.escapeHtml(f)}</li>`).join('')}
+                        </ul>
+                    </div>
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">⚡ So What</div>
+                        <div class="deep-read-text">${this.escapeHtml(cached.soWhat || '')}</div>
+                    </div>
+                    ${(cached.conversationDoor || cached.pillarMapping) ? `
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">🗣️ Conversation Door</div>
+                        <div class="deep-read-text"><strong>${this.escapeHtml(cached.conversationDoor || cached.pillarMapping)}</strong></div>
+                    </div>` : ''}
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">🔵 IBM Angle</div>
+                        <div class="deep-read-text">${this.escapeHtml(cached.ibmAngle || '')}</div>
+                    </div>
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">👤 Client Implication</div>
+                        <div class="deep-read-text">${this.escapeHtml(cached.clientImplication || '')}</div>
+                    </div>
+                    ${cached.competitiveWatch ? `
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">⚔️ Competitive Watch</div>
+                        <div class="deep-read-text">${this.escapeHtml(cached.competitiveWatch)}</div>
+                    </div>` : ''}
+                    <div class="deep-read-section">
+                        <div class="deep-read-label">💬 Conversation Opener</div>
+                        <div class="deep-read-text conversation-opener">"${this.escapeHtml(cached.conversationOpener || '')}"</div>
+                    </div>
+                `;
+            }
+            if (buttonEl) {
+                buttonEl.textContent = '✓ Analysis Generated';
+                buttonEl.disabled = true;
+            }
             return;
         }
         
         const settings = getAIProviderSettings();
         const apiKey = settings.apiKeys[settings.provider];
         if (!apiKey) {
-            alert('Please add your API key in Settings to use this feature.');
+            if (buttonEl) alert('Please add your API key in Settings to use this feature.');
             return;
         }
         
-        // Find the parent deep-read-item and create/find the analysis container
+        // Find the parent deep-read-item and its analysis container
         let container;
         if (buttonEl) {
             const deepReadItem = buttonEl.closest('.deep-read-item');
             if (deepReadItem) {
                 container = deepReadItem.querySelector('.deep-read-analysis');
-                if (!container) {
-                    container = document.createElement('div');
-                    container.className = 'deep-read-analysis';
-                    deepReadItem.appendChild(container);
-                }
                 // Disable button while loading
                 buttonEl.disabled = true;
                 buttonEl.textContent = '⏳ Generating...';
             }
+        } else {
+            // Auto-trigger path: find card by article id embedded in onclick
+            const deepReadItem = document.querySelector(`.deep-read-item[onclick*="${id}"]`);
+            if (deepReadItem) {
+                container = deepReadItem.querySelector('.deep-read-analysis');
+            }
         }
         
         if (!container) {
-            console.error('Could not find container for analysis');
+            console.error('Could not find .deep-read-analysis container for article:', id);
             return;
         }
         
@@ -4362,6 +4427,8 @@ Return ONLY valid JSON, no markdown fences:
             
             if (jsonMatch) {
                 const result = JSON.parse(jsonMatch[0]);
+                // Store in session cache so re-expansion and auto-trigger skip the API call
+                deepReadAnalysisCache.set(id, result);
                 container.innerHTML = `
                     <div class="deep-read-section">
                         <div class="deep-read-label">📌 Key Facts</div>
@@ -4409,7 +4476,7 @@ Return ONLY valid JSON, no markdown fences:
             console.error('Deep read error:', err);
             container.innerHTML = `<div class="deep-read-error">❌ Error generating analysis: ${this.escapeHtml(err.message)}</div>`;
             if (buttonEl) {
-                buttonEl.textContent = '🤖 Generate Deep Analysis';
+                buttonEl.textContent = '🔄 Regenerate Analysis';
                 buttonEl.disabled = false;
             }
         }
@@ -5619,12 +5686,17 @@ function toggleSection(sectionId) {
     if (!content) return;
     content.classList.toggle('collapsed');
     chevron?.classList.toggle('collapsed');
+    const isNowOpen = !content.classList.contains('collapsed');
     // Persist open/close state
     try {
         const states = JSON.parse(localStorage.getItem(STORAGE_KEYS.SECTION_STATE) || '{}');
-        states[sectionId] = !content.classList.contains('collapsed');
+        states[sectionId] = isNowOpen;
         localStorage.setItem(STORAGE_KEYS.SECTION_STATE, JSON.stringify(states));
     } catch(e) {}
+    // Auto-trigger per-article deep analysis when the Deep Reads section is expanded
+    if (sectionId === 'deep-reads' && isNowOpen) {
+        autoAnalyseDeepReads(app._deepReadCandidates || []);
+    }
 }
 
 function closeSettings() {
@@ -6832,6 +6904,18 @@ function renderClientRadar() {
             'general': '📰'
         }[dominantType];
         
+        // Derive dominant conversation door from Tier 3 intelligence
+        const convDoorCounts = {};
+        for (const a of articles) {
+            const door = a.intelligence?.conversationDoor;
+            if (a.intelligence?.tier === 3 && door) {
+                convDoorCounts[door] = (convDoorCounts[door] || 0) + 1;
+            }
+        }
+        const dominantConvDoor = Object.keys(convDoorCounts).length > 0
+            ? Object.entries(convDoorCounts).sort((a, b) => b[1] - a[1])[0][0]
+            : null;
+        
         return `
         <div class="client-radar-item signal-${dominantType}">
             <div class="client-radar-header">
@@ -6842,6 +6926,7 @@ function renderClientRadar() {
                     <span class="client-radar-industry">${client.industry || ''}</span>
                 </div>
             </div>
+            ${dominantConvDoor ? `<div class="client-conv-door">🗣️ ${escapeHtml(dominantConvDoor)}</div>` : ''}
             <div class="client-radar-articles">
                 ${articles.slice(0, 3).map(a => {
                     const articleType = a.signalType || classifySignalType(a);
@@ -6927,35 +7012,95 @@ Review these signals and consider client outreach.`;
     
     // AI-powered brief
     contentEl.innerHTML = '<p>Generating AI brief...</p>';
-    
-    const articleSummaries = clientArticles.slice(0, 5).map(a => 
-        `- "${a.title}" (${a.source}): ${a.summary || 'No summary'}`
-    ).join('\n');
-    
-    const prompt = `You are helping a Field CTO brief their Account Technical Leader (ATL) about a client. Generate a concise Slack message.
 
+    const articleSummaries = clientArticles.slice(0, 5).map((a, i) =>
+        `[${i + 1}] ${a.source || a.sourceName}: ${a.title}\n${a.summary?.substring(0, 200) || 'No summary'}`
+    ).join('\n\n');
+
+    const contextBlock = app.settings?.thisWeekContext
+        ? `\nTHIS WEEK'S CONTEXT (prioritize relevance):\n${app.settings.thisWeekContext}\n`
+        : '';
+
+    // Determine if this is a live meeting brief or ATL enablement brief
+    const resolvedCtx = resolveContextMatches(app.settings?.thisWeekContext, app.clients);
+    const clientAliases = client?.aliases || [];
+    const allClientTerms = [clientName, ...clientAliases];
+    const isMeetingThisWeek = !!(app.settings?.thisWeekContext &&
+        allClientTerms.some(term =>
+            resolvedCtx.clientNames.some(resolved =>
+                resolved.toLowerCase() === term.toLowerCase()
+            )
+        ));
+    const briefPurpose = isMeetingThisWeek
+        ? `LIVE MEETING BRIEF — you are meeting ${clientName} this week`
+        : `ATL ENABLEMENT BRIEF — for the ATL aligned to ${clientName}`;
+
+    const prompt = `You are preparing a brief for the IBM APAC Field CTO.
+Goal: Position ATL as "Client CTO" — trusted strategic advisor, not a vendor. The product comes last, discovered never led with.
+
+Brief Purpose: ${briefPurpose}
 Client: ${clientName}
 Market: ${client.market}
 Industry: ${client.industry || 'N/A'}
 ATL: ${client.atl || 'Not assigned'}
-
-Recent articles:
+${contextBlock}
+Recent news about ${clientName}:
 ${articleSummaries}
 
-Write a brief Slack message (max 150 words) that:
-1. Summarizes the key signal(s) about this client
-2. Suggests an IBM angle or conversation starter
-3. Recommends a specific action for the ATL
+THE FIVE CONVERSATIONS — choose the strongest door for this client based on the signals above:
+- Conv 1 · Govern Your Data (watsonx.data + Confluent): AI ambition stalled on data, platform sprawl, residency exposure
+- Conv 2 · Connect & Automate (watsonx Orchestrate + webMethods): agent sprawl, middleware debt, M&A integration, stalled RPA
+- Conv 3 · Trust Every Identity (Verify + Vault): zero-trust/audit mandate, DORA-style regulation, machine/agent identity growth
+- Conv 4 · Run Anywhere (Terraform + Vault + Cloudability + Concert): cloud cost, multi-cloud, workload sovereignty
+- Conv 5 · Build & Modernise (IBM Bob): legacy estate, ungoverned AI coding spend [on-premises GA target 30 Sep 2026]
+- Conv L · Lightwell (QUALIFYING PATH — never open cold): open-source CVE exposure the client owns and cannot fix; pinned dependency, community open-source in production, patch-to-production over 45 days
 
-Format for Slack (use emoji sparingly). Start with "🔔 Client Signal: ${clientName}"`;
+COMPETITIVE COUNTERS (use if a competitor is active at this account):
+- vs Snowflake/Databricks → Conv 1: portability + governance across all data, not inside one estate
+- vs MuleSoft/Boomi → Conv 2: agent control plane + total estate cost, not one connector's features
+- vs Okta/Entra → Conv 3: they keep their IAM for humans; the gap is machines, secrets, and agents
+- vs hyperscaler native stack → Conv 4: can you run, govern, and prove the same way everywhere?
+- vs GitHub Copilot/Cursor → Conv 5: whole lifecycle + governed spend, not just autocomplete
+- vs Snyk/Chainguard/Athena → Conv L: scanning is not fixing; Lightwell supplies the signed fix at the version they already run
+
+THE FIVE-STEP MOTION — structure the ATL's approach:
+1. OPEN: TSL + ATL together at C-suite altitude. Lead with a diagnostic question, not a pitch.
+2. WHY CHANGE: Surface the cost of standing still. The unconsidered need the client has not yet named.
+3. SHAPE: Draw the product-blind architecture bottom-to-top. Name no product until the client points at a layer.
+4. WHY IBM: Control built, not granted.
+5. PROGRESS: Agree a client step — a review, workshop, or PoC.
+
+Return ONLY valid JSON:
+{
+    "situationSummary": "2-3 sentences. Lead with client's most pressing challenge. Frame using Why Change language.",
+    "conversationDoor": "Conv 1 | Conv 2 | Conv 3 | Conv 4 | Conv 5 | Conv L — one sentence on why these signals point there",
+    "whyChange": "One sentence: the cost of standing still for this client. Do not mention IBM.",
+    "talkingPoint": "Single talking point: [industry challenge] + [why now] + [IBM product from the conversation door named last]",
+    "openingQuestion": "Hypothesis-framed peer CTO opener grounded in today's signals: 'I've been thinking that [observation] — is that consistent with what you're seeing?'",
+    "slackMessage": "Under 280 chars. Format: *${clientName} — Signal Alert*\\n📊 [situation] 💡 [talking point] ⚡ [IBM angle] 💬 Q: [opener]"
+}`;
 
     try {
-        // COST OPTIMIZATION: Use Haiku for short summarization (75% cost savings)
-        const { text: briefText } = await callAI('SUMMARIZATION_SHORT', prompt, 300, apiKey);
-        
-        contentEl.innerHTML = `<div class="brief-atl-slack">${escapeHtml(briefText)}</div>`;
-        app.lastBriefATLText = briefText;
-        
+        const { text } = await callAI('STRATEGIC_ANALYSIS', prompt, 600, apiKey);
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+        if (jsonMatch) {
+            const brief = JSON.parse(jsonMatch[0]);
+
+            contentEl.innerHTML = `<div class="brief-atl-slack">
+<div class="brief-atl-section"><strong>Situation</strong><p>${escapeHtml(brief.situationSummary || '')}</p></div>
+<div class="brief-atl-section"><strong>Conversation Door</strong><p>${escapeHtml(brief.conversationDoor || '')}</p></div>
+<div class="brief-atl-section"><strong>Why Change</strong><p>${escapeHtml(brief.whyChange || '')}</p></div>
+<div class="brief-atl-section"><strong>Talking Point</strong><p>${escapeHtml(brief.talkingPoint || '')}</p></div>
+<div class="brief-atl-section"><strong>Opening Question</strong><p>${escapeHtml(brief.openingQuestion || '')}</p></div>
+${brief.slackMessage ? `<div class="brief-atl-section brief-atl-slack-msg"><strong>Slack Message</strong><pre>${escapeHtml(brief.slackMessage)}</pre></div>` : ''}
+</div>`;
+            app.lastBriefATLText = brief.slackMessage || text;
+        } else {
+            contentEl.innerHTML = `<div class="brief-atl-slack">${escapeHtml(text)}</div>`;
+            app.lastBriefATLText = text;
+        }
+
     } catch (err) {
         contentEl.innerHTML = `<p>Error: ${err.message}</p>`;
         app.lastBriefATLText = '';
@@ -7287,7 +7432,11 @@ async function generateMarketSynthesis(activeMarkets, apiKey, listEl) {
         const marketPrompts = marketsToGenerate.map(({ market, signals }) => {
             const articleSummaries = signals.map((s, i) => {
                 const a = s.article;
-                return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nType: ${s.type}, Signal: ${s.signal}\nSummary: ${(a.summary || '').substring(0, 50)}`;
+                const clientsStr = (a.matchedClients || []).slice(0, 2).join(', ') || 'none';
+                const doorStr = (a.intelligence?.tier === 3 && a.intelligence?.conversationDoor)
+                    ? ` | Door: ${a.intelligence.conversationDoor}`
+                    : '';
+                return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nType: ${s.type}, Signal: ${s.signal} | Clients: ${clientsStr}${doorStr}\nSummary: ${(a.summary || '').substring(0, 200)}`;
             }).join('\n\n');
             
             return `## ${market} MARKET
@@ -7708,20 +7857,28 @@ async function renderExecutiveSummary(forceRefresh = false) {
     content.querySelector('.executive-summary-intro')?.classList.remove('hidden');
     content.querySelector('.executive-summary-intro').textContent = 'Synthesizing executive insights...';
     
-    const articleSummaries = topArticles.slice(0, 12).map((a, i) => 
-        `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nSignal: ${a.signalType || 'general'}, Clients: ${(a.matchedClients || []).join(', ') || 'none'}\nSummary: ${(a.summary || '').substring(0, 150)}`
-    ).join('\n\n');
-    
-    const trendContext = weeklyTrends.length > 0 
+    const articleSummaries = topArticles.slice(0, 12).map((a, i) => {
+        const isTier3 = a.intelligence?.tier === 3 && a.intelligence?.conversationDoor;
+        if (isTier3) {
+            return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nDoor: ${a.intelligence.conversationDoor} | Intel: ${(a.intelligence.reasoning || '').substring(0, 100)}\nSummary: ${(a.summary || '').substring(0, 150)}`;
+        }
+        return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nSignal: ${a.signalType || 'general'}, Clients: ${(a.matchedClients || []).join(', ') || 'none'}\nSummary: ${(a.summary || '').substring(0, 150)}`;
+    }).join('\n\n');
+
+    const trendContext = weeklyTrends.length > 0
         ? `\nWEEKLY TRENDS:\n${weeklyTrends.map(t => `- ${t.theme}: ${t.direction} (${t.change})`).join('\n')}`
         : '';
-    
+
+    const contextBlock = app.settings?.thisWeekContext
+        ? `\nTHIS WEEK'S CONTEXT (prioritize relevance to these meetings/deals):\n${app.settings.thisWeekContext}\n`
+        : '';
+
     const prompt = `You are the intelligence analyst for the IBM APAC Field CTO who leads 115 ATLs across 343 accounts.
 
 TODAY'S TOP ARTICLES:
 ${articleSummaries}
 ${trendContext}
-
+${contextBlock}
 MISSION: Generate EXACTLY 3 executive insights for the "Client CTO" role.
 
 Each insight must:
@@ -7733,6 +7890,14 @@ Each insight must:
 FRAMEWORK REMINDERS:
 - Under 1% of enterprise data is AI-ready — governed access is the bottleneck, not the model
 - Position ATLs as "Client CTOs"—strategic advisors, not vendors
+
+COMPETITIVE COUNTERS (use in sections and starters):
+- vs Snowflake/Databricks → Conv 1: portability and governance across all data, not inside one estate
+- vs MuleSoft/Boomi → Conv 2: total estate cost and agent control plane, not one connector's features
+- vs Okta/Entra → Conv 3: human + non-human identity as one fabric; they keep their IAM, we close the machine/agent gap
+- vs hyperscaler native stack → Conv 4: portability and lock-in — can you run, govern, and prove the same way everywhere?
+- vs GitHub Copilot/Cursor → Conv 5: autocomplete speeds one slice; Bob governs the whole lifecycle and the bill
+- vs Snyk/Chainguard/Athena → Conv L: scanning is not fixing; Lightwell supplies the signed fix at the version they already run
 
 Return JSON array, no markdown fences:
 [
@@ -7746,10 +7911,11 @@ Return JSON array, no markdown fences:
 
 RULES:
 - Each insight must reference at least 2 articles
+- ONE insight must directly reference a Tier 3 intelligence finding (Door + Intel fields) if any articles have them
 - ONE insight should address competitive positioning
 - ONE insight should be actionable THIS WEEK
 - Be specific about APAC markets when relevant
-- DO NOT include article numbers (like "article 7" or "article 5") in the headline or synthesis text
+- Refer to signals by their topic, not their index number
 - The synthesis should read naturally without referencing article numbers`;
 
     try {
@@ -9119,8 +9285,9 @@ function renderSignalFeed() {
         });
     });
     
-    // Render grouped view — always show first 2 articles per category, rest behind "Show more"
-    list.innerHTML = categories.map(cat => {
+    // Render grouped view — synthesised signals at top, categories collapsed by default
+    const synthesisedHtml = renderSynthesisedSignalsBlock();
+    const categoriesHtml = categories.map(cat => {
         const articles = grouped[cat.key];
         if (articles.length === 0) return '';
         
@@ -9130,12 +9297,13 @@ function renderSignalFeed() {
         
         return `
             <div class="signal-category" data-category="${cat.key}">
-                <div class="signal-category-header">
+                <div class="signal-category-header" onclick="toggleSignalCategory('${cat.key}')">
                     <span class="signal-category-emoji">${cat.emoji}</span>
-                    <span class="signal-category-label">${cat.label}</span>
+                    <span class="signal-category-label">${cat.label} · ${articles.length}</span>
                     <span class="signal-category-count">${articles.length}</span>
+                    <span class="signal-category-chevron">▶</span>
                 </div>
-                <div class="signal-category-body">
+                <div class="signal-category-body collapsed">
                     <div class="signal-category-items">
                         ${previewArticles.map(article => renderSignalFeedItem(article)).join('')}
                     </div>
@@ -9153,7 +9321,59 @@ function renderSignalFeed() {
             </div>
         `;
     }).join('');
+    list.innerHTML = synthesisedHtml + categoriesHtml;
     updateSectionTimestamp('signal-feed', Date.now(), false);
+}
+
+function renderSynthesisedSignalsBlock() {
+    let cachedSignals = [];
+    let cachedArticlesData = [];
+    try {
+        const cached = localStorage.getItem(STORAGE_KEYS.TODAYS_SIGNALS);
+        if (!cached) return '';
+        const data = JSON.parse(cached);
+        cachedSignals = data.signals || [];
+        cachedArticlesData = data.articlesData || [];
+    } catch (e) {
+        return '';
+    }
+    
+    if (cachedSignals.length === 0) return '';
+    
+    // Apply market + client filters
+    const filtered = cachedSignals.filter((signal, idx) => {
+        // Market filter
+        if (signalFeedFilters.market !== 'ALL') {
+            const markets = signal.affectedMarkets || [];
+            if (!markets.includes(signalFeedFilters.market)) return false;
+        }
+        
+        // Client filter — check article IDs in this signal's source articles
+        if (signalFeedFilters.client !== 'ALL') {
+            const articleIds = (cachedArticlesData[idx]?.articles || []).map(a => a.id).filter(Boolean);
+            const hasClient = articleIds.some(id => {
+                const article = signalFeedArticles.find(a => a.id === id);
+                return article?.matchedClients?.some(c => c.name === signalFeedFilters.client);
+            });
+            if (!hasClient) return false;
+        }
+        
+        return true;
+    });
+    
+    if (filtered.length === 0) return '';
+    
+    const cardsHtml = filtered.map((signal, idx) => {
+        const origIdx = cachedSignals.indexOf(signal);
+        return renderCachedSignal(signal, cachedArticlesData[origIdx]);
+    }).join('');
+    
+    return `
+        <div class="synthesised-signals-block">
+            <div class="synthesised-signals-header">🎯 Today's Signals</div>
+            ${cardsHtml}
+        </div>
+    `;
 }
 
 function renderSignalFeedItem(article) {
@@ -9193,13 +9413,19 @@ function renderSignalFeedItem(article) {
     const summaryText = article.context || article.summary || '';
     
     // Build details section (initially hidden)
-    const hasDetails = article.ibmAngle || article.talkingPoint || article.action;
+    const hasDetails = article.ibmAngle || article.talkingPoint || article.action || article.intelligence?.whyChange;
     const detailsHtml = hasDetails ? `
         <div class="signal-feed-details">
             ${article.action ? `
                 <div class="signal-feed-detail-row">
                     <span class="signal-feed-detail-label">Action</span>
                     <div class="signal-feed-detail-text">${escapeHtml(article.action)}</div>
+                </div>
+            ` : ''}
+            ${article.intelligence?.whyChange ? `
+                <div class="signal-feed-detail-row">
+                    <span class="signal-feed-detail-label">Why Change</span>
+                    <div class="signal-feed-detail-text why-change">${escapeHtml(article.intelligence.whyChange)}</div>
                 </div>
             ` : ''}
             ${article.ibmAngle ? `
@@ -9220,8 +9446,13 @@ function renderSignalFeedItem(article) {
     // Read state — dim if already read
     const isRead = Array.isArray(app.articles) && app.articles.some(a => a.id === article.id && a.isRead);
 
+    const urgencyClass = article.actionType === 'ESCALATE'  ? ' signal-urgency-critical'
+                       : article.actionType === 'BRIEF_ATL' ? ' signal-urgency-high'
+                       : article.actionType === 'POSITION'  ? ' signal-urgency-position'
+                       : '';
+
     return `
-        <div class="signal-feed-item signal-${article.signalType}${isRead ? ' signal-feed-item--read' : ''}" data-article-id="${article.id}">
+        <div class="signal-feed-item signal-${article.signalType}${isRead ? ' signal-feed-item--read' : ''}${urgencyClass}" data-article-id="${article.id}">
             <div class="signal-feed-header">
                 <span class="signal-feed-type" title="${article.signalType}">${signalEmoji}</span>
                 <div class="signal-feed-headline">
@@ -9408,10 +9639,14 @@ function toggleSignalCategory(categoryKey) {
     const category = document.querySelector(`.signal-category[data-category="${categoryKey}"]`);
     if (!category) return;
     
-    const isExpanded = category.classList.toggle('expanded');
+    const body = category.querySelector('.signal-category-body');
     const chevron = category.querySelector('.signal-category-chevron');
+    
+    const isCollapsed = body?.classList.toggle('collapsed');
+    category.classList.toggle('expanded', !isCollapsed);
+    
     if (chevron) {
-        chevron.textContent = isExpanded ? '▲' : '▼';
+        chevron.textContent = isCollapsed ? '▶' : '▼';
     }
 }
 
@@ -9658,6 +9893,9 @@ function renderBasicSignal(signal) {
     `;
 }
 
+// Session cache for per-article deep analysis results (keyed by article ID)
+const deepReadAnalysisCache = new Map();
+
 // ==========================================
 // DEEP READS RENDERING (AI-powered with caching)
 // Purpose: "Internalize for strategic conversations"
@@ -9688,6 +9926,7 @@ async function renderDeepReads(forceRefresh = false) {
                     list.innerHTML = insights.map((insight, idx) =>
                         renderCachedDeepRead(insight, articlesData?.[idx])
                     ).join('');
+                    app._deepReadCandidates = (articlesData || []).slice(0, 3);
                     return;
                 }
             }
@@ -9836,6 +10075,7 @@ async function renderDeepReads(forceRefresh = false) {
                     list.innerHTML = insights.map((insight, idx) =>
                         renderCachedDeepRead(insight, articlesData?.[idx])
                     ).join('');
+                    app._deepReadCandidates = candidates.slice(0, 3);
                     return;
                 }
                 
@@ -9988,11 +10228,24 @@ IMPORTANT: Return ONLY the JSON array. No explanatory text, no markdown code blo
             
             return renderSynthesizedDeepRead(insight, article);
         }).join('');
+        app._deepReadCandidates = candidates.slice(0, 3);
         
     } catch (err) {
         console.error('Deep read synthesis error:', err);
         list.innerHTML = candidates.slice(0, 5).map(article => renderBasicDeepRead(article)).join('');
     }
+}
+
+function autoAnalyseDeepReads(candidates) {
+    const settings = getAIProviderSettings();
+    const apiKey = settings.apiKeys[settings.provider];
+    if (!apiKey || !candidates || candidates.length === 0) return;
+    candidates.forEach((article, idx) => {
+        if (!article?.id || deepReadAnalysisCache.has(article.id)) return;
+        setTimeout(() => {
+            app.deepReadArticle(article.id, null);
+        }, idx * 600);
+    });
 }
 
 function cacheDeepReads(insights, articles) {
@@ -10054,8 +10307,9 @@ function renderSynthesizedDeepRead(insight, article) {
                 <div class="deep-read-question"><strong>🎯 CxO Question:</strong> "${escapeHtml(insight.cxoQuestion || '')}"</div>
             </div>
             <div class="deep-read-item-action">
-                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${article.id || ''}', this)">🤖 Generate Deep Analysis</button>
+                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${article.id || ''}', this)">🔄 Regenerate Analysis</button>
             </div>
+            <div class="deep-read-analysis"></div>
         </div>
     `;
 }
@@ -10080,8 +10334,9 @@ function renderCachedDeepRead(insight, articleData) {
             </div>
             ` : `<div class="deep-read-item-summary">${escapeHtml(insight.summary || article.summary || '')}</div>`}
             <div class="deep-read-item-action">
-                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${articleId}', this)">🤖 Generate Deep Analysis</button>
+                <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${articleId}', this)">🔄 Regenerate Analysis</button>
             </div>
+            <div class="deep-read-analysis"></div>
         </div>
     `;
 }

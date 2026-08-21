@@ -1818,7 +1818,7 @@ OUTPUT FORMAT — respond with a single JSON object, nothing else, no markdown f
   "reasoning": "One sentence: what this signals and which conversation door it opens.",
   "actionableInsights": [
     {
-      "action": "One sentence: who opens which conversation door, with which client, by when.",
+      "action": "Two sentences max. Sentence 1: Open step — name the client, state the diagnostic question, and include the urgency driver (regulatory deadline, renewal window, competitive threat). Sentence 2: Why IBM step — name the specific IBM product from the conversation door last, with the Why Change clause (cost of standing still). Example: 'Open Conv 3 with DBS — ask Can you list every non-human identity with credentials in your environment? before their MAS audit deadline. When they name the gap, position Vault.'",
       "urgency": "CRITICAL or HIGH or MEDIUM or LOW",
       "timeline": "Within 7 days or Within 30 days or Within 90 days or Monitor",
       "ibmAngle": "IBM product from the conversation door + one Why Change clause.",
@@ -1828,7 +1828,8 @@ OUTPUT FORMAT — respond with a single JSON object, nothing else, no markdown f
   "affectedClients": [],
   "affectedMarkets": [],
   "competitorActivity": "Competitor, their move, IBM counter in one sentence. Empty string if none.",
-  "clientContext": "Only populate if article explicitly names one of YOUR managed clients above. Format: YOUR Tier X client [name] — open Conv N."
+  "clientContext": "Only populate if article explicitly names one of YOUR managed clients above. Format: YOUR Tier X client [name] — open Conv N.",
+  "whyChange": "One sentence: the cost of standing still for this client — the unconsidered need they have not yet named. Do not mention IBM."
 }`;
     }
 
