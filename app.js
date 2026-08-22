@@ -1200,7 +1200,8 @@ class SignalApp {
             this.initAutoRefresh();
             
             // Show cached content if available
-            if (this.digest || this.articles.length > 0) {
+            const hasSignalsCache = !!localStorage.getItem(STORAGE_KEYS.TODAYS_SIGNALS);
+            if (this.digest || this.articles.length > 0 || hasSignalsCache) {
                 // Don't re-score cached articles on init - they're already scored
                 // Only categorize and render for instant display
                 this.categorizeArticles();
@@ -4515,14 +4516,22 @@ Return ONLY valid JSON, no markdown fences:
             ? (this.digest?.industrySignals || []).find(s => s.industry === clientIndustry)
             : null;
         
-        // Gather articles mentioning this client
-        const clientArticles = this.dailyArticles.filter(a => {
-            const text = `${a.title} ${a.summary}`.toLowerCase();
-            const clientLower = clientName.toLowerCase();
-            if (clientName.length <= 3) {
-                return new RegExp(`\\b${this.escapeRegex(clientLower)}\\b`, 'i').test(text);
+        // Gather articles mentioning this client — search both dailyArticles and rolling corpus
+        const allArticles = [...this.dailyArticles, ...this.articles];
+        const seen = new Set();
+        const clientArticles = allArticles.filter(a => {
+            if (seen.has(a.id)) return false;
+            seen.add(a.id);
+            // Use structured matchedClients first (most reliable)
+            if (Array.isArray(a.matchedClients)) {
+                const names = a.matchedClients.map(c => (typeof c === 'string' ? c : c.name).toLowerCase());
+                const aliases = (clientObj?.aliases || []).map(al => al.toLowerCase());
+                if (names.includes(clientName.toLowerCase()) ||
+                    aliases.some(al => names.includes(al))) return true;
             }
-            return new RegExp(`\\b${this.escapeRegex(clientLower)}`, 'i').test(text);
+            // Fallback: full-word text search (both start and end boundary)
+            const text = `${a.title} ${a.summary}`.toLowerCase();
+            return new RegExp(`\\b${this.escapeRegex(clientName.toLowerCase())}\\b`, 'i').test(text);
         }).slice(0, 8);
         
         if (!apiKey) {
@@ -7343,20 +7352,29 @@ function renderMarketInsights(forceRefresh = false) {
     const apiKey = settings.apiKeys[settings.provider];
 
     if (!apiKey) {
-        // Without API: Show article list with sources
-        const briefs = activeMarkets.map(({ market, signals, hasSignals }) => ({
-            market,
-            synthesis: hasSignals
-                ? `${signals.length} signals detected for ${market} market today.`
-                : `No signals detected for ${market} market today.`,
-            sources: signals.map(s => ({
-                title: s.article.title,
-                url: s.article.url,
-                source: s.article.source || s.article.sourceName
-            })),
-            copyText: hasSignals ? generateMarketCopyText(market, signals) : `No signals for ${market} today.`,
-            hasSignals
-        }));
+        // Without API: serve existing cache if available, otherwise show article list
+        const briefs = activeMarkets.map(({ market, signals, hasSignals }) => {
+            try {
+                const cached = localStorage.getItem('market_insights_' + market + '_cache');
+                if (cached) {
+                    const cachedBrief = JSON.parse(cached);
+                    if (cachedBrief && cachedBrief.synthesis) return cachedBrief;
+                }
+            } catch (e) {}
+            return {
+                market,
+                synthesis: hasSignals
+                    ? `${signals.length} signals detected for ${market} market today.`
+                    : `No signals detected for ${market} market today.`,
+                sources: signals.map(s => ({
+                    title: s.article.title,
+                    url: s.article.url,
+                    source: s.article.source || s.article.sourceName
+                })),
+                copyText: hasSignals ? generateMarketCopyText(market, signals) : `No signals for ${market} today.`,
+                hasSignals
+            };
+        });
         
         list.innerHTML = briefs.map(renderMarketBriefCard).join('');
         cacheMarketInsights(briefs);
