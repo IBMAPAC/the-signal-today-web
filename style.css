@@ -1227,7 +1227,7 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .client-table .col-tier { width: 80px; }
 .client-table .col-market { width: 80px; }
 .client-table .col-last { width: 100px; }
-.client-table .col-actions { width: 80px; text-align: right; }
+.client-table .col-actions { width: 110px; text-align: right; }
 
 .client-table input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: var(--cds-interactive); }
 .client-name-cell { font-weight: 500; color: var(--cds-text-primary); }

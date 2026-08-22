@@ -6564,6 +6564,7 @@ function renderClientTable() {
                 <td>${escapeHtml(client.atl || '—')}</td>
                 <td class="client-last-signal ${isRecent ? 'recent' : ''}">${lastSignal}</td>
                 <td class="col-actions">
+                    <button class="client-action-btn" onclick="closeClientManager(); openMeetingBrief('${escapeHtml(client.name).replace(/'/g, "\\'")}')" title="Client Brief">📋</button>
                     <button class="client-action-btn" onclick="editClient(${originalIdx})" title="Edit">✏️</button>
                     <button class="client-action-btn" onclick="deleteClient(${originalIdx})" title="Delete">🗑️</button>
                 </td>
