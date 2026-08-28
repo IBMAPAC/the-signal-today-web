@@ -220,10 +220,10 @@ class SignalDB {
 
 const CORS_PROXIES = [
     'https://api.allorigins.win/raw?url=',
-    'https://corsproxy.io/?',
     'https://api.codetabs.com/v1/proxy?quest=',
-    'https://cors-anywhere.herokuapp.com/',
-    'https://thingproxy.freeboard.io/fetch/'
+    'https://corsproxy.io/?url=',
+    'https://thingproxy.freeboard.io/fetch/',
+    'https://proxy.cors.sh/'
 ];
 
 // Feed cache to avoid refetching within 2 minutes (short enough to stay fresh)
@@ -1776,6 +1776,11 @@ class SignalApp {
         // Read source failures once here — avoids one localStorage read + JSON.parse per source
         const sourceFailures = this.getSourceFailures();
 
+        // Track which sources actually attempted a fetch this run (not auto-disabled/cached)
+        // so we can detect a global proxy outage and avoid penalising individual sources.
+        this.lastFetchAttempted = [];
+        this.lastFetchFailed = [];
+
         this.showLoading(`Fetching ${sources.length} feeds...`);
         const results = await Promise.allSettled(
             sources.map(source => this.fetchFeedWithTimeout(source, fetchTimeout, sourceFailures))
@@ -1787,6 +1792,21 @@ class SignalApp {
                 articles.push(...result.value);
             }
         }
+
+        // ── Global proxy outage detection ────────────────────────────────────────
+        // If ≥80% of attempted sources (those not auto-disabled/cached) returned 0 articles,
+        // this is almost certainly a proxy outage rather than individual source failures.
+        // Roll back the failure increments recorded during this run so sources are not
+        // progressively auto-disabled by a temporary proxy problem.
+        const attempted = this.lastFetchAttempted.length;
+        const failed = this.lastFetchFailed.length;
+        if (attempted > 0 && failed / attempted >= 0.8) {
+            console.warn(`⚠️ Global proxy outage detected (${failed}/${attempted} sources failed) — rolling back failure counts`);
+            for (const { url } of this.lastFetchFailed) {
+                this.rollbackSourceFailure(url);
+            }
+        }
+
         return articles;
     }
 
@@ -1846,6 +1866,9 @@ class SignalApp {
             });
         });
 
+        // Register this source as attempted (for global outage detection in fetchArticles)
+        if (this.lastFetchAttempted) this.lastFetchAttempted.push({ url: source.url });
+
         try {
             // Promise.any resolves with the first successful result
             const articles = await Promise.any(fetchPromises);
@@ -1863,6 +1886,9 @@ class SignalApp {
             clearTimeout(overallTimeout);
             // All proxies failed — record for source health badge
             console.warn(`❌ All proxies failed for ${source.name}`);
+
+            // Track as failed for global outage detection
+            if (this.lastFetchFailed) this.lastFetchFailed.push({ url: source.url, name: source.name });
             
             // Increment failure count
             const newCount = this.incrementSourceFailure(source.url, source.name);
@@ -1904,6 +1930,20 @@ class SignalApp {
             delete failures[url];
             localStorage.setItem('source-failures', JSON.stringify(failures));
         }
+    }
+
+    // Undo one failure increment — used when a global proxy outage is detected so that
+    // a temporary proxy problem doesn't accumulate as source-level failures.
+    rollbackSourceFailure(url) {
+        const failures = this.getSourceFailures();
+        if (!failures[url]) return;
+        // Don't touch already-disabled sources — they were disabled by prior runs, not this one
+        if (failures[url].disabled) return;
+        failures[url].count = Math.max(0, (failures[url].count || 1) - 1);
+        if (failures[url].count === 0) {
+            delete failures[url];
+        }
+        localStorage.setItem('source-failures', JSON.stringify(failures));
     }
 
     disableSource(url, name) {
