@@ -219,13 +219,12 @@ class SignalDB {
 }
 
 // Each proxy entry: { url, format }
-//   format 'query-encoded' → appends encodeURIComponent(feedUrl) to url
 //   format 'path-raw'      → appends the raw feed URL directly (path-based proxies)
-//   format 'feed2json'     → query-encoded; response is JSON Feed, not XML
+//   format 'query-encoded' → appends encodeURIComponent(feedUrl) to url
 // Confirmed working as of 2026-08-28. Re-test if all start failing again.
+// NOTE: feed2json.org removed — works from curl but lacks CORS headers, browser blocks it.
 const CORS_PROXIES = [
     { url: 'https://cors-anywhere.fly.dev/', format: 'path-raw' },
-    { url: 'https://feed2json.org/convert?url=', format: 'feed2json' },
 ];
 
 // Feed cache to avoid refetching within 2 minutes (short enough to stay fresh)
