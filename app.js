@@ -218,12 +218,14 @@ class SignalDB {
     }
 }
 
+// Each proxy entry: { url, format }
+//   format 'query-encoded' → appends encodeURIComponent(feedUrl) to url
+//   format 'path-raw'      → appends the raw feed URL directly (path-based proxies)
+//   format 'feed2json'     → query-encoded; response is JSON Feed, not XML
+// Confirmed working as of 2026-08-28. Re-test if all start failing again.
 const CORS_PROXIES = [
-    'https://api.allorigins.win/raw?url=',
-    'https://api.codetabs.com/v1/proxy?quest=',
-    'https://corsproxy.io/?url=',
-    'https://thingproxy.freeboard.io/fetch/',
-    'https://proxy.cors.sh/'
+    { url: 'https://cors-anywhere.fly.dev/', format: 'path-raw' },
+    { url: 'https://feed2json.org/convert?url=', format: 'feed2json' },
 ];
 
 // Feed cache to avoid refetching within 2 minutes (short enough to stay fresh)
@@ -1838,20 +1840,28 @@ class SignalApp {
         const sharedController = new AbortController();
         const overallTimeout = setTimeout(() => sharedController.abort(), timeout);
 
-        const fetchPromises = CORS_PROXIES.map((proxy, i) => {
+        const fetchPromises = CORS_PROXIES.map(({ url: proxyUrl, format }, i) => {
             return new Promise((resolve, reject) => {
                 // Stagger each proxy launch by i × HEDGE_DELAY
                 const hedgeTimer = setTimeout(async () => {
                     // Bail immediately if a winner already aborted the controller
                     if (sharedController.signal.aborted) { reject(new Error('aborted')); return; }
                     try {
-                        const response = await fetch(proxy + encodeURIComponent(source.url), {
-                            headers: { 'Accept': 'application/rss+xml, application/xml, text/xml' },
+                        const fullUrl = format === 'path-raw'
+                            ? proxyUrl + source.url
+                            : proxyUrl + encodeURIComponent(source.url);
+                        const response = await fetch(fullUrl, {
+                            headers: { 'Accept': 'application/rss+xml, application/xml, text/xml, application/json' },
                             signal: sharedController.signal
                         });
                         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                        const text = await response.text();
-                        resolve(this.parseFeed(text, source));
+                        if (format === 'feed2json') {
+                            const json = await response.json();
+                            resolve(this.parseFeed2Json(json, source));
+                        } else {
+                            const text = await response.text();
+                            resolve(this.parseFeed(text, source));
+                        }
                     } catch (error) {
                         reject(error);
                     }
@@ -2182,6 +2192,45 @@ class SignalApp {
         }
 
         return kept;
+    }
+
+    // Parse a JSON Feed response from feed2json.org into the same article shape as parseFeed.
+    // JSON Feed spec: https://www.jsonfeed.org/version/1.1/
+    // feed2json.org returns: { items: [{ guid, url, title, summary, content_html, date_published, author }] }
+    parseFeed2Json(json, source) {
+        if (!json || !Array.isArray(json.items)) return [];
+        const articles = [];
+        const seenUrls = new Set();
+
+        for (const item of json.items.slice(0, 20)) {
+            try {
+                const url = item.url || item.id;
+                const title = item.title;
+                if (!title || !url || seenUrls.has(url)) continue;
+                seenUrls.add(url);
+
+                const rawSummary = item.summary || item.content_html || '';
+                const cleanSummary = rawSummary.replace(/<[^>]*>/g, '').substring(0, 500);
+
+                articles.push({
+                    id: this.generateId(url),
+                    title: this.decodeHtmlEntities(title),
+                    url,
+                    summary: this.decodeHtmlEntities(cleanSummary),
+                    sourceName: source.name,
+                    category: source.category,
+                    publishedDate: item.date_published
+                        ? new Date(item.date_published).toISOString()
+                        : new Date().toISOString(),
+                    priority: source.priority,
+                    credibilityScore: source.credibilityScore,
+                    digestType: source.digestType
+                });
+            } catch (e) {
+                // skip malformed item
+            }
+        }
+        return articles;
     }
 
     parseFeed(xmlText, source) {
