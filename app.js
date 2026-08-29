@@ -8028,10 +8028,33 @@ RULES:
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
         const { text } = await callAI('SYNTHESIS', prompt, 1000, apiKey);
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
+
+        // Clean response: strip markdown fences
+        let cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        const jsonMatch = cleanedText.match(/\[[\s\S]*\]/);
         
         if (jsonMatch) {
-            const synthesized = JSON.parse(jsonMatch[0]);
+            let jsonStr = jsonMatch[0];
+            // Remove trailing commas before closing brackets
+            jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+            // Fix missing commas between adjacent objects
+            jsonStr = jsonStr.replace(/\}\s*\{/g, '},{');
+            // Truncate to the first balanced close of the outer array
+            let bracketCount = 0;
+            let firstBalanced = -1;
+            for (let i = 0; i < jsonStr.length; i++) {
+                if (jsonStr[i] === '[') bracketCount++;
+                if (jsonStr[i] === ']') {
+                    bracketCount--;
+                    if (bracketCount === 0 && firstBalanced === -1) firstBalanced = i;
+                }
+            }
+            if (firstBalanced > 0 && firstBalanced < jsonStr.length - 1) {
+                jsonStr = jsonStr.substring(0, firstBalanced + 1);
+            }
+            // Repair truncated JSON (closes any open strings/objects)
+            if (typeof repairTruncatedJson === 'function') jsonStr = repairTruncatedJson(jsonStr);
+            const synthesized = JSON.parse(jsonStr);
             
             // Map sourceIndices to actual article data
             const insights = synthesized.map(insight => ({
@@ -10295,19 +10318,13 @@ IMPORTANT: Return ONLY the JSON array. No explanatory text, no markdown code blo
             }
         }
         
-        // Validate what comes after the first balanced point
+        // Always truncate to the first balanced close — anything after the outer
+        // array/object boundary is either trailing prose or a second JSON value,
+        // both of which cause JSON.parse to throw.
         if (firstBalanced > 0 && firstBalanced < jsonStr.length - 1) {
-            const remaining = jsonStr.substring(firstBalanced + 1).trim();
-            
-            // Check if remaining looks like valid JSON continuation
-            if (remaining.startsWith(',') || remaining.startsWith('{') || remaining.startsWith('[')) {
-                // Valid JSON continuation - keep full response
-                console.log('Deep Reads: Detected valid JSON continuation, keeping full response');
-            } else if (remaining.length > 0) {
-                // Trailing text - truncate it
-                console.log(`Deep Reads: Truncating ${remaining.length} chars of trailing text`);
-                jsonStr = jsonStr.substring(0, firstBalanced + 1);
-            }
+            const trimmed = jsonStr.length - firstBalanced - 1;
+            console.log(`Deep Reads: Truncating ${trimmed} chars after balanced close`);
+            jsonStr = jsonStr.substring(0, firstBalanced + 1);
         }
         
         let synthesized;
