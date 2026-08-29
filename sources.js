@@ -1,6 +1,6 @@
 // =============================================
 // The Signal Today - Optimized Sources Configuration
-// Version 3.4 - 87 Working Feeds
+// Version 3.6 - 84 Working Feeds
 // =============================================
 
 const DEFAULT_SOURCES = [
@@ -72,7 +72,7 @@ const DEFAULT_SOURCES = [
     },
     {
         name: "Anthropic News",
-        url: "https://www.anthropic.com/news/rss",
+        url: "https://anthropic.substack.com/feed",
         category: "AI & Agentic",
         priority: 1,
         credibilityScore: 0.90,
@@ -139,7 +139,7 @@ const DEFAULT_SOURCES = [
     },
     {
         name: "CISA Alerts",
-        url: "https://www.cisa.gov/sites/default/files/feeds/alerts.xml",
+        url: "https://www.cisa.gov/news.xml",
         category: "Cybersecurity & Sovereignty",
         priority: 1,
         credibilityScore: 0.95,
@@ -147,17 +147,17 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "CSA Singapore",
-        url: "https://www.csa.gov.sg/news-articles/rss",
+        name: "NCSC UK",
+        url: "https://www.ncsc.gov.uk/api/1/services/v1/all-rss-feed.xml",
         category: "Cybersecurity & Sovereignty",
         priority: 2,
-        credibilityScore: 0.90,
+        credibilityScore: 0.92,
         digestType: "daily",
         enabled: true
     },
 
     // ============================================
-    // 🌏 APAC REGIONAL (27 sources — added Nikkei Asia, GovInsider, Business Times SG, Fintech News SG, e27; removed TechCrunch SEA/ASEAN duplicates, ASEAN News Today, Strategy+Business duplicate)
+    // 🌏 APAC REGIONAL (27 sources — added Nikkei Asia, GovInsider, Business Times SG, Fintech News SG, TechNode; removed TechCrunch SEA/ASEAN duplicates, ASEAN News Today, Strategy+Business duplicate, e27)
     // ============================================
     {
         name: "Rest of World",
@@ -196,11 +196,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "Nikkei Asia Tech",
-        url: "https://asia.nikkei.com/rss/feed/technology",
+        name: "TechCrunch Japan",
+        url: "https://techcrunch.com/tag/japan/feed/",
         category: "APAC Regional",
         priority: 1,
-        credibilityScore: 0.92,
+        credibilityScore: 0.88,
         digestType: "daily",
         enabled: true
     },
@@ -394,8 +394,8 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "e27",
-        url: "https://e27.co/feed/",
+        name: "TechNode",
+        url: "https://technode.com/feed/",
         category: "APAC Regional",
         priority: 2,
         credibilityScore: 0.82,
@@ -458,7 +458,7 @@ const DEFAULT_SOURCES = [
     },
 
     // ============================================
-    // 🏢 ENTERPRISE TECH (14 sources — added Gartner + IDC; removed ZDNet, The Register Cloud, 3x TechRepublic → 1)
+    // 🏢 ENTERPRISE TECH (13 sources — IDC retained; removed Gartner Newsroom, ZDNet, The Register Cloud, 3x TechRepublic → 1)
     // ============================================
     {
         name: "MIT Sloan Review",
@@ -512,15 +512,6 @@ const DEFAULT_SOURCES = [
         priority: 1,
         credibilityScore: 0.85,
         digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "Gartner Newsroom",
-        url: "https://www.gartner.com/en/newsroom/press-releases/feed",
-        category: "Enterprise Tech",
-        priority: 1,
-        credibilityScore: 0.93,
-        digestType: "weekly",
         enabled: true
     },
     {
@@ -713,7 +704,7 @@ const DEFAULT_SOURCES = [
     },
 
     // ============================================
-    // 📊 STRATEGIC ANALYSIS (6 sources — added McKinsey, BCG, HBR; removed duplicate Strategy+Business + Wavestone)
+    // 📊 STRATEGIC ANALYSIS (6 sources)
     // ============================================
     {
         name: "Stratechery",
@@ -743,8 +734,8 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "BCG Insights",
-        url: "https://www.bcg.com/rss",
+        name: "HBR Technology",
+        url: "https://hbr.org/topic/subject/technology-and-analytics/feed",
         category: "Strategic Analysis",
         priority: 1,
         credibilityScore: 0.93,
@@ -752,11 +743,11 @@ const DEFAULT_SOURCES = [
         enabled: true
     },
     {
-        name: "HBR Technology",
-        url: "https://hbr.org/topic/technology/feed",
+        name: "Constellation Research",
+        url: "https://www.constellationr.com/feed",
         category: "Strategic Analysis",
         priority: 1,
-        credibilityScore: 0.93,
+        credibilityScore: 0.88,
         digestType: "weekly",
         enabled: true
     },
@@ -771,7 +762,7 @@ const DEFAULT_SOURCES = [
     },
 
     // ============================================
-    // 🔵 IBM & PARTNERS (5 sources — added IBM Newsroom + IBM Think Blog)
+    // 🔵 IBM & PARTNERS (4 sources — IBM Research, Red Hat Blog, OpenShift Blog, IBM Newsroom; removed IBM Think Blog — no RSS)
     // ============================================
     {
         name: "IBM Research",
@@ -802,20 +793,11 @@ const DEFAULT_SOURCES = [
     },
     {
         name: "IBM Newsroom",
-        url: "https://newsroom.ibm.com/feed",
+        url: "https://newsroom.ibm.com/announcements?pagetemplate=rss",
         category: "IBM & Partners",
         priority: 1,
         credibilityScore: 0.92,
         digestType: "daily",
-        enabled: true
-    },
-    {
-        name: "IBM Think Blog",
-        url: "https://www.ibm.com/blog/feed/",
-        category: "IBM & Partners",
-        priority: 1,
-        credibilityScore: 0.90,
-        digestType: "both",
         enabled: true
     }
 ];
@@ -1371,17 +1353,17 @@ const APAC_MARKET_CONTEXT = {
 const DEEP_READS_SOURCES = {
     // Primary strategic sources (always include) — names match DEFAULT_SOURCES
     PRIMARY: [
-        'McKinsey Insights', 'BCG Insights', 'HBR Technology', 'MIT Sloan Review',
+        'McKinsey Insights', 'MIT Sloan Review',
         'Ben Evans', 'Stratechery', 'SemiAnalysis', 'Capgemini Insights'
     ],
     // Research & Analysis (high quality, include when relevant)
     RESEARCH: [
-        'Gartner Newsroom', 'Forrester', 'IDC Blog', 'MIT Tech Review',
+        'Constellation Research', 'Forrester', 'IDC Blog', 'MIT Tech Review',
         'Rest of World', 'Import AI', 'AI Snake Oil'
     ],
     // IBM & Industry (include for IBM-relevant topics)
     IBM_ADJACENT: [
-        'IBM Newsroom', 'IBM Think Blog', 'IBM Research', 'Red Hat Blog',
+        'IBM Newsroom', 'IBM Research', 'Red Hat Blog',
         'OpenShift Blog', 'The Register', 'Computer Weekly All'
     ],
     // Categories that indicate strategic content

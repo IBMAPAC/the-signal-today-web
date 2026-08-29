@@ -1770,9 +1770,12 @@ class SignalApp {
     async fetchArticles(sources) {
         const fetchTimeout = 7000; // 7s timeout — auto-disable after 3 failures protects against slow sources
 
-        // Fetch ALL sources in parallel — each has its own AbortController timeout inside
-        // fetchFeedWithTimeout, so worst-case wall-clock time is 7s regardless of source count.
-        // Previously used serial 15-source batches which meant up to 6 × 10s = 60s worst case.
+        // Concurrency-limited fetching: fire sources in batches of 15 with a 400ms pause
+        // between batches. Firing all 87 sources at once overwhelms the single CORS proxy
+        // (cors-anywhere rate-limits by IP) — this keeps peak concurrent requests low
+        // while keeping total wall-clock time well under 10s.
+        const BATCH_SIZE = 15;
+        const BATCH_DELAY = 400; // ms between batch launches
 
         // Read source failures once here — avoids one localStorage read + JSON.parse per source
         const sourceFailures = this.getSourceFailures();
@@ -1783,12 +1786,19 @@ class SignalApp {
         this.lastFetchFailed = [];
 
         this.showLoading(`Fetching ${sources.length} feeds...`);
-        const results = await Promise.allSettled(
-            sources.map(source => this.fetchFeedWithTimeout(source, fetchTimeout, sourceFailures))
-        );
+
+        const allResults = [];
+        for (let i = 0; i < sources.length; i += BATCH_SIZE) {
+            if (i > 0) await new Promise(r => setTimeout(r, BATCH_DELAY));
+            const batch = sources.slice(i, i + BATCH_SIZE);
+            const batchResults = await Promise.allSettled(
+                batch.map(source => this.fetchFeedWithTimeout(source, fetchTimeout, sourceFailures))
+            );
+            allResults.push(...batchResults);
+        }
 
         const articles = [];
-        for (const result of results) {
+        for (const result of allResults) {
             if (result.status === 'fulfilled' && result.value) {
                 articles.push(...result.value);
             }
@@ -10086,7 +10096,7 @@ async function renderDeepReads(forceRefresh = false) {
         else if (article.category === 'Cloud & Infrastructure') score += 15;
         
         // 2. Source Credibility (0-25 points)
-        const premiumSources = ['a16z', 'Benedict Evans', 'Stratechery', 'MIT Technology Review', 'Harvard Business Review'];
+        const premiumSources = ['a16z', 'Benedict Evans', 'Stratechery', 'MIT Technology Review', 'Constellation Research'];
         const goodSources = ['TechCrunch', 'The Verge', 'Ars Technica', 'The Information'];
         
         if (premiumSources.some(s => article.source?.includes(s))) score += 25;
@@ -10160,7 +10170,7 @@ async function renderDeepReads(forceRefresh = false) {
     // Select deep read candidates: strategic sources, analyst content, thought leadership
     // RULE: Pulls from weeklyArticles (7-14 day lookback) for strategic, longer-form content
     const strategicCategories = ['Strategic Perspectives', 'Architecture & Platform'];
-    const strategicSources = ['a16z', 'Benedict Evans', 'Stratechery', 'MIT Technology Review', 'Harvard Business Review'];
+    const strategicSources = ['a16z', 'Benedict Evans', 'Stratechery', 'MIT Technology Review', 'Constellation Research'];
     
     // Initial filtering: strategic category OR analyst source OR high relevance
     let candidates = app.weeklyArticles.length > 0
