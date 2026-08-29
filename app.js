@@ -3628,10 +3628,13 @@ ${articleList}`;
             // COST OPTIMIZATION: Use unified API helper with token tracking
             const { text } = await callAI('MULTI_SOURCE_ANALYSIS', prompt, 2500, apiKey);
             
-            // Parse JSON from response
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            // Parse JSON from response — strip markdown fences first
+            let cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+            const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
-                this.digest = JSON.parse(jsonMatch[0]);
+                let jsonStr = jsonMatch[0];
+                jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
+                this.digest = JSON.parse(jsonStr);
                 this.digest.generatedAt = new Date().toISOString();
                 // Phase 7: store fingerprint + seen IDs for delta detection on next refresh
                 this.digest.articleFingerprint = this.computeArticleFingerprint(this.dailyArticles);
@@ -8642,7 +8645,9 @@ Return valid JSON array, max 5 signals, in the SAME ORDER as input signals.`;
         // COST OPTIMIZATION: Use unified API helper with token tracking
         const { text } = await callAI('STRATEGIC_ANALYSIS', prompt, 2000, apiKey);
         claudeResponse = text;
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        // Strip markdown code fences before matching JSON
+        const cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        const jsonMatch = cleanedText.match(/\[[\s\S]*\]/);
         
         if (jsonMatch) {
             // Clean up JSON before parsing (remove trailing commas, fix common issues)
