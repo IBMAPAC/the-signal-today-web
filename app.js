@@ -8532,7 +8532,7 @@ async function renderTodaysSignals(forceRefresh = false) {
         });
     }
     
-    countEl.textContent = Math.min(rawSignals.length, 5);
+    if (countEl) countEl.textContent = Math.min(rawSignals.length, 5);
     
     if (rawSignals.length === 0) {
         if (introEl) introEl.textContent = 'Click Refresh to generate signals.';
