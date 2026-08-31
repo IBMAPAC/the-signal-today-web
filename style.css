@@ -387,6 +387,27 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 .weekly-export-actions { display: flex; gap: var(--cds-spacing-03); flex-wrap: wrap; margin-top: var(--cds-spacing-05); padding-top: var(--cds-spacing-05); border-top: 1px solid var(--cds-border-subtle-01); }
 .btn-sm { padding: var(--cds-spacing-02) var(--cds-spacing-04); font-size: var(--cds-body-01); min-height: 32px; }
 
+/* ==========================================
+   LinkedIn Post Modal
+   ========================================== */
+.linkedin-tone-row { display: flex; align-items: center; gap: var(--cds-spacing-04); padding: var(--cds-spacing-04) 0 var(--cds-spacing-05); border-bottom: 1px solid var(--cds-border-subtle-01); margin-bottom: var(--cds-spacing-05); }
+.linkedin-tone-label { font-size: var(--cds-body-01); color: var(--cds-text-secondary); white-space: nowrap; }
+.linkedin-tone-btns { display: flex; gap: var(--cds-spacing-02); flex-wrap: wrap; }
+.linkedin-tone-btn { background: var(--cds-layer-02); border: 1px solid var(--cds-border-subtle-01); color: var(--cds-text-secondary); padding: var(--cds-spacing-02) var(--cds-spacing-04); font-size: var(--cds-body-01); cursor: pointer; border-radius: 0; font-family: inherit; transition: background 70ms, color 70ms; }
+.linkedin-tone-btn:hover { background: var(--cds-layer-hover-02); color: var(--cds-text-primary); }
+.linkedin-tone-btn.active { background: var(--cds-button-primary); color: var(--cds-text-on-color); border-color: var(--cds-button-primary); }
+.linkedin-post-loading { display: flex; align-items: center; gap: var(--cds-spacing-04); padding: var(--cds-spacing-07) 0; color: var(--cds-text-secondary); font-size: var(--cds-body-01); }
+.linkedin-post-loading .spinner { width: 20px; height: 20px; border: 2px solid var(--cds-border-subtle-01); border-top-color: var(--cds-button-primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+.linkedin-post-text { font-family: 'IBM Plex Sans', sans-serif; font-size: 0.9rem; line-height: 1.75; white-space: pre-wrap; word-break: break-word; background: var(--cds-layer-02); padding: var(--cds-spacing-05); color: var(--cds-text-primary); border: 1px solid var(--cds-border-subtle-01); max-height: 55vh; overflow-y: auto; border-left: 3px solid #0a66c2; }
+.linkedin-post-meta { display: flex; gap: var(--cds-spacing-05); margin-top: var(--cds-spacing-04); font-size: var(--cds-body-01); color: var(--cds-text-secondary); }
+.linkedin-post-meta span { display: flex; align-items: center; gap: var(--cds-spacing-02); }
+.linkedin-post-error { color: var(--cds-text-error); padding: var(--cds-spacing-04) 0; font-size: var(--cds-body-01); }
+.linkedin-nokey-hint { background: var(--cds-layer-02); border: 1px solid var(--cds-border-subtle-01); padding: var(--cds-spacing-05); }
+.linkedin-nokey-hint p { margin: 0 0 var(--cds-spacing-03); color: var(--cds-text-secondary); font-size: var(--cds-body-01); }
+.linkedin-nokey-hint pre { font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; white-space: pre-wrap; color: var(--cds-text-primary); margin: 0; }
+
+
+
 /* Meeting Brief — Sales Angle, ATL Note + Slack button */
 .meeting-brief-sales-angle { border-left: 3px solid var(--cds-support-success); padding-left: var(--cds-spacing-04); color: var(--cds-support-success); font-weight: 500; }
 .meeting-brief-atl-note { border-left: 3px solid #08bdba; padding-left: var(--cds-spacing-04); font-style: italic; color: var(--cds-text-secondary); }

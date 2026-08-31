@@ -1093,7 +1093,8 @@ const STORAGE_KEYS = {
     TREND_HISTORY: 'signal_trend_history',
     ARTICLE_RATINGS: 'signal_article_ratings',   // Per-article 👍/👎 feedback
     SOURCE_SCORE_DRIFT: 'signal_score_drift',     // Accumulated score drift per source
-    SECTION_STATE: 'signal_section_state'         // Persisted section open/close states
+    SECTION_STATE: 'signal_section_state',        // Persisted section open/close states
+    LINKEDIN_POST: 'signal_linkedin_post_cache'   // Cached LinkedIn post (tone + text)
 };
 
 // Utility: Escape HTML entities to prevent XSS
@@ -10677,6 +10678,260 @@ function renderClientRisk() {
 // Initialize app
 const app = new SignalApp();
 
+// ==========================================
+// LINKEDIN POST GENERATOR — #SignalToNoiseAPAC
+// ==========================================
+
+// Tracks selected tone across regenerations
+let _linkedInTone = 'thought-leader';
+// Holds the last generated post text for copy
+let _linkedInPostText = '';
+
+function openLinkedInPost() {
+    const modal = document.getElementById('linkedin-post-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+
+    // Restore tone selection from cache or default
+    try {
+        const cached = localStorage.getItem(STORAGE_KEYS.LINKEDIN_POST);
+        if (cached) {
+            const data = JSON.parse(cached);
+            if (data.tone) _linkedInTone = data.tone;
+        }
+    } catch (e) { /* ignore */ }
+
+    _syncToneButtons(_linkedInTone);
+
+    // If we have a fresh cached post for this tone, show it immediately
+    try {
+        const cached = localStorage.getItem(STORAGE_KEYS.LINKEDIN_POST);
+        if (cached) {
+            const data = JSON.parse(cached);
+            const age = Date.now() - (data.timestamp || 0);
+            // Cache valid for 6 hours (same as signals)
+            if (age < CACHE_DURATIONS.TODAYS_SIGNALS && data.tone === _linkedInTone && data.text) {
+                _renderLinkedInPost(data.text);
+                return;
+            }
+        }
+    } catch (e) { /* ignore */ }
+
+    generateLinkedInPost(false);
+}
+
+function closeLinkedInPost() {
+    const modal = document.getElementById('linkedin-post-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function selectLinkedInTone(tone) {
+    _linkedInTone = tone;
+    _syncToneButtons(tone);
+    generateLinkedInPost(true);
+}
+
+function _syncToneButtons(activeTone) {
+    document.querySelectorAll('.linkedin-tone-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tone === activeTone);
+    });
+}
+
+async function generateLinkedInPost(force = false) {
+    const outputEl = document.getElementById('linkedin-post-output');
+    const copyBtn = document.getElementById('linkedin-copy-btn');
+    const regenBtn = document.getElementById('linkedin-regenerate-btn');
+    if (!outputEl) return;
+
+    // Check cache first unless forcing
+    if (!force) {
+        try {
+            const cached = localStorage.getItem(STORAGE_KEYS.LINKEDIN_POST);
+            if (cached) {
+                const data = JSON.parse(cached);
+                const age = Date.now() - (data.timestamp || 0);
+                if (age < CACHE_DURATIONS.TODAYS_SIGNALS && data.tone === _linkedInTone && data.text) {
+                    _renderLinkedInPost(data.text);
+                    return;
+                }
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    // Show loading state
+    if (copyBtn) copyBtn.style.display = 'none';
+    if (regenBtn) regenBtn.style.display = 'none';
+    outputEl.innerHTML = `<div class="linkedin-post-loading"><div class="spinner"></div> Drafting your #SignalToNoiseAPAC post…</div>`;
+
+    const settings = getAIProviderSettings();
+    const apiKey = settings.apiKeys[settings.provider];
+
+    if (!apiKey) {
+        _renderLinkedInNoKey();
+        return;
+    }
+
+    // Gather content: top signals + deep reads + today's date
+    const date = new Date().toLocaleDateString('en-SG', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+    let signalLines = '';
+    try {
+        const cached = localStorage.getItem(STORAGE_KEYS.TODAYS_SIGNALS);
+        if (cached) {
+            const { signals } = JSON.parse(cached);
+            signalLines = (signals || []).slice(0, 5).map(s =>
+                `- [${s.wave || 'SIGNAL'}] ${s.headline}: ${s.context || ''}`
+            ).join('\n');
+        }
+    } catch (e) { /* ignore */ }
+
+    let deepReadLines = '';
+    try {
+        const cached = localStorage.getItem(STORAGE_KEYS.DEEP_READS);
+        if (cached) {
+            const { insights } = JSON.parse(cached);
+            deepReadLines = (insights || []).slice(0, 3).map(i =>
+                `- ${i.title}: ${i.strategicTakeaway || i.synthesis || ''}`
+            ).join('\n');
+        }
+    } catch (e) { /* ignore */ }
+
+    // Top article headlines as additional context
+    const topHeadlines = (app.dailyArticles.length > 0 ? app.dailyArticles : app.articles)
+        .slice(0, 8)
+        .map(a => `- ${a.title} (${a.source || a.sourceName || ''})`)
+        .join('\n');
+
+    const toneGuide = {
+        'thought-leader': `Tone: Authoritative thought leader. Open with a bold observation about APAC tech/AI landscape. Use "I've been thinking..." or "Something I keep coming back to..." framing. Peer CTO voice — not vendor, not consultant. Professional but human. No jargon for its own sake.`,
+        'practitioner':   `Tone: Practitioner sharing field observations. Open with a concrete pattern you're seeing across client conversations ("Across my conversations this week..." or "Three different CTOs raised the same question..."). Grounded, specific, practical. Avoid abstract generalizations.`,
+        'provocateur':    `Tone: Provocateur with a contrarian take. Open with a statement most people disagree with or haven't considered. Challenge a prevailing narrative in AI/cloud/enterprise tech. Back it up with a specific observation. End with a question that invites debate.`
+    }[_linkedInTone];
+
+    const prompt = `You are drafting a LinkedIn post for the IBM APAC Field CTO who publishes under the hashtag #SignalToNoiseAPAC. His posts cut through vendor noise to deliver genuine strategic insight for enterprise technology leaders across Asia Pacific.
+
+DATE: ${date}
+
+${toneGuide}
+
+TODAY'S INTELLIGENCE SIGNALS:
+${signalLines || 'No synthesised signals available — use the article headlines below.'}
+
+DEEP READ THEMES:
+${deepReadLines || 'Not available.'}
+
+TOP ARTICLE HEADLINES (for context, do NOT list them all):
+${topHeadlines || 'Not available.'}
+
+POST REQUIREMENTS:
+- Length: 150–220 words (LinkedIn optimal engagement zone)
+- Structure: Hook (1–2 lines) → Insight or observation (3–5 lines) → "So what?" implication for APAC enterprise leaders (2–3 lines) → Closing question or call to reflection (1 line)
+- Must feel like a person wrote it, not a press release
+- Reference at least one specific technology, company, or regulatory/market development from today's signals
+- APAC context is important — name at least one market (ANZ, ASEAN, India, Korea, Greater China) where relevant
+- End with exactly these two hashtags on their own line: #SignalToNoiseAPAC #IBMAPAC
+- Do NOT use bullet points or numbered lists — flowing paragraphs only
+- Do NOT use em-dashes (—) more than once
+- Do NOT start with "In today's" or "As AI continues to"
+- Return ONLY the post text, nothing else, no preamble, no explanation
+
+Write the post now:`;
+
+    try {
+        const { text } = await callAI('SYNTHESIS', prompt, 400, apiKey);
+        // Strip any accidental markdown fences
+        const cleaned = text.replace(/```[a-z]*\s*/g, '').replace(/```\s*/g, '').trim();
+        _linkedInPostText = cleaned;
+
+        // Cache it
+        try {
+            localStorage.setItem(STORAGE_KEYS.LINKEDIN_POST, JSON.stringify({
+                tone: _linkedInTone,
+                text: cleaned,
+                timestamp: Date.now()
+            }));
+        } catch (e) { /* ignore quota errors */ }
+
+        _renderLinkedInPost(cleaned);
+    } catch (err) {
+        outputEl.innerHTML = `<div class="linkedin-post-error">⚠️ Post generation failed: ${escapeHtml(err.message)}</div>`;
+        if (regenBtn) regenBtn.style.display = '';
+    }
+}
+
+function _renderLinkedInPost(text) {
+    const outputEl = document.getElementById('linkedin-post-output');
+    const copyBtn = document.getElementById('linkedin-copy-btn');
+    const regenBtn = document.getElementById('linkedin-regenerate-btn');
+    if (!outputEl) return;
+
+    _linkedInPostText = text;
+
+    const wordCount = text.trim().split(/\s+/).length;
+    const charCount = text.length;
+
+    outputEl.innerHTML = `
+        <div class="linkedin-post-text">${escapeHtml(text)}</div>
+        <div class="linkedin-post-meta">
+            <span>📝 ${wordCount} words</span>
+            <span>🔤 ${charCount} characters</span>
+        </div>
+    `;
+
+    if (copyBtn) copyBtn.style.display = '';
+    if (regenBtn) regenBtn.style.display = '';
+}
+
+function _renderLinkedInNoKey() {
+    const outputEl = document.getElementById('linkedin-post-output');
+    const copyBtn = document.getElementById('linkedin-copy-btn');
+    const regenBtn = document.getElementById('linkedin-regenerate-btn');
+    if (!outputEl) return;
+
+    // Build a basic template from today's top signal so it's still useful
+    let topSignal = 'the AI and sovereignty dynamics reshaping enterprise technology in APAC';
+    try {
+        const cached = localStorage.getItem(STORAGE_KEYS.TODAYS_SIGNALS);
+        if (cached) {
+            const { signals } = JSON.parse(cached);
+            if (signals && signals.length > 0) topSignal = signals[0].headline;
+        }
+    } catch (e) { /* ignore */ }
+
+    const template = `Something I keep coming back to this week: ${topSignal}.
+
+The conversation in APAC boardrooms has shifted. It's no longer about whether to adopt AI — it's about who governs it, where the data sits, and whether the architecture can hold up when the regulator asks questions.
+
+For enterprise leaders across ANZ, ASEAN, and GCG, the signal here isn't the technology. It's the operating model that has to change around it.
+
+What are you hearing in your market?
+
+#SignalToNoiseAPAC #IBMAPAC`;
+
+    outputEl.innerHTML = `
+        <div class="linkedin-nokey-hint">
+            <p>⚙️ Add a Claude or OpenAI API key in Settings for AI-generated posts. Here's a template based on today's top signal:</p>
+            <pre>${escapeHtml(template)}</pre>
+        </div>
+    `;
+
+    _linkedInPostText = template;
+    if (copyBtn) copyBtn.style.display = '';
+    if (regenBtn) regenBtn.style.display = 'none';
+}
+
+function copyLinkedInPost() {
+    if (!_linkedInPostText) return;
+    navigator.clipboard.writeText(_linkedInPostText).then(() => {
+        const btn = document.getElementById('linkedin-copy-btn');
+        if (btn) {
+            const original = btn.textContent;
+            btn.textContent = '✓ Copied!';
+            setTimeout(() => { btn.textContent = original; }, 2000);
+        }
+    });
+}
+
 // Debug: verify app loaded
 console.log('📡 App created:', typeof app.refresh, typeof app.openSettings);
 
@@ -10717,3 +10972,10 @@ window.toggleSignalFeedItem = toggleSignalFeedItem;
 window.toggleSignalCategory = toggleSignalCategory;
 window.showMoreInCategory = showMoreInCategory;
 window.openBriefATL = openBriefATL;
+
+// LinkedIn Post Generator
+window.openLinkedInPost = openLinkedInPost;
+window.closeLinkedInPost = closeLinkedInPost;
+window.generateLinkedInPost = generateLinkedInPost;
+window.selectLinkedInTone = selectLinkedInTone;
+window.copyLinkedInPost = copyLinkedInPost;

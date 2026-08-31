@@ -183,6 +183,7 @@
 
                 <div class="export-actions">
                     <button class="btn btn-secondary" onclick="exportBrief()">📤 Export Brief</button>
+                    <button class="btn btn-secondary" onclick="openLinkedInPost()">💼 LinkedIn</button>
                     <button class="btn btn-primary" onclick="openGTMDigest()">📧 GTM Digest</button>
                 </div>
             </div>
@@ -591,6 +592,33 @@
                     <button class="btn btn-danger" onclick="deleteCurrentSource()" id="delete-source-btn" style="display:none;">Delete</button>
                     <button class="btn btn-secondary" onclick="closeSourceEditor()">Cancel</button>
                     <button class="btn btn-primary" onclick="saveSource()">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- LINKEDIN POST MODAL -->
+        <div id="linkedin-post-modal" class="modal hidden">
+            <div class="modal-backdrop" onclick="closeLinkedInPost()"></div>
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h2>💼 #SignalToNoiseAPAC Post</h2>
+                    <button class="modal-close" onclick="closeLinkedInPost()">×</button>
+                </div>
+                <div class="modal-body" id="linkedin-post-body">
+                    <div class="linkedin-tone-row">
+                        <span class="linkedin-tone-label">Tone</span>
+                        <div class="linkedin-tone-btns">
+                            <button class="linkedin-tone-btn active" data-tone="thought-leader" onclick="selectLinkedInTone('thought-leader')">Thought Leader</button>
+                            <button class="linkedin-tone-btn" data-tone="practitioner" onclick="selectLinkedInTone('practitioner')">Practitioner</button>
+                            <button class="linkedin-tone-btn" data-tone="provocateur" onclick="selectLinkedInTone('provocateur')">Provocateur</button>
+                        </div>
+                    </div>
+                    <div id="linkedin-post-output"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeLinkedInPost()">Close</button>
+                    <button class="btn btn-secondary" id="linkedin-regenerate-btn" onclick="generateLinkedInPost(true)" style="display:none">↻ Regenerate</button>
+                    <button class="btn btn-primary" id="linkedin-copy-btn" onclick="copyLinkedInPost()" style="display:none">📋 Copy Post</button>
                 </div>
             </div>
         </div>
