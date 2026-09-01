@@ -10808,7 +10808,9 @@ async function generateLinkedInPost(force = false) {
         'provocateur':    `Tone: Provocateur with a contrarian take. Open with a statement most people disagree with or haven't considered. Challenge a prevailing narrative in AI/cloud/enterprise tech. Back it up with a specific observation. End with a question that invites debate.`
     }[_linkedInTone];
 
-    const prompt = `You are drafting a LinkedIn post for the IBM APAC Field CTO who publishes under the hashtag #SignalToNoiseAPAC. His posts cut through vendor noise to deliver genuine strategic insight for enterprise technology leaders across Asia Pacific.
+    const prompt = `You are drafting a LinkedIn post for a senior enterprise technology leader in Asia Pacific who publishes under the hashtag #SignalToNoiseAPAC. This person engages deeply with enterprise CIOs, CTOs, and business leaders across the region. The goal is to build credibility and spark genuine conversation — not to promote products or vendors.
+
+These posts are insightful, thought-provoking, and grounded in the real technology and business challenges enterprises are navigating. They surface the strategic tensions, decision points, and emerging patterns that matter to senior leaders. The topics naturally align with areas like AI governance, hybrid cloud strategy, data architecture, enterprise security, and digital transformation — explored through the lens of ideas and outcomes, not vendor capabilities. The author has a strong, differentiated point of view on these topics and writes to engage peers, not to broadcast.
 
 DATE: ${date}
 
@@ -10827,7 +10829,9 @@ POST REQUIREMENTS:
 - Length: 150–220 words (LinkedIn optimal engagement zone)
 - Structure: Hook (1–2 lines) → Insight or observation (3–5 lines) → "So what?" implication for APAC enterprise leaders (2–3 lines) → Closing question or call to reflection (1 line)
 - Must feel like a person wrote it, not a press release
-- Reference at least one specific technology, company, or regulatory/market development from today's signals
+- Focus on the idea, the challenge, or the strategic question — NOT on any specific vendor or product; do NOT name any technology companies by name; refer to vendors generically if needed (e.g. "hyperscalers", "AI platform vendors", "cloud providers")
+- Ground the post in a specific technology or business challenge drawn from today's signals — make the insight concrete, not generic
+- The topics should naturally resonate with themes around AI at scale, data trust, hybrid infrastructure, open ecosystems, enterprise security, or governance — without framing these as any company's agenda
 - APAC context is important — name at least one market (ANZ, ASEAN, India, Korea, Greater China) where relevant
 - End with exactly these two hashtags on their own line: #SignalToNoiseAPAC #IBMAPAC
 - Do NOT use bullet points or numbered lists — flowing paragraphs only
