@@ -7958,11 +7958,20 @@ async function renderExecutiveSummary(forceRefresh = false) {
         }
     }
     
-    // Prepare article data for synthesis
-    const topArticles = todayArticles
-        .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
-        .slice(0, 15);
-    
+    // Prepare article data for synthesis.
+    // Take top 20 by relevance, then guarantee up to 5 client-matched articles are included
+    // even if they scored below the top-20 cut (e.g. a Tier 1 client signal from a lower-
+    // credibility source). This mirrors the guaranteed-slot logic in Today's Signals.
+    const byRelevance = todayArticles
+        .slice() // avoid mutating the original array
+        .sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+    const topArticles = byRelevance.slice(0, 20);
+    const topIds = new Set(topArticles.map(a => a.id));
+    const clientGuaranteed = byRelevance
+        .filter(a => a.matchedClients && a.matchedClients.length > 0 && !topIds.has(a.id))
+        .slice(0, 5);
+    const synthesisArticles = [...topArticles, ...clientGuaranteed]; // max 25
+
     // Calculate weekly trends
     const weeklyTrends = calculateWeeklyTrends(topArticles);
     
@@ -7979,7 +7988,7 @@ async function renderExecutiveSummary(forceRefresh = false) {
     content.querySelector('.executive-summary-intro')?.classList.remove('hidden');
     content.querySelector('.executive-summary-intro').textContent = 'Synthesizing executive insights...';
     
-    const articleSummaries = topArticles.slice(0, 12).map((a, i) => {
+    const articleSummaries = synthesisArticles.map((a, i) => {
         const isTier3 = a.intelligence?.tier === 3 && a.intelligence?.conversationDoor;
         if (isTier3) {
             return `[${i + 1}] "${a.title}" (${a.source || a.sourceName})\nDoor: ${a.intelligence.conversationDoor} | Intel: ${(a.intelligence.reasoning || '').substring(0, 100)}\nSummary: ${(a.summary || '').substring(0, 150)}`;
@@ -8071,11 +8080,11 @@ RULES:
             if (typeof repairTruncatedJson === 'function') jsonStr = repairTruncatedJson(jsonStr);
             const synthesized = JSON.parse(jsonStr);
             
-            // Map sourceIndices to actual article data
+            // Map sourceIndices to actual article data (index into synthesisArticles, 1-based)
             const insights = synthesized.map(insight => ({
                 ...insight,
                 sources: (insight.sourceIndices || []).map(idx => {
-                    const article = topArticles[idx - 1];
+                    const article = synthesisArticles[idx - 1];
                     if (!article) return null;
                     return {
                         title: article.title,
