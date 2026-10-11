@@ -225,6 +225,7 @@ class SignalDB {
 // NOTE: feed2json.org removed — works from curl but lacks CORS headers, browser blocks it.
 const CORS_PROXIES = [
     { url: 'https://cors-anywhere.fly.dev/', format: 'path-raw' },
+    { url: 'https://corsmirror.com/v1?url=',  format: 'query-encoded' },
 ];
 
 // Feed cache to avoid refetching within 2 minutes (short enough to stay fresh)
@@ -1859,7 +1860,7 @@ class SignalApp {
                     try {
                         const fullUrl = format === 'path-raw'
                             ? proxyUrl + source.url
-                            : proxyUrl + encodeURIComponent(source.url);
+                            : proxyUrl + encodeURIComponent(source.url); // covers 'query-encoded' and 'feed2json'
                         const response = await fetch(fullUrl, {
                             headers: { 'Accept': 'application/rss+xml, application/xml, text/xml, application/json' },
                             signal: sharedController.signal

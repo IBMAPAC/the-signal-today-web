@@ -90,7 +90,7 @@ const DEFAULT_SOURCES = [
     },
 
     // ============================================
-    // 🛡️ CYBERSECURITY & SOVEREIGNTY (7 sources — replaced Computer Weekly Security + Cyber Security Hub with Krebs + CISA + CSA Singapore)
+    // 🛡️ CYBERSECURITY & SOVEREIGNTY (9 sources — added OAIC Australia + MediaNama India for APAC regulatory coverage)
     // ============================================
     {
         name: "NIST Cybersecurity",
@@ -153,6 +153,24 @@ const DEFAULT_SOURCES = [
         priority: 2,
         credibilityScore: 0.92,
         digestType: "daily",
+        enabled: true
+    },
+    {
+        name: "OAIC Australia",
+        url: "https://www.oaic.gov.au/site-configuration/rss",
+        category: "Cybersecurity & Sovereignty",
+        priority: 1,
+        credibilityScore: 0.93,
+        digestType: "both",
+        enabled: true
+    },
+    {
+        name: "MediaNama",
+        url: "https://medianama.com/feed/",
+        category: "Cybersecurity & Sovereignty",
+        priority: 1,
+        credibilityScore: 0.86,
+        digestType: "both",
         enabled: true
     },
 
