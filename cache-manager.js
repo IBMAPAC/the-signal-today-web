@@ -64,7 +64,9 @@ class CacheManager {
                 console.log('IndexedDB initialized successfully');
                 
                 // Clean up expired entries on startup
-                this.cleanupExpired();
+                this.cleanupExpired().catch(err => {
+                    console.warn('CacheManager: cleanupExpired error (non-fatal):', err?.message || err);
+                });
                 
                 resolve(this.db);
             };

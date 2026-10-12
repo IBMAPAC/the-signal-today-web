@@ -11,6 +11,59 @@
     <meta name="description" content="Field CTO Intelligence Briefing - IBM Asia Pacific">
     <meta name="format-detection" content="telephone=no">
     <title>The Signal Today</title>
+    <!-- ═══════════════════════════════════════════════════════════
+         DIAGNOSTIC: Unhandled Rejection Tracer — REMOVE AFTER FIX
+         Captures exact source of "Access to storage is not allowed"
+         ═══════════════════════════════════════════════════════════ -->
+    <script>
+    (function() {
+        var _rejections = [];
+        window.addEventListener('unhandledrejection', function(e) {
+            var reason = e.reason;
+            var msg    = (reason && reason.message) ? reason.message : String(reason);
+            var stack  = (reason && reason.stack)   ? reason.stack   : '(no stack)';
+            var entry  = { msg: msg, stack: stack, ts: new Date().toISOString() };
+            _rejections.push(entry);
+
+            // 1. Detailed console group — always visible regardless of "group similar"
+            console.group('%c🔴 UNHANDLED REJECTION #' + _rejections.length, 'color:red;font-weight:bold');
+            console.error('Message :', msg);
+            console.error('Stack   :', stack);
+            console.error('Full obj:', reason);
+            console.groupEnd();
+
+            // 2. On-screen banner so you can see it without DevTools open
+            var banner = document.getElementById('_diag_banner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = '_diag_banner';
+                banner.style.cssText = [
+                    'position:fixed','top:0','left:0','right:0','z-index:999999',
+                    'background:#b91c1c','color:#fff','font:13px/1.5 monospace',
+                    'padding:8px 12px','white-space:pre-wrap','word-break:break-all',
+                    'max-height:40vh','overflow-y:auto','border-bottom:2px solid #7f1d1d'
+                ].join(';');
+                banner.innerHTML = '<strong>🔴 DIAGNOSTIC — Unhandled Rejections (remove after fix)</strong>\n';
+                document.body ? document.body.prepend(banner) :
+                    document.addEventListener('DOMContentLoaded', function() { document.body.prepend(banner); });
+            }
+            var line = document.createElement('div');
+            line.style.cssText = 'border-top:1px solid rgba(255,255,255,0.3);margin-top:4px;padding-top:4px';
+            line.textContent = '#' + _rejections.length + ' [' + entry.ts.slice(11,23) + '] ' + msg + '\n' + stack;
+            banner.appendChild(line);
+        });
+
+        // Also catch synchronous errors for completeness
+        window.addEventListener('error', function(e) {
+            console.group('%c🟠 UNCAUGHT ERROR', 'color:orange;font-weight:bold');
+            console.error('Message :', e.message);
+            console.error('Source  :', e.filename + ':' + e.lineno + ':' + e.colno);
+            console.error('Stack   :', e.error && e.error.stack);
+            console.groupEnd();
+        });
+    })();
+    </script>
+    <!-- ═══════════════════════════════════════════════════════════ -->
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
