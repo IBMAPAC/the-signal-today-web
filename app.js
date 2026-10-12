@@ -304,9 +304,15 @@ let tokenUsageStats = {
     estimatedCost: 0
 };
 
+// Safe localStorage accessor — returns null instead of throwing in restricted contexts
+// (incognito with strict cookie blocking, Safari ITP, extension sandboxes)
+function _safeStorageGet(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+}
+
 // Load persisted stats
 try {
-    const saved = localStorage.getItem('signal_token_stats');
+    const saved = _safeStorageGet('signal_token_stats');
     if (saved) {
         const parsed = JSON.parse(saved);
         // Only use if from today
@@ -331,7 +337,7 @@ let cachePerformanceStats = {
 
 // Load persisted cache stats
 try {
-    const saved = localStorage.getItem('signal_cache_stats');
+    const saved = _safeStorageGet('signal_cache_stats');
     if (saved) {
         const parsed = JSON.parse(saved);
         // Only use if from today
@@ -1148,7 +1154,7 @@ class SignalApp {
         this.intelligenceEngine = null;
         this.intelligenceStats = null;
         
-        this.init();
+        this.init().catch(err => console.warn('SignalApp init error (non-fatal):', err.message));
     }
 
     async init() {
