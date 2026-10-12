@@ -35,7 +35,9 @@ class CacheManager {
         // TTL: 7 days in milliseconds
         this.TTL = 7 * 24 * 60 * 60 * 1000;
         
-        this.initDB();
+        this.initDB().catch(err => {
+            console.warn('CacheManager: IndexedDB unavailable, falling back to memory cache:', err?.message || err);
+        });
     }
     
     /**
