@@ -24,17 +24,7 @@ class SignalDB {
     // Open (or create) the database and run migrations
     open() {
         return new Promise((resolve, reject) => {
-            // DEBUG — use console.error so it shows at Default log level (not Verbose)
-            console.error('[DEBUG 1/4] SignalDB.open() entered. typeof indexedDB =', typeof indexedDB);
-            let req;
-            try {
-                req = indexedDB.open(SignalDB.DB_NAME, SignalDB.DB_VERSION);
-                console.error('[DEBUG 2/4] indexedDB.open() did NOT throw. req =', req);
-            } catch (e) {
-                console.error('[DEBUG 2/4] indexedDB.open() threw synchronously ← THIS IS THE ERROR SOURCE', e);
-                resolve(this);
-                return;
-            }
+            const req = indexedDB.open(SignalDB.DB_NAME, SignalDB.DB_VERSION);
 
             req.onupgradeneeded = (e) => {
                 const db = e.target.result;
@@ -55,7 +45,6 @@ class SignalDB {
             };
 
             req.onsuccess = (e) => {
-                console.error('[DEBUG 3/4] SignalDB.open() onsuccess — IDB opened OK');
                 this._db = e.target.result;
                 // Purge stale records on every open (non-blocking)
                 this._purgeOldArticles();
@@ -64,7 +53,7 @@ class SignalDB {
             };
 
             req.onerror = (e) => {
-                console.error('[DEBUG 3/4] SignalDB.open() onerror ← THIS IS THE ERROR SOURCE', e.target.error);
+                console.warn('SignalDB: failed to open IndexedDB', e.target.error);
                 resolve(this); // Resolve (not reject) so app still works without IDB
             };
         });
@@ -216,22 +205,13 @@ class SignalDB {
 
     // One-time migration: import articles from localStorage into IDB, then remove the key
     async migrateFromLocalStorage() {
-        // DEBUG: confirm localStorage is accessible before reading
-        console.debug('[DEBUG] migrateFromLocalStorage() called');
-        let raw;
-        try {
-            raw = localStorage.getItem('signal_articles');
-            console.debug('[DEBUG] migrateFromLocalStorage() localStorage.getItem succeeded, raw length:', raw?.length ?? 0);
-        } catch (e) {
-            console.error('[DEBUG] migrateFromLocalStorage() localStorage.getItem threw:', e, e.stack);
-            return 0;
-        }
+        const raw = localStorage.getItem('signal_articles');
         if (!raw) return 0;
         try {
             const articles = JSON.parse(raw);
             if (Array.isArray(articles) && articles.length > 0) {
                 await this.saveArticles(articles);
-                try { localStorage.removeItem('signal_articles'); } catch (e) { /* restricted */ }
+                localStorage.removeItem('signal_articles');
                 console.log(`SignalDB: migrated ${articles.length} articles from localStorage → IDB`);
                 return articles.length;
             }
@@ -425,14 +405,7 @@ function getCacheHitRate(section = null) {
  * Get current AI provider and API keys from settings
  */
 function getAIProviderSettings() {
-    console.error('[DEBUG 4/4] getAIProviderSettings() — about to access localStorage');
-    let provider;
-    try {
-        provider = localStorage.getItem('signal_ai_provider') || AI_PROVIDERS.CLAUDE;
-    } catch (e) {
-        console.error('[DEBUG 4/4] localStorage.getItem threw in getAIProviderSettings ← THIS IS THE ERROR SOURCE', e);
-        return { provider: AI_PROVIDERS.CLAUDE, apiKeys: { claude: '', openai: '' } };
-    }
+    let provider = localStorage.getItem('signal_ai_provider') || AI_PROVIDERS.CLAUDE;
     
     // Migration: Auto-switch Gemini users to Claude
     if (provider === 'gemini') {
@@ -1279,15 +1252,8 @@ class SignalApp {
     // ==========================================
 
     loadFromStorage() {
-        // DEBUG
-        console.error('[DEBUG 4/4] loadFromStorage() — about to access localStorage');
-        let savedSources;
-        try {
-            savedSources = localStorage.getItem(STORAGE_KEYS.SOURCES);
-        } catch (e) {
-            console.error('[DEBUG 4/4] localStorage.getItem threw in loadFromStorage ← THIS IS THE ERROR SOURCE', e);
-            return;
-        }
+        // Load sources
+        const savedSources = localStorage.getItem(STORAGE_KEYS.SOURCES);
         this.sources = savedSources ? JSON.parse(savedSources) : [...DEFAULT_SOURCES];
 
         // Load industries
