@@ -51,7 +51,8 @@ class IncrementalTracker {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(this.dbName, this.dbVersion);
             
-            request.onerror = () => {
+            request.onerror = (e) => {
+                e.preventDefault(); // Stop IDB error bubbling to window as a separate error event
                 console.error('Failed to open IncrementalTracker DB:', request.error);
                 reject(request.error);
             };

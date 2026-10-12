@@ -53,7 +53,8 @@ class CacheManager {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(this.dbName, this.version);
             
-            request.onerror = () => {
+            request.onerror = (e) => {
+                e.preventDefault(); // Stop IDB error bubbling to window as a separate error event
                 console.error('IndexedDB error:', request.error);
                 this.stats.errors++;
                 reject(request.error);
