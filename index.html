@@ -72,6 +72,18 @@
                     </div>
                 </section>
 
+                <!-- AGENTS PANEL - Counter-Positioning + Relationship Pulse + ATL Brief status -->
+                <section id="agents-section" class="card agents-card hidden">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('agents')">
+                        <h2>🤖 Agents</h2>
+                        <span id="agents-count" class="badge badge-purple">0</span>
+                        <span class="chevron collapsed">▼</span>
+                    </div>
+                    <div id="agents-content" class="card-body collapsed">
+                        <div id="agents-list"></div>
+                    </div>
+                </section>
+
                 <!-- CLIENT RISK - Accounts with elevated threat signals (collapsible, collapsed) -->
                 <section id="client-risk-section" class="card client-risk-card hidden">
                     <div class="card-header card-header--collapsible" onclick="toggleSection('client-risk')">
@@ -668,6 +680,7 @@
     <script src="sources.js"></script>
     <script src="intelligence-engine.js"></script>
     <script src="hybrid-classifier.js"></script>
+    <script src="agents.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
