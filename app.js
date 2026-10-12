@@ -84,10 +84,12 @@ class SignalDB {
         const cutoff = new Date(Date.now() - SignalDB.ARTICLE_TTL_DAYS * 86400000).toISOString();
         const idx = store.index('publishedDate');
         const range = IDBKeyRange.upperBound(cutoff);
-        idx.openCursor(range).onsuccess = (e) => {
+        const req = idx.openCursor(range);
+        req.onsuccess = (e) => {
             const cursor = e.target.result;
             if (cursor) { cursor.delete(); cursor.continue(); }
         };
+        req.onerror = (e) => { e.preventDefault(); }; // suppress bubble to window
     }
 
     _purgeOldDigests() {
@@ -96,10 +98,12 @@ class SignalDB {
         const cutoffDate = new Date(Date.now() - SignalDB.DIGEST_TTL_DAYS * 86400000);
         const cutoffKey = cutoffDate.toISOString().slice(0, 10); // YYYY-MM-DD
         const range = IDBKeyRange.upperBound(cutoffKey);
-        store.openCursor(range).onsuccess = (e) => {
+        const req = store.openCursor(range);
+        req.onsuccess = (e) => {
             const cursor = e.target.result;
             if (cursor) { cursor.delete(); cursor.continue(); }
         };
+        req.onerror = (e) => { e.preventDefault(); }; // suppress bubble to window
     }
 
     // Close the database connection
