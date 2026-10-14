@@ -6742,7 +6742,13 @@ function renderClientTable() {
     
     let filtered = app.clients.filter(c => {
         if (app.clientManagerMarket !== 'ALL' && c.market !== app.clientManagerMarket) return false;
-        if (searchTerm && !c.name.toLowerCase().includes(searchTerm)) return false;
+        if (searchTerm) {
+            const matchName = (c.name || '').toLowerCase().includes(searchTerm);
+            const matchAtl = (c.atl || '').toLowerCase().includes(searchTerm);
+            const matchIndustry = (c.industry || '').toLowerCase().includes(searchTerm);
+            const matchAliases = (c.aliases || []).some(a => a.toLowerCase().includes(searchTerm));
+            if (!matchName && !matchAtl && !matchIndustry && !matchAliases) return false;
+        }
         return true;
     });
     
@@ -6753,10 +6759,16 @@ function renderClientTable() {
         const originalIdx = app.clients.indexOf(client);
         const lastSignal = client.lastMentioned ? formatRelativeDate(new Date(client.lastMentioned)) : '—';
         const isRecent = client.lastMentioned && (Date.now() - new Date(client.lastMentioned).getTime()) < 7 * 24 * 60 * 60 * 1000;
+        const aliasesHtml = (client.aliases && client.aliases.length > 0)
+            ? `<div class="client-aliases-subtext" style="font-size: 0.72rem; color: var(--cds-text-secondary); margin-top: 2px; line-height: 1.2;">${escapeHtml(client.aliases.join(' · '))}</div>`
+            : '';
         return `
             <tr data-idx="${originalIdx}">
                 <td class="col-checkbox"><input type="checkbox" onchange="toggleClientSelection(${originalIdx})" ${app.selectedClients.has(originalIdx) ? 'checked' : ''}></td>
-                <td class="client-name-cell">${escapeHtml(client.name)}</td>
+                <td class="client-name-cell">
+                    <div style="font-weight: 500;">${escapeHtml(client.name)}</div>
+                    ${aliasesHtml}
+                </td>
                 <td>${client.market || '—'}</td>
                 <td>${client.industry || '—'}</td>
                 <td><span class="client-tier-badge tier-${client.tier}">Tier ${client.tier}</span></td>
