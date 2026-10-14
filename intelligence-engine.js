@@ -70,7 +70,7 @@ class HybridIntelligenceEngine {
         this.apiKey = apiKey;
         this.provider = provider;
         this.providerConfig = providerConfig || this.getDefaultProviderConfig();
-        this.embeddingCache = new Map();
+        this.entityExtractionCache = new Map();
         this.analysisCache = new Map(); // Legacy in-memory cache
         
         // PHASE 1: Initialize persistent cache manager
@@ -938,7 +938,7 @@ Return a JSON array with ${articles.length} objects, one for each article in ord
             const truncatedSummary = this._truncateText(article.summary, 500);
 
             // PHASE 2 TASK 2.3: Use prompt caching
-            const systemPrompt = this.getSystemPrompt();
+            const systemPrompt = this.getSystemPrompt(clients);
             const userContent = this.buildUserContent(article, clientList, contextBlock, truncatedSummary, clients);
             
             const requestBody = this.formatRequestWithCaching(
@@ -1401,8 +1401,8 @@ Return a JSON array with ${articles.length} objects, one for each article in ord
     extractEntities(text, clients) {
         // PERFORMANCE OPTIMIZATION: Cache entity extraction results
         const textHash = text.substring(0, 100); // Use first 100 chars as hash
-        if (this.embeddingCache.has(textHash)) {
-            return this.embeddingCache.get(textHash);
+        if (this.entityExtractionCache.has(textHash)) {
+            return this.entityExtractionCache.get(textHash);
         }
         
         // PHASE 3 TASK 3.4: Use EntityRecognizer if available
@@ -1453,10 +1453,10 @@ Return a JSON array with ${articles.length} objects, one for each article in ord
             });
             
             // Cache and return
-            this.embeddingCache.set(textHash, entities);
-            if (this.embeddingCache.size > 500) {
-                const firstKey = this.embeddingCache.keys().next().value;
-                this.embeddingCache.delete(firstKey);
+            this.entityExtractionCache.set(textHash, entities);
+            if (this.entityExtractionCache.size > 500) {
+                const firstKey = this.entityExtractionCache.keys().next().value;
+                this.entityExtractionCache.delete(firstKey);
             }
             
             return entities;
@@ -1524,10 +1524,10 @@ Return a JSON array with ${articles.length} objects, one for each article in ord
         }
 
         // Cache and return
-        this.embeddingCache.set(textHash, entities);
-        if (this.embeddingCache.size > 500) {
-            const firstKey = this.embeddingCache.keys().next().value;
-            this.embeddingCache.delete(firstKey);
+        this.entityExtractionCache.set(textHash, entities);
+        if (this.entityExtractionCache.size > 500) {
+            const firstKey = this.entityExtractionCache.keys().next().value;
+            this.entityExtractionCache.delete(firstKey);
         }
 
         return entities;
@@ -1738,8 +1738,13 @@ Return a JSON array with ${articles.length} objects, one for each article in ord
      * 
      * @returns {string} Static system prompt (~1500 tokens)
      */
-    getSystemPrompt() {
-        return `You are the intelligence analyst for the IBM APAC Field CTO who leads 115 ATLs across 343 enterprise accounts. Your role is to map every signal to the five client conversations the field runs. Lead with Why Change — the cost of standing still — not a product pitch.
+    getSystemPrompt(clients = []) {
+        const clientList = (clients && clients.length > 0) ? clients : (typeof app !== 'undefined' && app.clients ? app.clients : []);
+        const accountsCount = clientList.length;
+        const uniqueATLs = new Set(clientList.map(c => c.atl?.trim()).filter(Boolean)).size;
+        const atlText = uniqueATLs > 0 ? `${uniqueATLs} ATLs` : 'ATLs';
+        const accountsText = accountsCount > 0 ? `${accountsCount} enterprise accounts` : 'enterprise accounts';
+        return `You are the intelligence analyst for the IBM APAC Field CTO who leads ${atlText} across ${accountsText}. Your role is to map every signal to the five client conversations the field runs. Lead with Why Change — the cost of standing still — not a product pitch.
 
 THE FIVE CLIENT CONVERSATIONS:
 - Conv 1 · Govern Your Data (watsonx.data + Confluent): data platform sprawl, residency/localisation exposure, AI ambition stalled on data. Unconsidered need: governed access is control over where data lives, not just a platform. Why change: under 1% of enterprise data is AI-ready.
@@ -1987,7 +1992,7 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
         // Cached tokens get 90% discount after first use
         // Savings: ~$0.00027 per article (90% of $0.0003)
         
-        const systemPrompt = this.getSystemPrompt();
+        const systemPrompt = this.getSystemPrompt(clients);
         const userContent = this.buildUserContent(article, clientList, contextBlock, truncatedSummary, clients);
 
         // Get provider configuration (reuse providerConfig from above)
@@ -2353,7 +2358,7 @@ Analyze this article using the framework above. Remember: ONLY suggest clients t
     async clearAllCaches() {
         // Clear memory cache
         this.analysisCache.clear();
-        this.embeddingCache.clear();
+        this.entityExtractionCache.clear();
         
         // Clear persistent cache
         if (this.cacheManager) {

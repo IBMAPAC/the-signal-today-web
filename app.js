@@ -234,7 +234,7 @@ const CORS_PROXIES = [
 
 // Feed cache to avoid refetching within 2 minutes (short enough to stay fresh)
 const feedCache = new Map();
-const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
+const FEED_CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 
 // PHASE 1: Staggered cache durations for cost optimization
 // Different content types have different update frequencies
@@ -941,26 +941,6 @@ async function callAIInternal(taskType, prompt, maxTokens, apiKey, provider) {
 }
 
 /**
- * Legacy function for backward compatibility with Claude-only implementation.
- *
- * @deprecated Since v2.0 - Use callAI() instead with AI_PROVIDERS.CLAUDE
- * @param {string} taskType - The type of AI task (e.g., 'SYNTHESIS', 'STRATEGIC_ANALYSIS')
- * @param {string} prompt - The prompt to send to Claude
- * @param {number} maxTokens - Maximum tokens for the response
- * @param {string} apiKey - Claude API key
- * @returns {Promise<{text: string, usage: {input_tokens: number, output_tokens: number}}>}
- * @example
- * // Old way (deprecated)
- * const result = await callClaudeAPI('SYNTHESIS', prompt, 800, apiKey);
- *
- * // New way (recommended)
- * const result = await callAI('SYNTHESIS', prompt, 800, apiKey, AI_PROVIDERS.CLAUDE);
- */
-async function callClaudeAPI(taskType, prompt, maxTokens, apiKey) {
-    return callAI(taskType, prompt, maxTokens, apiKey, AI_PROVIDERS.CLAUDE);
-}
-
-/**
  * Compress article data for prompts - reduces input tokens by ~40%
  */
 function compressArticleForPrompt(article, includeFields = ['title', 'summary', 'source']) {
@@ -1095,7 +1075,6 @@ const STORAGE_KEYS = {
     SOURCES: 'signal_sources',
     INDUSTRIES: 'signal_industries',
     CLIENTS: 'signal_clients',
-    ARTICLES: 'signal_articles',
     DIGEST: 'signal_digest',
     SETTINGS: 'signal_settings',
     TODAYS_SIGNALS: 'signal_todays_signals_cache',
@@ -1314,6 +1293,34 @@ class SignalApp {
         // IndexedDB: rolling article corpus + digest history (fire-and-forget)
         this.db.saveArticles(this.articles);
         if (this.digest) this.db.saveDigest(this.digest);
+    }
+
+    getClientStats() {
+        const clients = this.clients || [];
+        const accountsCount = clients.length;
+        const uniqueATLs = new Set(clients.map(c => c.atl?.trim()).filter(Boolean)).size;
+        const atlText = uniqueATLs > 0 ? `${uniqueATLs} ATLs` : 'ATLs';
+        const accountsText = accountsCount > 0 ? `${accountsCount} Accounts` : 'Accounts';
+        const tier1Count = clients.filter(c => c.tier === 1).length;
+        const tier2Count = clients.filter(c => c.tier === 2).length;
+        const tier3Count = clients.filter(c => c.tier === 3).length;
+        const activeMarkets = [...new Set(clients.map(c => c.market).filter(Boolean))];
+        const marketsCount = activeMarkets.length > 0 ? activeMarkets.length : 5;
+        const marketsList = activeMarkets.length > 0 ? activeMarkets.join(', ') : 'ANZ, ASEAN, GCG, ISA, KOREA';
+        const marketsText = `${marketsCount} Markets (${marketsList})`;
+        return {
+            accountsCount,
+            uniqueATLs,
+            atlText,
+            accountsText,
+            tier1Count,
+            tier2Count,
+            tier3Count,
+            activeMarkets,
+            marketsCount,
+            marketsList,
+            marketsText
+        };
     }
 
     // ==========================================
@@ -1853,7 +1860,7 @@ class SignalApp {
         // Check cache first
         const cacheKey = source.url;
         const cached = feedCache.get(cacheKey);
-        if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
+        if (cached && (Date.now() - cached.timestamp < FEED_CACHE_DURATION)) {
             return cached.articles;
         }
         
@@ -3568,12 +3575,13 @@ Return ONLY valid JSON, no markdown fences:
             : 'a Tier 1 client';
         const sampleClient = tier1Clients.length > 0 ? tier1Clients[0] : 'a watchlist client';
 
+        const stats = this.getClientStats();
         const prompt = `You are the intelligence briefer for the IBM APAC Field CTO.
 ${contextBlock}
 YOUR JOB IS NOT TO SUMMARIZE NEWS. Map today's signals to the five client conversations the field runs. Lead with Why Change — the cost of standing still — not a product pitch.
 
 ROLE CONTEXT:
-- You lead 115 ATLs across 343 enterprise accounts in Asia Pacific (excluding Japan)
+- You lead ${stats.atlText} across ${stats.accountsCount} enterprise accounts in Asia Pacific (excluding Japan)
 - Joint cockpit model: TSL + ATL together at C-suite altitude
 - Priority industries: Financial Services, Government, Manufacturing, Energy, Retail
 - Competitors: Microsoft Azure, AWS, Google Cloud, Salesforce, SAP, Oracle, ServiceNow, Databricks, Snowflake
@@ -4952,10 +4960,11 @@ Return ONLY valid JSON:
         const lines = [];
         const date = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         
+        const stats = this.getClientStats();
         lines.push(`# The Signal Today — Field CTO Brief`);
         lines.push(`## ${date}`);
         lines.push('');
-        lines.push('**IBM APAC** | 115 ATLs | 343 Accounts | 5 Markets (ANZ, ASEAN, GCG, ISA, KOREA)');
+        lines.push(`**IBM APAC** | ${stats.atlText} | ${stats.accountsText} | ${stats.marketsText}`);
         lines.push('');
         lines.push('---');
         lines.push('');
@@ -5421,13 +5430,14 @@ Return ONLY valid JSON:
                 }
             } catch (e) { /* ignore */ }
             
+            const stats = this.getClientStats();
             const lines = [
                 `Subject: IBM APAC Field CTO — Weekly Intelligence Brief | ${date}`,
                 '',
                 '================================================================================',
                 'FIELD CTO CONTEXT',
                 '================================================================================',
-                '115 ATLs | 343 Accounts | 5 Markets (ANZ, ASEAN, GCG, ISA, KOREA)',
+                `${stats.atlText} | ${stats.accountsText} | ${stats.marketsText}`,
                 'Five Conversations: Govern Data · Connect & Automate · Trust Identity · Run Anywhere · Build & Modernise',
                 '',
                 '================================================================================',
@@ -5472,11 +5482,12 @@ Return ONLY valid JSON:
             return;
         }
 
-        const prompt = `Write a weekly intelligence email FROM the IBM APAC Field CTO TO 115 ATLs across 5 APAC markets.
+        const stats = this.getClientStats();
+        const prompt = `Write a weekly intelligence email FROM the IBM APAC Field CTO TO ${stats.atlText} across ${stats.marketsCount} APAC markets.
 
 CONTEXT:
-- You ARE the Field CTO leading 115 ATLs engaging 343 enterprise accounts
-- Markets: ANZ, ASEAN, GCG, ISA, KOREA
+- You ARE the Field CTO leading ${stats.atlText} engaging ${stats.accountsCount} enterprise accounts
+- Markets: ${stats.marketsList}
 - Each ATL manages 2-3 clients in "cockpit model" with TSL
 - Goal: Earn "Client CTO" posture, increase IBM share
 - Five Conversations framework: map every signal to the relevant conversation door
@@ -5857,11 +5868,6 @@ let currentEditingSourceIndex = null;
 let currentSourceFilter = 'all';
 let selectedPriority = 2;
 let selectedDigestType = 'daily';
-
-function switchDigestTab(tab) {
-    // Legacy function - tabs removed in v2 redesign
-    // Kept for backwards compatibility in case any code calls it
-}
 
 // ==========================================
 // SETTINGS TABS
@@ -6719,8 +6725,9 @@ function updateClientManagerCounts() {
     // Update portfolio stats in header
     const statsEl = document.getElementById('portfolio-stats');
     if (statsEl) {
-        const tier1 = app.clients.filter(c => c.tier === 1).length;
-        statsEl.textContent = `${counts.ALL} clients (${tier1} Tier 1)`;
+        const stats = app.getClientStats();
+        const atlPart = stats.uniqueATLs > 0 ? ` · ${stats.uniqueATLs} ATLs` : '';
+        statsEl.textContent = `${stats.accountsCount} clients (${stats.tier1Count} Tier 1)${atlPart}`;
     }
 }
 
@@ -6951,6 +6958,36 @@ function handleCSVFile(event) {
     reader.readAsText(file);
 }
 
+function parseCSVLine(line) {
+    const result = [];
+    let cur = '', inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+                cur += '"';
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (c === ',' && !inQuotes) {
+            result.push(cur.trim());
+            cur = '';
+        } else {
+            cur += c;
+        }
+    }
+    result.push(cur.trim());
+    return result;
+}
+
+function escapeCSVField(val) {
+    const str = String(val ?? '');
+    return (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r'))
+        ? `"${str.replace(/"/g, '""')}"`
+        : str;
+}
+
 function processCSVImport() {
     const data = document.getElementById('csv-import-data').value.trim();
     if (!data) {
@@ -6958,27 +6995,34 @@ function processCSVImport() {
         return;
     }
     
-    const lines = data.split('\n').filter(l => l.trim());
+    const lines = data.split(/\r?\n/).filter(l => l.trim());
     let imported = 0;
     
-    lines.forEach(line => {
-        const parts = line.split(',').map(s => s.trim());
+    lines.forEach((line, idx) => {
+        const parts = parseCSVLine(line);
         if (parts.length < 2) return;
         
-        const [name, market, country, industry, tierStr, atl] = parts;
+        const [name, market, country, industry, tierStr, atl, aliasesStr] = parts;
         if (!name || !market) return;
+        
+        // Skip CSV header row if present
+        if (idx === 0 && (name.toLowerCase() === 'name' || market.toLowerCase() === 'market')) return;
         
         // Check for duplicate
         if (app.clients.some(c => c.name.toLowerCase() === name.toLowerCase())) return;
+        
+        const tier = parseInt(tierStr);
+        const validTier = [1, 2, 3].includes(tier) ? tier : 2;
+        const aliases = aliasesStr ? aliasesStr.split(';').map(s => s.trim()).filter(Boolean) : [];
         
         app.clients.push({
             name,
             market: market.toUpperCase(),
             country: country || '',
             industry: industry || '',
-            tier: parseInt(tierStr) || 2,
+            tier: validTier,
             atl: atl || '',
-            aliases: []
+            aliases
         });
         imported++;
     });
@@ -6991,167 +7035,25 @@ function processCSVImport() {
 }
 
 function exportClientsCSV() {
-    const csv = app.clients.map(c => 
-        [c.name, c.market, c.country, c.industry, c.tier, c.atl || ''].join(',')
+    const csv = app.clients.map(c =>
+        [
+            escapeCSVField(c.name),
+            escapeCSVField(c.market),
+            escapeCSVField(c.country),
+            escapeCSVField(c.industry),
+            c.tier || 2,
+            escapeCSVField(c.atl || ''),
+            escapeCSVField((c.aliases || []).join('; '))
+        ].join(',')
     ).join('\n');
     
-    const blob = new Blob([`Name,Market,Country,Industry,Tier,ATL\n${csv}`], { type: 'text/csv' });
+    const blob = new Blob([`Name,Market,Country,Industry,Tier,ATL,Aliases\n${csv}`], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'signal-today-clients.csv';
     a.click();
     URL.revokeObjectURL(url);
-}
-
-// ==========================================
-// MARKET FILTERING (Client Radar)
-// ==========================================
-
-// Old switchMarket removed - now handled by Signal Feed switchMarket function
-
-function filterClientRadar() {
-    // Deprecated - Signal Feed now handles filtering
-    renderSignalFeed();
-}
-
-function renderClientRadar() {
-    const list = document.getElementById('client-radar-list');
-    const emptyEl = document.getElementById('client-radar-empty');
-    
-    const showTier1 = document.getElementById('filter-tier-1')?.checked ?? true;
-    const showTier2 = document.getElementById('filter-tier-2')?.checked ?? true;
-    const showTier3 = document.getElementById('filter-tier-3')?.checked ?? false;
-    
-    // Get articles with client matches
-    const clientArticles = {};
-    const allArticles = [...app.dailyArticles, ...app.articles.filter(a => {
-        const articleDate = a.date || a.publishedDate;
-        if (!articleDate) return true; // Include if no date
-        const age = Date.now() - new Date(articleDate).getTime();
-        return age < 48 * 60 * 60 * 1000; // 48 hours for better coverage
-    })];
-    
-    // Debug: check how many articles have matchedClients
-    const articlesWithClients = allArticles.filter(a => a.matchedClients && a.matchedClients.length > 0);
-    console.log(`Client Radar: ${allArticles.length} total articles, ${articlesWithClients.length} have matchedClients, ${app.clients.length} clients tracked`);
-    if (articlesWithClients.length > 0) {
-        console.log('Sample matched clients:', articlesWithClients.slice(0, 3).map(a => ({ title: a.title.substring(0, 50), clients: a.matchedClients })));
-    }
-    
-    allArticles.forEach(article => {
-        if (!article.matchedClients || article.matchedClients.length === 0) return;
-        article.matchedClients.forEach(clientName => {
-            const client = app.clients.find(c => 
-                c.name.toLowerCase() === clientName.toLowerCase() ||
-                (c.aliases || []).some(a => a.toLowerCase() === clientName.toLowerCase())
-            );
-            if (!client) return;
-            if (!clientArticles[client.name]) {
-                clientArticles[client.name] = { client, articles: [] };
-            }
-            if (!clientArticles[client.name].articles.some(a => a.id === article.id)) {
-                clientArticles[client.name].articles.push(article);
-            }
-        });
-    });
-    
-    // Filter by market and tier
-    let entries = Object.values(clientArticles).filter(({ client }) => {
-        if (app.currentMarket !== 'ALL' && client.market !== app.currentMarket) return false;
-        if (client.tier === 1 && !showTier1) return false;
-        if (client.tier === 2 && !showTier2) return false;
-        if (client.tier === 3 && !showTier3) return false;
-        return true;
-    });
-    
-    // Sort by tier then article count
-    entries.sort((a, b) => (a.client.tier - b.client.tier) || (b.articles.length - a.articles.length));
-    
-    // Update count badge
-    const countEl = document.getElementById('client-signals-count');
-    if (countEl) countEl.textContent = entries.length;
-    
-    if (entries.length === 0) {
-        list.innerHTML = '';
-        emptyEl?.classList.remove('hidden');
-        return;
-    }
-    
-    emptyEl?.classList.add('hidden');
-    
-    list.innerHTML = entries.map(({ client, articles }) => {
-        // Determine dominant signal type for client
-        const signalCounts = { risk: 0, opportunity: 0, competitive: 0, regulatory: 0, relationship: 0 };
-        articles.forEach(a => {
-            const type = a.signalType || classifySignalType(a);
-            if (signalCounts[type] !== undefined) signalCounts[type]++;
-        });
-        const dominantSignal = Object.entries(signalCounts)
-            .sort((a, b) => b[1] - a[1])
-            .filter(([_, count]) => count > 0)[0];
-        
-        const dominantType = dominantSignal ? dominantSignal[0] : 'general';
-        const dominantEmoji = {
-            'risk': '🔴',
-            'opportunity': '🟢',
-            'competitive': '⚔️',
-            'regulatory': '🛡️',
-            'relationship': '🤝',
-            'general': '📰'
-        }[dominantType];
-        
-        // Derive dominant conversation door from Tier 3 intelligence
-        const convDoorCounts = {};
-        for (const a of articles) {
-            const door = a.intelligence?.conversationDoor;
-            if (a.intelligence?.tier === 3 && door) {
-                convDoorCounts[door] = (convDoorCounts[door] || 0) + 1;
-            }
-        }
-        const dominantConvDoor = Object.keys(convDoorCounts).length > 0
-            ? Object.entries(convDoorCounts).sort((a, b) => b[1] - a[1])[0][0]
-            : null;
-        
-        return `
-        <div class="client-radar-item signal-${dominantType}">
-            <div class="client-radar-header">
-                <span class="client-radar-name">${escapeHtml(client.name)}</span>
-                <div class="client-radar-meta">
-                    <span class="client-radar-signal-type" title="${dominantType} signal">${dominantEmoji}</span>
-                    <span class="client-radar-tier tier-${client.tier}">Tier ${client.tier}</span>
-                    <span class="client-radar-industry">${client.industry || ''}</span>
-                </div>
-            </div>
-            ${dominantConvDoor ? `<div class="client-conv-door">🗣️ ${escapeHtml(dominantConvDoor)}</div>` : ''}
-            <div class="client-radar-articles">
-                ${articles.slice(0, 3).map(a => {
-                    const articleType = a.signalType || classifySignalType(a);
-                    const articleEmoji = {
-                        'risk': '🔴',
-                        'opportunity': '🟢',
-                        'competitive': '⚔️',
-                        'regulatory': '🛡️',
-                        'relationship': '🤝',
-                        'ibm': '🔵',
-                        'general': '📰'
-                    }[articleType] || '📰';
-                    
-                    return `
-                    <div class="client-radar-article">
-                        <span class="client-radar-article-signal" title="${articleType}">${articleEmoji}</span>
-                        <a class="client-radar-article-link" href="${a.url || '#'}" target="_blank">${escapeHtml(a.title)}</a>
-                        <span class="client-radar-article-source">(${escapeHtml(a.source || a.sourceName || 'Source')})</span>
-                    </div>`;
-                }).join('')}
-            </div>
-            <div class="client-radar-actions">
-                <button class="btn btn-sm btn-brief-atl" onclick="openBriefATL('${escapeHtml(client.name)}')">
-                    📤 Brief ATL
-                </button>
-            </div>
-        </div>`;
-    }).join('');
 }
 
 // ==========================================
@@ -8088,7 +7990,8 @@ async function renderExecutiveSummary(forceRefresh = false) {
         ? `\nTHIS WEEK'S CONTEXT (prioritize relevance to these meetings/deals):\n${app.settings.thisWeekContext}\n`
         : '';
 
-    const prompt = `You are the intelligence analyst for the IBM APAC Field CTO who leads 115 ATLs across 343 accounts.
+    const stats = app.getClientStats();
+    const prompt = `You are the intelligence analyst for the IBM APAC Field CTO who leads ${stats.atlText} across ${stats.accountsCount} accounts.
 
 TODAY'S TOP ARTICLES:
 ${articleSummaries}
@@ -8669,7 +8572,8 @@ async function renderTodaysSignals(forceRefresh = false) {
         }).filter(Boolean)
     ))];
     
-    const prompt = `You are the strategic intelligence briefer for the IBM APAC Field CTO who leads 115 ATLs across 343 enterprise accounts in 5 markets: ANZ, ASEAN, GCG, ISA, KOREA.
+    const stats = app.getClientStats();
+    const prompt = `You are the strategic intelligence briefer for the IBM APAC Field CTO who leads ${stats.atlText} across ${stats.accountsCount} enterprise accounts in ${stats.marketsCount} markets: ${stats.marketsList}.
 
 TODAY'S RAW SIGNALS:
 ${signalSummaries}
@@ -10351,7 +10255,8 @@ async function renderDeepReads(forceRefresh = false) {
         `[${i + 1}] "${a.title}" (${a.source})\nContent: ${a.content?.substring(0, 500) || a.summary?.substring(0, 500) || 'No content available'}`
     ).join('\n\n');
     
-    const prompt = `You are preparing a strategic reading brief for the IBM APAC Field CTO who leads 115 ATLs across 343 enterprise accounts.
+    const stats = app.getClientStats();
+    const prompt = `You are preparing a strategic reading brief for the IBM APAC Field CTO who leads ${stats.atlText} across ${stats.accountsCount} enterprise accounts.
 
 Long-form articles for strategic thinking — content for CxO conversations, board discussions, QBRs.
 

@@ -1,50 +1,49 @@
 # 📡 The Signal Today - Web Version
 
-An AI-powered intelligence briefing app designed for the **Field CTO of IBM Asia Pacific**, leading 115 ATLs across 343 accounts in 5 markets.
+An AI-powered intelligence briefing app designed for the **Field CTO of IBM Asia Pacific**, who leads ATLs across five markets. It is a static browser app with no backend: it reads RSS feeds, scores and classifies articles, and uses your own Claude or OpenAI API key to synthesise briefings.
 
-## 🧠 NEW: Hybrid Intelligence Engine
+## 🧠 Hybrid Intelligence Engine
 
-**90%+ categorization accuracy** with 3-tier progressive analysis:
+Articles are categorised in up to three tiers, escalating only when needed (`hybrid-classifier.js`, `intelligence-engine.js`):
 
-| Tier | Method | Speed | Cost | Coverage |
-|------|--------|-------|------|----------|
-| **T1** | Keyword Filter | 0ms | Free | 100% |
-| **T2** | Context Analysis | 5ms | Free | ~30% |
-| **T3** | Semantic (Claude) | 200ms | $0.0002 | ~10% |
+| Tier | Method | Cost |
+|------|--------|------|
+| **T1** | Keyword filter | Free |
+| **T2** | Context analysis | Free |
+| **T3** | Semantic analysis (Claude or OpenAI) | Per-call API cost |
 
-**Monthly Cost:** ~$1.50 for 2,400 articles/day
+- 🎯 **Categorisation**: Risk, Opportunity, Competitive, Regulatory, Information
+- ⚠️ **Threat scoring** and 💰 **opportunity scoring** (0-100)
+- 🔍 **Entity extraction**: competitors, clients, markets, industries
+- 🗣️ **Conversation door**: each signal is mapped to one of the Five Conversations (Conv 1-5, plus Conv L)
 
-### Intelligence Features
-- 🎯 **Auto-Categorization**: Risk, Opportunity, Competitive, Regulatory, Information
-- ⚠️ **Threat Scoring**: 0-100 urgency levels with pulsing alerts
-- 💰 **Opportunity Scoring**: 0-100 business value indicators
-- 🔍 **Entity Extraction**: Competitors, clients, markets, industries
-- 📊 **Real-time Stats**: Threats, opportunities, API costs in header
-- ⚙️ **Cost Controls**: Configurable monthly limits and confidence thresholds
+> The engine can also use `cache-manager.js`, `budget-manager.js`, `worker-pool.js`, `entity-recognizer.js` and `incremental-tracker.js` (persistent caching, budget limits, parallel workers, incremental analysis). These are **not loaded by `index.html`**, so they are inactive in the main app. The engine detects them at runtime and falls back gracefully. See [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md).
 
-**Documentation:**
-- [Technical Docs](INTELLIGENCE_ENGINE_DOCS.md) - Architecture and implementation
-- [User Guide](USER_GUIDE_INTELLIGENCE.md) - How to use intelligence features
-- [Test Data](test-data-intelligence.json) - Validation scenarios
+## 🎯 Page Layout
 
-## 🎯 4-Section Layout
+| Section | Purpose |
+|---------|---------|
+| **🚨 Action Required** | Items that need a response now (appears only when there are any) |
+| **🤖 Agents** | Output of the three refresh-triggered agents (see below) |
+| **⚠️ Client Risk** | Watchlist clients exposed to risk signals |
+| **📊 Today's Brief** | Executive summary mapped to the Five Conversations |
+| **📢 Market Insights** | Per-market briefs with a conversation door and copy-for-Slack text |
+| **📡 Signal Feed** | Full scored feed, filterable by client, market, priority and signal type; 👍/👎 per article |
+| **📚 Deep Reads** | Strategic long-form pieces: thesis, implication, CxO question |
 
-| Section | Purpose | Timeframe | AI Analysis |
-|---------|---------|-----------|-------------|
-| **⚡ Today's Signals** | "Act on this TODAY" | Last 24-48h | Action + IBM angle + competitive alert |
-| **📍 Client Radar** | Account-specific intelligence | Real-time | Brief ATL action per client |
-| **📢 ATL Enablement** | Team communication | This week | Slack-ready talking points |
-| **📚 Deep Reads** | Strategic internalization | 7-14 days | Thesis + leadership implication + CxO question |
+Additional tools: **👥 Clients** (portfolio manager), **📋 Meeting Brief** per client, **📤 Brief ATL** (Slack-ready), **📧 GTM Digest Email**, **💼 LinkedIn post generator** (#SignalToNoiseAPAC), and **📅 This Week's Context** (meetings and deals used for prioritisation).
 
-### Today's Signals vs Deep Reads
+## 🤖 Agent Layer
 
-| Aspect | ⚡ Today's Signals | 📚 Deep Reads |
-|--------|-------------------|---------------|
-| **Question** | "What do I do TODAY?" | "What should I be thinking about?" |
-| **Output** | 3-5 actionable items | 3-5 strategic pieces |
-| **Format** | Headline + Action + IBM Angle | Thesis + Implication + CxO Question |
-| **Use case** | ATL brief, client meeting prep | Board prep, offsite thinking, CxO conversations |
-| **Wave tag** | AI WAVE or SOVEREIGNTY WAVE | Time horizon (6mo / 12mo / 2-3yr) |
+Defined in `agents.js`. The agents run when the page refreshes; there is **no background operation**.
+
+| Agent | What it does | Needs API key |
+|-------|--------------|---------------|
+| **ATL Brief Agent** | Pre-generates and caches a meeting brief for each Tier 1 client with 2 or more new articles in the last 48 hours, so the Brief modal opens instantly. | Yes |
+| **Counter-Positioning Agent** | For competitive articles with relevance of 0.60 or more (capped at 4 per run), drafts an IBM counter-narrative using the conversation-door framework. | Yes |
+| **Relationship Pulse** | Flags Tier 1 clients with no mention in 14 or more days. Runs locally with no API call. | No |
+
+Agent results are cached in localStorage (6 hours for briefs and counter-positioning, 2 hours for the pulse).
 
 ## 🗺️ Market Coverage
 
@@ -66,22 +65,25 @@ git push origin main
 
 Enable Pages: **Settings → Pages → Source: main branch**
 
-### Configure Claude API
+### Configure the AI provider
 
-1. Get API key from [console.anthropic.com](https://console.anthropic.com/)
-2. Open app → **⚙️ Settings** → Enter API key
-3. AI synthesis for Today's Signals and Deep Reads now enabled
+1. Get an API key from [console.anthropic.com](https://console.anthropic.com/) (Claude) or OpenAI.
+2. Open the app → **⚙️ Settings** → **🤖 AI Provider** → choose a provider and enter the key.
+3. AI synthesis, the Agents and the briefs are now enabled. Without a key the app falls back to keyword-based summaries.
+
+The key is stored in your browser's localStorage and sent only to the provider you select.
 
 ## 👥 Client Portfolio Management
 
-Click **👥 Clients** to access full client management:
+Click **👥 Clients** for client management:
 
 | Feature | Description |
 |---------|-------------|
-| **Market Tabs** | Filter by ANZ, ASEAN, GCG, ISA, Korea |
-| **Bulk Tier Assignment** | Select multiple → Set Tier 1/2/3 |
-| **ATL Assignment** | Link client to ATL name |
-| **CSV Import/Export** | Bulk manage 343+ accounts |
+| **Market tabs** | Filter by ANZ, ASEAN, GCG, ISA, Korea |
+| **Bulk tier assignment** | Select multiple → set Tier 1/2/3 |
+| **CSV import and export** | Bulk manage the watchlist |
+
+The built-in default watchlist (`DEFAULT_CLIENTS` in `sources.js`) has 74 clients. Edit it in the Clients manager or import your own CSV.
 
 ### CSV Format
 ```
@@ -91,45 +93,55 @@ Telstra,ANZ,AU,Telecommunications,1,Jane Doe
 ```
 
 ### Client Tiers
-- **Tier 1 (Strategic)**: +35% boost, daily monitoring
-- **Tier 2 (Growth)**: +25% boost, weekly monitoring
-- **Tier 3 (Prospect)**: +15% boost, background tracking
+Tier adds a relevance boost to articles that match a client:
+
+- **Tier 1 (Strategic)**: +0.35
+- **Tier 2 (Growth)**: +0.25
+- **Tier 3 (Prospect)**: +0.15
 
 ## 📊 RSS Sources
 
-**99 curated sources** across 8 categories:
+**87 curated sources** in `sources.js` across 8 categories (all enabled by default; manage them in Settings → Sources):
 
-| Category | Sources | Deep Read Priority |
-|----------|---------|-------------------|
-| 🤖 AI & Agentic | 9 | Medium |
-| 🛡️ Sovereignty & Regulation | 19 | High |
-| 🌏 APAC Enterprise | 22 | Low |
-| 🇨🇳 China & Geopolitics | 6 | Medium |
-| ⚔️ Competitive Landscape | 23 | Medium |
-| 🏗️ Architecture & Platform | 8 | High |
-| 💭 Strategic Perspectives | 7 | **Highest** |
-| 🔵 IBM & Partners | 5 | Low |
+| Category | Sources |
+|----------|---------|
+| 🤖 AI & Agentic | 9 |
+| 🛡️ Cybersecurity & Sovereignty | 9 |
+| 🌏 APAC Regional | 33 |
+| 🏢 Enterprise Tech | 12 |
+| ⚔️ Competitive Landscape | 8 |
+| 🏗️ Architecture & Platform | 6 |
+| 💭 Strategic Analysis | 6 |
+| 🔵 IBM & Partners | 4 |
+
+Feeds are fetched from the browser through a chain of public CORS proxies, started staggered so a slow proxy adds no delay. A source that fails 3 times in a row is automatically disabled.
 
 ## 🔧 Settings
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Claude API Key | — | Enables AI synthesis |
-| This Week's Context | — | Meetings/deals for prioritization |
-| Industry Priorities | Tier 1-3 | Boost by industry |
+| Tab | Contents |
+|-----|----------|
+| **⚙️ General** | AI provider and API keys, Intelligence Engine options, data reset |
+| **🏢 Industries** | Industry priority tiers (boost by industry) |
+| **📰 Sources** | Add, edit, enable or disable RSS sources |
 
 ## 📱 Responsive Design
 
-Optimized for Mac, iPad, and iPhone with 44px touch targets (Apple HIG).
+Optimised for Mac, iPad and iPhone with 44px touch targets (Apple HIG).
 
 ## 🛠️ Technical
 
+### Files
+Scripts loaded by `index.html`: `sources.js`, `intelligence-engine.js`, `hybrid-classifier.js`, `agents.js`, `app.js`.
+
 ### Storage
-- **IndexedDB**: 7-day article corpus, 14-day digest history
-- **localStorage**: Settings, clients, sources
+- **IndexedDB**: 7-day article corpus, 14-day digest history, read state
+- **localStorage**: settings, clients, sources, ratings and score drift, section caches, agent caches
 
 ### AI Prompts
-All AI prompts use **dynamic client lists** from your configured watchlist. No hardcoded client names.
+Prompts build the client list dynamically from your configured watchlist. See `docs/AI_PROMPTS_V2.md`.
+
+### Tests
+Browser-based test pages are in `tests/` (open `tests/test-runner.html`). The manual test plan is `docs/test-plan.md`.
 
 ---
 
