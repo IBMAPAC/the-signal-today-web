@@ -108,7 +108,7 @@ class CacheManager {
                 const result = await this._getFromDB(key);
                 if (result) {
                     // Check if expired
-                    if (Date.now() > result.expiresAt) {
+                    if (Date.now() >= result.expiresAt) {
                         await this.delete(key);
                         this.stats.misses++;
                         return null;
@@ -125,7 +125,7 @@ class CacheManager {
         // Fallback to memory cache
         if (this.memoryCache.has(key)) {
             const cached = this.memoryCache.get(key);
-            if (Date.now() > cached.expiresAt) {
+            if (Date.now() >= cached.expiresAt) {
                 this.memoryCache.delete(key);
                 this.stats.misses++;
                 return null;
