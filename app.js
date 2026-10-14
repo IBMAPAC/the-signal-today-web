@@ -1245,20 +1245,25 @@ class SignalApp {
             const parsed = JSON.parse(savedClients);
             // Migration: if stored as flat strings, convert to objects
             if (parsed.length > 0 && typeof parsed[0] === 'string') {
-                this.clients = parsed.map(name => ({ name, tier: 2, country: '', market: 'ASEAN' }));
+                this.clients = parsed.map(name => ({ name, tier: 2, country: '', market: 'ASEAN', aliases: [] }));
             } else {
-                // Ensure all clients have market field (migration from pre-market version)
-                this.clients = parsed.map(c => {
-                    if (!c.market && c.country) {
-                        c.market = typeof getMarketFromCountry === 'function' 
-                            ? getMarketFromCountry(c.country) 
-                            : 'ASEAN';
-                    }
-                    return c;
-                });
+                // Ensure all clients have market and aliases fields, and filter out any rogue header rows
+                this.clients = parsed
+                    .filter(c => c && c.name && !(c.name.toLowerCase() === 'name' && (c.market?.toLowerCase() === 'market' || c.industry?.toLowerCase() === 'industry')))
+                    .map(c => {
+                        if (!c.market && c.country) {
+                            c.market = typeof getMarketFromCountry === 'function'
+                                ? getMarketFromCountry(c.country)
+                                : 'ASEAN';
+                        }
+                        if (!Array.isArray(c.aliases)) {
+                            c.aliases = c.aliases ? [c.aliases] : [];
+                        }
+                        return c;
+                    });
             }
         } else {
-            this.clients = [...DEFAULT_CLIENTS];
+            this.clients = JSON.parse(JSON.stringify(DEFAULT_CLIENTS));
         }
         
         // NOTE: articles and digest are no longer stored in localStorage.
@@ -7034,8 +7039,22 @@ function processCSVImport() {
     showToast(`Imported ${imported} clients`);
 }
 
+function resetDefaultClients() {
+    if (confirm(`Reset all clients to default portfolio (${typeof DEFAULT_CLIENTS !== 'undefined' ? DEFAULT_CLIENTS.length : 510} accounts)? Any custom added clients will be replaced.`)) {
+        app.clients = JSON.parse(JSON.stringify(DEFAULT_CLIENTS));
+        app.saveToStorage();
+        updateClientManagerCounts();
+        renderClientTable();
+        showToast(`Reset to ${app.clients.length} default clients`);
+    }
+}
+
 function exportClientsCSV() {
-    const csv = app.clients.map(c =>
+    const clientsToExport = (app.clients || []).filter(c =>
+        c && c.name && !(c.name.toLowerCase() === 'name' && (c.market?.toLowerCase() === 'market' || c.industry?.toLowerCase() === 'industry'))
+    );
+    
+    const csv = clientsToExport.map(c =>
         [
             escapeCSVField(c.name),
             escapeCSVField(c.market),
