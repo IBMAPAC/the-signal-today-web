@@ -7000,7 +7000,9 @@ function processCSVImport() {
         return;
     }
     
+    const shouldReplace = document.getElementById('csv-import-replace')?.checked ?? true;
     const lines = data.split(/\r?\n/).filter(l => l.trim());
+    const newClients = [];
     let imported = 0;
     
     lines.forEach((line, idx) => {
@@ -7013,14 +7015,15 @@ function processCSVImport() {
         // Skip CSV header row if present
         if (idx === 0 && (name.toLowerCase() === 'name' || market.toLowerCase() === 'market')) return;
         
-        // Check for duplicate
-        if (app.clients.some(c => c.name.toLowerCase() === name.toLowerCase())) return;
+        // Check for duplicate in the incoming batch or existing clients
+        if (newClients.some(c => c.name.toLowerCase() === name.toLowerCase())) return;
+        if (!shouldReplace && app.clients.some(c => c.name.toLowerCase() === name.toLowerCase())) return;
         
         const tier = parseInt(tierStr);
         const validTier = [1, 2, 3].includes(tier) ? tier : 2;
         const aliases = aliasesStr ? aliasesStr.split(';').map(s => s.trim()).filter(Boolean) : [];
         
-        app.clients.push({
+        newClients.push({
             name,
             market: market.toUpperCase(),
             country: country || '',
@@ -7032,20 +7035,39 @@ function processCSVImport() {
         imported++;
     });
     
+    if (shouldReplace) {
+        app.clients = newClients;
+    } else {
+        app.clients.push(...newClients);
+    }
+    
     app.saveToStorage();
     updateClientManagerCounts();
     renderClientTable();
     closeCSVImport();
-    showToast(`Imported ${imported} clients`);
+    showToast(`Loaded ${app.clients.length} clients (${imported} from file)`);
 }
 
 function resetDefaultClients() {
-    if (confirm(`Reset all clients to default portfolio (${typeof DEFAULT_CLIENTS !== 'undefined' ? DEFAULT_CLIENTS.length : 510} accounts)? Any custom added clients will be replaced.`)) {
+    try {
+        if (typeof DEFAULT_CLIENTS === 'undefined' || !Array.isArray(DEFAULT_CLIENTS)) {
+            showToast('Error: Default clients not loaded. Please refresh the page.');
+            return;
+        }
         app.clients = JSON.parse(JSON.stringify(DEFAULT_CLIENTS));
         app.saveToStorage();
         updateClientManagerCounts();
         renderClientTable();
         showToast(`Reset to ${app.clients.length} default clients`);
+    } catch (e) {
+        console.error('Reset clients error:', e);
+        if (typeof DEFAULT_CLIENTS !== 'undefined' && Array.isArray(DEFAULT_CLIENTS)) {
+            app.clients = JSON.parse(JSON.stringify(DEFAULT_CLIENTS));
+            app.saveToStorage();
+            updateClientManagerCounts();
+            renderClientTable();
+            showToast(`Reset to ${app.clients.length} clients`);
+        }
     }
 }
 

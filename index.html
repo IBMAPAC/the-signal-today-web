@@ -11,7 +11,7 @@
     <meta name="description" content="Field CTO Intelligence Briefing - IBM Asia Pacific">
     <meta name="format-detection" content="telephone=no">
     <title>The Signal Today</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2.1.0">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -538,6 +538,12 @@
                     <div class="form-group">
                         <input type="file" id="csv-file-input" accept=".csv" onchange="handleCSVFile(event)">
                     </div>
+                    <div class="form-group" style="margin-top: 0.5rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem; color: var(--cds-text-secondary);">
+                            <input type="checkbox" id="csv-import-replace" checked>
+                            <span>Replace current watchlist with this import (recommended)</span>
+                        </label>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="closeCSVImport()">Cancel</button>
@@ -678,10 +684,10 @@
         </div>
     </div>
 
-    <script src="sources.js"></script>
-    <script src="intelligence-engine.js"></script>
-    <script src="hybrid-classifier.js"></script>
-    <script src="agents.js"></script>
-    <script src="app.js"></script>
+    <script src="sources.js?v=2.1.0"></script>
+    <script src="intelligence-engine.js?v=2.1.0"></script>
+    <script src="hybrid-classifier.js?v=2.1.0"></script>
+    <script src="agents.js?v=2.1.0"></script>
+    <script src="app.js?v=2.1.0"></script>
 </body>
 </html>
