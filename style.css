@@ -1164,6 +1164,8 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 
 /* Market Brief Synthesis */
 .market-brief-synthesis { font-size: var(--cds-body-02); color: var(--cds-text-primary); line-height: 1.6; margin-bottom: var(--cds-spacing-04); }
+.market-brief-lead-pillar { font-size: var(--cds-body-01); color: var(--cds-text-secondary); padding: var(--cds-spacing-02) var(--cds-spacing-03); margin-bottom: var(--cds-spacing-03); background: var(--cds-tag-background-purple); border-left: 2px solid var(--cds-tag-color-purple); }
+.market-brief-lead-pillar strong { color: var(--cds-tag-color-purple); }
 .market-brief-key-message { font-size: var(--cds-body-01); color: var(--cds-text-primary); background: var(--cds-tag-background-green); padding: var(--cds-spacing-03); margin-bottom: var(--cds-spacing-04); border-radius: 2px; }
 .market-brief-key-message strong { color: var(--cds-tag-color-green); }
 .market-brief-sources { font-size: var(--cds-body-01); color: var(--cds-text-secondary); padding-top: var(--cds-spacing-03); border-top: 1px solid var(--cds-border-subtle-01); }
@@ -1193,11 +1195,19 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
 
 /* Deep Read Strategic Synthesis */
 .deep-read-strategic { margin-top: var(--cds-spacing-03); padding-top: var(--cds-spacing-03); border-top: 1px solid var(--cds-border-subtle-01); }
-.deep-read-thesis, .deep-read-implication, .deep-read-question { font-size: var(--cds-body-01); color: var(--cds-text-secondary); margin-bottom: var(--cds-spacing-03); line-height: 1.5; }
-.deep-read-thesis strong, .deep-read-implication strong, .deep-read-question strong { color: var(--cds-text-primary); }
+.deep-read-thesis, .deep-read-technical, .deep-read-problem, .deep-read-implication, .deep-read-question { font-size: var(--cds-body-01); color: var(--cds-text-secondary); margin-bottom: var(--cds-spacing-03); line-height: 1.5; }
+.deep-read-thesis strong, .deep-read-technical strong, .deep-read-problem strong, .deep-read-implication strong, .deep-read-question strong { color: var(--cds-text-primary); }
 
 /* Strategic thesis highlight */
 .deep-read-thesis { color: var(--cds-tag-color-teal); font-weight: 500; padding: var(--cds-spacing-03); background: var(--cds-layer-01); border-left: 3px solid var(--cds-tag-color-teal); }
+
+/* Technical breakthrough styling */
+.deep-read-technical { padding: var(--cds-spacing-03); background: var(--cds-tag-background-cyan); border-radius: 2px; }
+.deep-read-technical strong { color: var(--cds-tag-color-cyan); }
+
+/* Problem solved styling */
+.deep-read-problem { padding: var(--cds-spacing-03); background: var(--cds-tag-background-orange); border-radius: 2px; }
+.deep-read-problem strong { color: var(--cds-tag-color-orange); }
 
 /* Leadership implication styling */
 .deep-read-implication { padding: var(--cds-spacing-03); background: var(--cds-tag-background-blue); border-radius: 2px; }

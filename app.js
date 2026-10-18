@@ -7521,6 +7521,7 @@ function renderMarketInsights(forceRefresh = false) {
         
         list.innerHTML = briefs.map(renderMarketBriefCard).join('');
         cacheMarketInsights(briefs);
+        updateSectionTimestamp('market-insights', Date.now(), false);
         return;
     }
     
@@ -8428,6 +8429,7 @@ function cacheExecutiveSummary(insights, articleCount = 0) {
     } catch (e) {
         console.log('Exec summary cache write error:', e);
     }
+    updateSectionTimestamp('executive-summary', Date.now(), false);
 }
 
 // ==========================================
