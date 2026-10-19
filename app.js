@@ -3726,8 +3726,9 @@ ${articleList}`;
     renderDailyTab(forceRefresh = false) {
         // ── Render immediately from scored articles (no AI wait) ──────────────
         // Action Required and Signal Feed derive from locally-scored articles
-        // and render in <1s. Client Watch strip is embedded inside Signal Feed.
+        // and render in <1s. Client Watch is rendered in its dedicated container.
         renderActionRequired();
+        renderClientWatch();
         renderSignalFeed();
 
         // ── AI-enriched sections ──────────────────────────────────────────────
@@ -9589,8 +9590,10 @@ function renderSignalFeed() {
     document.querySelectorAll('.market-tab').forEach(b =>
         b.classList.toggle('active', b.dataset.market === signalFeedFilters.market));
 
-    // Render: Client Watch strip + synthesised signals + grouped categories
-    const clientWatchHtml = renderClientWatchStrip();
+    // Render Client Watch in its dedicated container above Market Insights
+    renderClientWatch();
+
+    // Render: synthesised signals + grouped categories
     const synthesisedHtml = renderSynthesisedSignalsBlock();
     const categoriesHtml = categories.map(cat => {
         const articles = grouped[cat.key];
@@ -9625,7 +9628,7 @@ function renderSignalFeed() {
             </div>
         `;
     }).join('');
-    list.innerHTML = clientWatchHtml + synthesisedHtml + categoriesHtml;
+    list.innerHTML = synthesisedHtml + categoriesHtml;
     updateSectionTimestamp('signal-feed', Date.now(), false);
 }
 
@@ -10870,8 +10873,21 @@ function renderClientWatchStrip() {
     </div>`;
 }
 
-// Stub — section removed; function kept to prevent errors from any cached references
-function renderClientRisk() { /* Client Watch is now embedded in Signal Feed */ }
+// Standalone Client Watch renderer — populates the strip between Today's Brief and Market Insights
+function renderClientWatch() {
+    const container = document.getElementById('client-watch-container');
+    if (!container) return;
+    const html = renderClientWatchStrip();
+    if (html) {
+        container.innerHTML = html;
+        container.classList.remove('hidden');
+    } else {
+        container.innerHTML = '';
+        container.classList.add('hidden');
+    }
+}
+
+function renderClientRisk() { renderClientWatch(); }
 
 // Initialize app
 const app = new SignalApp();

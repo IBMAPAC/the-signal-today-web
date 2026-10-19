@@ -58,7 +58,8 @@
 
             <div id="digest-content" class="digest-content hidden">
                 
-                <!-- PRIORITY 0: ACTION REQUIRED - Urgent items surfaced at top (collapsible, expanded by default) -->
+                <!-- TIER 1: STRATEGIC ORIENTATION & TRIAGE -->
+                <!-- 1. ACTION REQUIRED - Urgent items surfaced at top (collapsible, expanded by default, visible only if items exist) -->
                 <section id="action-required-section" class="card action-required-card hidden">
                     <div class="card-header card-header--collapsible" onclick="toggleSection('action-required')">
                         <h2>🚨 Action Required</h2>
@@ -72,35 +73,26 @@
                     </div>
                 </section>
 
-                <!-- AGENTS PANEL - Counter-Positioning + Relationship Pulse + ATL Brief status -->
-                <section id="agents-section" class="card agents-card hidden">
-                    <div class="card-header card-header--collapsible" onclick="toggleSection('agents')">
-                        <h2>🤖 Agents</h2>
-                        <span id="agents-count-cp"    class="badge badge-red    hidden" title="Counter-Positioning alerts"></span>
-                        <span id="agents-count-pulse" class="badge badge-orange hidden" title="Relationship Pulse alerts"></span>
-                        <span class="chevron collapsed">▼</span>
-                    </div>
-                    <div id="agents-content" class="card-body collapsed">
-                        <div id="agents-list"></div>
-                    </div>
-                </section>
-
-                <!-- PRIORITY 1: TODAY'S BRIEF - 3 things to know today (collapsible, collapsed) -->
+                <!-- 2. TODAY'S BRIEF - Morning Strategic Anchor (expanded by default) -->
                 <section id="executive-summary-section" class="card executive-summary-card">
                     <div class="card-header card-header--collapsible" onclick="toggleSection('executive-summary')">
                         <h2>📊 Today's Brief</h2>
                         <span class="badge badge-muted">Top 3</span>
                         <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyExecutiveSummary()" title="Copy to clipboard">📋 Copy</button>
                         <span id="executive-summary-timestamp" class="section-timestamp"></span>
-                        <span class="chevron collapsed">▼</span>
+                        <span class="chevron">▼</span>
                     </div>
-                    <div id="executive-summary-content" class="card-body collapsed">
+                    <div id="executive-summary-content" class="card-body">
                         <p class="executive-summary-intro">Synthesizing key insights...</p>
                         <div id="executive-summary-list"></div>
                     </div>
                 </section>
 
-                <!-- PRIORITY 2: MARKET INSIGHTS - Market-specific briefs (collapsible, collapsed) -->
+                <!-- TIER 2: ACCOUNT EXECUTION & FIELD OPERATIONS -->
+                <!-- 3. CLIENT WATCH - Standalone horizontal risk strip for Tier 1 & Tier 2 accounts -->
+                <div id="client-watch-container" class="client-watch-container hidden"></div>
+
+                <!-- 4. MARKET INSIGHTS - Market-specific regional briefs (collapsible, collapsed) -->
                 <section id="market-insights-section" class="card market-insights-card">
                     <div class="card-header card-header--collapsible" onclick="toggleSection('market-insights')">
                         <h2>📢 Market Insights</h2>
@@ -114,7 +106,36 @@
                     </div>
                 </section>
 
-                <!-- PRIORITY 3: UNIFIED SIGNAL FEED (collapsible, collapsed) -->
+                <!-- 5. AGENTS PANEL - Counter-Positioning + Relationship Pulse + ATL Brief status (collapsible, collapsed) -->
+                <section id="agents-section" class="card agents-card hidden">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('agents')">
+                        <h2>🤖 Agents</h2>
+                        <span id="agents-count-cp"    class="badge badge-red    hidden" title="Counter-Positioning alerts"></span>
+                        <span id="agents-count-pulse" class="badge badge-orange hidden" title="Relationship Pulse alerts"></span>
+                        <span class="chevron collapsed">▼</span>
+                    </div>
+                    <div id="agents-content" class="card-body collapsed">
+                        <div id="agents-list"></div>
+                    </div>
+                </section>
+
+                <!-- TIER 3: STRATEGIC DEPTH & INTELLIGENCE REPOSITORY -->
+                <!-- 6. DEEP READS - Strategic perspectives for CxO conversations & Keynotes (collapsible, collapsed) -->
+                <section id="deep-reads-section" class="card deep-reads-card">
+                    <div class="card-header card-header--collapsible" onclick="toggleSection('deep-reads')">
+                        <h2>📚 Deep Reads</h2>
+                        <span id="deep-reads-count" class="badge badge-muted">0</span>
+                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyDeepReads()" title="Copy to clipboard">📋 Copy</button>
+                        <span id="deep-reads-timestamp" class="section-timestamp"></span>
+                        <span class="chevron collapsed">▼</span>
+                    </div>
+                    <div id="deep-reads-content" class="card-body collapsed">
+                        <p class="card-description">Strategic perspectives for CxO conversations</p>
+                        <div id="deep-reads-list"></div>
+                    </div>
+                </section>
+
+                <!-- 7. UNIFIED SIGNAL FEED - Tactical reference feed with filtering (collapsible, collapsed) -->
                 <section id="signal-feed-section" class="card signal-feed-card">
                     <div class="card-header card-header--collapsible" onclick="toggleSection('signal-feed')">
                         <h2>📡 Signal Feed</h2>
@@ -162,21 +183,6 @@
                         <div id="signal-feed-empty" class="signal-feed-empty hidden">
                             <p>No signals match current filters.</p>
                         </div>
-                    </div>
-                </section>
-
-                <!-- PRIORITY 4: DEEP READS - Weekend reading (collapsible, collapsed) -->
-                <section id="deep-reads-section" class="card deep-reads-card">
-                    <div class="card-header card-header--collapsible" onclick="toggleSection('deep-reads')">
-                        <h2>📚 Deep Reads</h2>
-                        <span id="deep-reads-count" class="badge badge-muted">0</span>
-                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyDeepReads()" title="Copy to clipboard">📋 Copy</button>
-                        <span id="deep-reads-timestamp" class="section-timestamp"></span>
-                        <span class="chevron collapsed">▼</span>
-                    </div>
-                    <div id="deep-reads-content" class="card-body collapsed">
-                        <p class="card-description">Strategic perspectives for CxO conversations</p>
-                        <div id="deep-reads-list"></div>
                     </div>
                 </section>
 

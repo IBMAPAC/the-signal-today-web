@@ -1030,15 +1030,24 @@ a:hover { color: var(--cds-link-primary-hover); text-decoration: underline; }
    ============================================= */
 .signal-feed-card .card-header { border-left-color: var(--cds-tag-color-cyan); }
 
-/* Client Watch strip — embedded at top of Signal Feed (replaces Client Risk section) */
+/* Client Watch strip — standalone risk strip between Today's Brief and Market Insights */
+.client-watch-container {
+    margin-bottom: var(--cds-spacing-05);
+}
+.client-watch-container.hidden {
+    display: none;
+}
 .client-watch-strip {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-02);
     flex-wrap: wrap;
-    padding: var(--cds-spacing-03) 0 var(--cds-spacing-04);
-    border-bottom: 1px solid var(--cds-border-subtle-01);
-    margin-bottom: var(--cds-spacing-04);
+    padding: var(--cds-spacing-04) var(--cds-spacing-05);
+    background: var(--cds-layer-01);
+    border-left: 4px solid var(--cds-tag-color-orange, #ff832b);
+    border-top: 1px solid var(--cds-border-subtle-00, #393939);
+    border-right: 1px solid var(--cds-border-subtle-00, #393939);
+    border-bottom: 1px solid var(--cds-border-subtle-00, #393939);
 }
 .client-watch-label {
     font-size: 0.6875rem;

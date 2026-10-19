@@ -182,9 +182,9 @@ Return ONLY valid JSON:
 
 // Add ⚡ badge to Brief buttons for pre-generated clients
 function _markPreGeneratedBriefButtons(briefCache, todayKey) {
-    const rows = document.querySelectorAll('.client-risk-row');
-    rows.forEach(row => {
-        const nameEl = row.querySelector('.client-risk-name');
+    const chips = document.querySelectorAll('.client-watch-chip, .client-risk-row');
+    chips.forEach(row => {
+        const nameEl = row.querySelector('.client-watch-name, .client-risk-name');
         const briefBtn = row.querySelector('button');
         if (!nameEl || !briefBtn) return;
         const name = nameEl.textContent.trim();
