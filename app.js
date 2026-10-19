@@ -1736,6 +1736,11 @@ class SignalApp {
             this.hideLoading();
             this.isLoading = false;
             console.log(`⚡ First render in ${Math.round(performance.now() - startTime)}ms`);
+
+            // Run agent suite immediately (Relationship Pulse + Runbook Counter-Positioning)
+            if (typeof runAllAgents === 'function') {
+                runAllAgents(this).catch(e => console.warn('Agents run error:', e));
+            }
             // ─────────────────────────────────────────────────────────────────
 
             // ── PROGRESSIVE RENDER STEP 2 ────────────────────────────────────

@@ -77,20 +77,21 @@ async function runATLBriefAgent(appInstance) {
             });
         });
 
-        if (newArticles.length >= 2) {
+        if (newArticles.length >= 1) {
             qualifying.push({ client, newArticles });
         }
     }
 
-    if (qualifying.length === 0) {
+    const targetClients = qualifying.slice(0, 3); // Cap at 3 clients per cycle
+    if (targetClients.length === 0) {
         console.log('🤖 ATL Brief Agent: no qualifying clients this cycle');
         return;
     }
 
-    console.log(`🤖 ATL Brief Agent: pre-generating briefs for ${qualifying.length} client(s)`);
+    console.log(`🤖 ATL Brief Agent: pre-generating briefs for ${targetClients.length} client(s)`);
 
     // Pre-generate briefs sequentially to avoid hammering the API
-    for (const { client, newArticles } of qualifying) {
+    for (const { client, newArticles } of targetClients) {
         const name = client.name;
         try {
             const brief = await _generateBriefData(appInstance, name, apiKey);
@@ -243,16 +244,17 @@ async function runCounterPositioningAgent(appInstance) {
         }
     } catch (e) { /* regenerate */ }
 
-    // Find competitive articles above threshold
+    // Find competitive articles
     const allArticles = [...(appInstance.dailyArticles || []), ...(appInstance.articles || [])];
     const seen = new Set();
     const competitiveArticles = allArticles.filter(a => {
         if (seen.has(a.id)) return false;
         seen.add(a.id);
-        if ((a.relevanceScore || 0) < 0.60) return false;
-        return a.signalType === 'competitor' ||
-            /\b(aws|azure|google cloud|microsoft|salesforce|servicenow|snowflake|databricks|okta|mulesoft|boomi|github copilot)\b/i
+        const isCompetitorMatch = a.signalType === 'competitor' ||
+            /\b(aws|azure|google cloud|microsoft|salesforce|servicenow|snowflake|databricks|okta|mulesoft|boomi|workato|github copilot|cursor|cyberark|ping identity)\b/i
                 .test(`${a.title} ${a.summary || ''}`);
+        if (!isCompetitorMatch) return false;
+        return (a.relevanceScore || 0) >= 0.25 || a.signalType === 'competitor';
     }).slice(0, 4); // Cap at 4 to control API cost
 
     if (competitiveArticles.length === 0) {
@@ -265,17 +267,23 @@ async function runCounterPositioningAgent(appInstance) {
     console.log(`🤖 Counter-Positioning Agent: ${competitiveArticles.length} competitive signal(s)`);
 
     if (!apiKey) {
-        // No API: store basic items (competitor name + article title only)
-        const basicItems = competitiveArticles.map(a => ({
-            competitor: _extractCompetitorName(a),
-            headline: a.title,
-            source: a.source || a.sourceName,
-            url: a.url,
-            conversationDoor: null,
-            ibmCounter: null,
-            talkingPoint: null,
-            affectedClients: (a.matchedClients || []).slice(0, 3)
-        }));
+        // No API: map to IBM runbook counter-positions deterministically
+        const basicItems = competitiveArticles.map(a => {
+            const competitor = _extractCompetitorName(a);
+            const rb = _getRunbookCounter(competitor, a.title);
+            return {
+                competitor: competitor,
+                headline: `Counter ${competitor}: ${a.title.slice(0, 50)}...`,
+                source: a.source || a.sourceName,
+                url: a.url,
+                conversationDoor: rb.door,
+                ibmCounter: rb.counter,
+                talkingPoint: rb.talkingPoint,
+                affectedMarkets: ['ANZ', 'ASEAN', 'GCG', 'ISA', 'KOREA'],
+                urgency: rb.urgency,
+                affectedClients: (a.matchedClients || []).slice(0, 3)
+            };
+        });
         _saveCounterPositioningCache(basicItems);
         renderAgentsPanel();
         return;
@@ -354,27 +362,91 @@ Return valid JSON array only. Max ${competitiveArticles.length} items, same orde
         console.log(`🤖 Counter-Positioning Agent: ${items.length} counter(s) generated`);
     } catch (err) {
         console.warn('🤖 Counter-Positioning Agent error:', err.message);
-        // Fall back to basic (no-API) items
-        const basicItems = competitiveArticles.map(a => ({
-            competitor: _extractCompetitorName(a),
-            headline: a.title,
-            source: a.source || a.sourceName,
-            url: a.url,
-            conversationDoor: null,
-            ibmCounter: null,
-            talkingPoint: null,
-            affectedClients: (a.matchedClients || []).slice(0, 3)
-        }));
+        // Fall back to deterministic runbook items
+        const basicItems = competitiveArticles.map(a => {
+            const competitor = _extractCompetitorName(a);
+            const rb = _getRunbookCounter(competitor, a.title);
+            return {
+                competitor: competitor,
+                headline: `Counter ${competitor}: ${a.title.slice(0, 50)}...`,
+                source: a.source || a.sourceName,
+                url: a.url,
+                conversationDoor: rb.door,
+                ibmCounter: rb.counter,
+                talkingPoint: rb.talkingPoint,
+                affectedMarkets: ['ANZ', 'ASEAN', 'GCG', 'ISA', 'KOREA'],
+                urgency: rb.urgency,
+                affectedClients: (a.matchedClients || []).slice(0, 3)
+            };
+        });
         _saveCounterPositioningCache(basicItems);
         renderAgentsPanel();
     }
 }
 
+function _getRunbookCounter(competitor, articleTitle = '') {
+    const compLower = (competitor || '').toLowerCase();
+    if (/snowflake|databricks/i.test(compLower)) {
+        return {
+            door: 'Conv 1 · Govern Your Data',
+            counter: 'Portability and governance across the whole estate (watsonx.data + Confluent), not locked inside one vendor lakehouse.',
+            talkingPoint: 'Can you govern and query data models across multi-cloud and on-prem with zero replication?',
+            urgency: 'MEDIUM'
+        };
+    }
+    if (/mulesoft|boomi|workato|servicenow/i.test(compLower)) {
+        return {
+            door: 'Conv 2 · Connect & Automate',
+            counter: 'Agent control plane and total estate cost (watsonx Orchestrate + webMethods), not renting connectivity per endpoint.',
+            talkingPoint: 'Who governs the growing agent and integration sprawl across your enterprise applications?',
+            urgency: 'MEDIUM'
+        };
+    }
+    if (/okta|entra|ping|cyberark/i.test(compLower)) {
+        return {
+            door: 'Conv 3 · Trust Every Identity',
+            counter: 'Human + non-human identity as one unified fabric (Verify + HashiCorp Vault). Keep existing IAM for employees; IBM closes the machine, secrets, and agent gap.',
+            talkingPoint: 'Can you list every non-human identity and agent credential currently active in your cloud estate?',
+            urgency: 'HIGH'
+        };
+    }
+    if (/aws|azure|microsoft|google/i.test(compLower)) {
+        return {
+            door: 'Conv 4 · Run Anywhere',
+            counter: 'Run, govern, and prove the same way everywhere (Terraform + Vault + Concert). Concentration risk is an operational vulnerability under MAS/APRA.',
+            talkingPoint: 'What is your exit cost and regulatory posture if hyperscaler pricing or policy shifts?',
+            urgency: 'MEDIUM'
+        };
+    }
+    if (/copilot|cursor|devin|github/i.test(compLower)) {
+        return {
+            door: 'Conv 5 · Build & Modernise',
+            counter: 'Whole-lifecycle governance and governed spend (IBM Bob), not just developer autocomplete.',
+            talkingPoint: 'Is your AI tooling governing code provenance, licensing, and full-stack modernisation or just code completions?',
+            urgency: 'MEDIUM'
+        };
+    }
+    if (/snyk|chainguard|athena/i.test(compLower)) {
+        return {
+            door: 'Conv L · Lightwell',
+            counter: 'Scanning is not fixing. Lightwell supplies the signed, tested fix at the version already running in production.',
+            talkingPoint: 'How long does your team spend patching upstream open-source vulnerabilities after security scanners flag them?',
+            urgency: 'HIGH'
+        };
+    }
+    return {
+        door: 'Conv 4 · Run Anywhere',
+        counter: 'Unified hybrid cloud governance and cost control across multi-cloud infrastructure.',
+        talkingPoint: 'How are you managing platform lock-in and regulatory compliance across environments?',
+        urgency: 'LOW'
+    };
+}
+
 function _extractCompetitorName(article) {
     const text = `${article.title} ${article.summary || ''}`;
     const competitors = ['AWS', 'Azure', 'Microsoft', 'Google Cloud', 'Salesforce',
-        'ServiceNow', 'Snowflake', 'Databricks', 'Okta', 'MuleSoft', 'Boomi',
-        'GitHub Copilot', 'Cursor'];
+        'ServiceNow', 'Snowflake', 'Databricks', 'Okta', 'MuleSoft', 'Boomi', 'Workato',
+        'GitHub Copilot', 'Cursor', 'CyberArk', 'Ping Identity'];
     for (const c of competitors) {
         if (new RegExp(`\\b${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text)) return c;
     }
@@ -632,9 +704,16 @@ async function runAllAgents(appInstance) {
     }
 }
 
-// Called from updateUI() — lightweight, synchronous only
+// Called from updateUI() — lightweight, synchronous + runbook counter population
 function runLightweightAgents(appInstance) {
     if (!appInstance) return;
     runRelationshipPulseAgent(appInstance);
+    // If Counter-Positioning is not yet in cache, run it with runbook fallback
+    try {
+        const raw = localStorage.getItem(AGENT_STORAGE_KEYS.COUNTER_POSITIONING);
+        if (!raw && appInstance.articles && appInstance.articles.length > 0) {
+            runCounterPositioningAgent(appInstance).catch(() => {});
+        }
+    } catch(e) {}
     renderAgentsPanel();
 }
