@@ -9902,10 +9902,11 @@ async function updateIntelligenceStats() {
         });
     }
     
-    // Format cost
-    const costFormatted = stats.totalCost < 0.01
+    // Format cost — totalCost may be undefined if engine ran but recorded no calls yet
+    const totalCost = stats.totalCost ?? 0;
+    const costFormatted = totalCost < 0.01
         ? '<$0.01'
-        : `$${stats.totalCost.toFixed(2)}`;
+        : `$${totalCost.toFixed(2)}`;
     
     // Build stats HTML
     const statsHtml = `
