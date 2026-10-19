@@ -3665,8 +3665,8 @@ Articles:
 ${articleList}`;
 
         try {
-            // COST OPTIMIZATION: Use unified API helper with token tracking
-            const { text } = await callAI('MULTI_SOURCE_ANALYSIS', prompt, 2500, apiKey);
+            // COST OPTIMIZATION: Use unified API helper with token tracking (3500 token ceiling prevents truncation)
+            const { text } = await callAI('MULTI_SOURCE_ANALYSIS', prompt, 3500, apiKey);
             
             // Parse JSON from response — strip markdown fences first
             let cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
@@ -8722,8 +8722,8 @@ Return valid JSON array, max 5 signals, in the SAME ORDER as input signals.`;
 
     let claudeResponse = null;
     try {
-        // COST OPTIMIZATION: Use unified API helper with token tracking
-        const { text } = await callAI('STRATEGIC_ANALYSIS', prompt, 2000, apiKey);
+        // COST OPTIMIZATION: Use unified API helper with token tracking (3200 token ceiling prevents truncation)
+        const { text } = await callAI('STRATEGIC_ANALYSIS', prompt, 3200, apiKey);
         claudeResponse = text;
         // Strip markdown code fences before matching JSON
         const cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
@@ -9920,7 +9920,7 @@ async function updateIntelligenceStats() {
         </div>
         <div class="intel-stat">
             <div class="intel-stat-label">Tier 3 Calls</div>
-            <div class="intel-stat-value">${stats.tier3Count}</div>
+            <div class="intel-stat-value">${stats.tier3Processed ?? stats.tier3Count ?? 0}</div>
         </div>
         <div class="intel-stat">
             <div class="intel-stat-label">API Cost</div>
