@@ -442,9 +442,10 @@ function runRelationshipPulseAgent(appInstance) {
 // ─────────────────────────────────────────────────────────────
 
 function renderAgentsPanel() {
-    const section = document.getElementById('agents-section');
-    const list    = document.getElementById('agents-list');
-    const countEl = document.getElementById('agents-count');
+    const section  = document.getElementById('agents-section');
+    const list     = document.getElementById('agents-list');
+    const cpBadge  = document.getElementById('agents-count-cp');
+    const pulseBadge = document.getElementById('agents-count-pulse');
     if (!section || !list) return;
 
     let html = '';
@@ -513,11 +514,31 @@ function renderAgentsPanel() {
 
     if (totalItems === 0 && preGenCount === 0) {
         section.classList.add('hidden');
+        if (cpBadge)    cpBadge.classList.add('hidden');
+        if (pulseBadge) pulseBadge.classList.add('hidden');
         return;
     }
 
     section.classList.remove('hidden');
-    if (countEl) countEl.textContent = totalItems;
+
+    // Update split badges: ⚔️ counter-positioning count + 🔇 pulse count
+    if (cpBadge) {
+        if (cpItems.length > 0) {
+            cpBadge.textContent = `⚔️ ${cpItems.length}`;
+            cpBadge.classList.remove('hidden');
+        } else {
+            cpBadge.classList.add('hidden');
+        }
+    }
+    if (pulseBadge) {
+        if (pulseItems.length > 0) {
+            pulseBadge.textContent = `🔇 ${pulseItems.length}`;
+            pulseBadge.classList.remove('hidden');
+        } else {
+            pulseBadge.classList.add('hidden');
+        }
+    }
+
     list.innerHTML = html;
 
     // Re-mark pre-generated Brief buttons

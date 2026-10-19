@@ -76,25 +76,12 @@
                 <section id="agents-section" class="card agents-card hidden">
                     <div class="card-header card-header--collapsible" onclick="toggleSection('agents')">
                         <h2>🤖 Agents</h2>
-                        <span id="agents-count" class="badge badge-purple">0</span>
+                        <span id="agents-count-cp"    class="badge badge-red    hidden" title="Counter-Positioning alerts"></span>
+                        <span id="agents-count-pulse" class="badge badge-orange hidden" title="Relationship Pulse alerts"></span>
                         <span class="chevron collapsed">▼</span>
                     </div>
                     <div id="agents-content" class="card-body collapsed">
                         <div id="agents-list"></div>
-                    </div>
-                </section>
-
-                <!-- CLIENT RISK - Accounts with elevated threat signals (collapsible, collapsed) -->
-                <section id="client-risk-section" class="card client-risk-card hidden">
-                    <div class="card-header card-header--collapsible" onclick="toggleSection('client-risk')">
-                        <h2>⚠️ Client Risk</h2>
-                        <span id="client-risk-count" class="badge badge-orange">0</span>
-                        <span id="client-risk-timestamp" class="section-timestamp"></span>
-                        <span class="chevron collapsed">▼</span>
-                    </div>
-                    <div id="client-risk-content" class="card-body collapsed">
-                        <p class="card-description">Clients with elevated threat signals this week</p>
-                        <div id="client-risk-list"></div>
                     </div>
                 </section>
 
@@ -139,12 +126,12 @@
                         <!-- View Options: Priority Filters -->
                         <div class="view-options-container">
                             <div class="priority-filters">
-                                <button class="priority-filter-btn active" data-priority="all" onclick="filterByPriority('all')">
-                                    All
-                                </button>
-                                <button class="priority-filter-btn" data-priority="high" onclick="filterByPriority('high')">
-                                    High
-                                </button>
+                                    <button class="priority-filter-btn" data-priority="all" onclick="filterByPriority('all')">
+                                        All
+                                    </button>
+                                    <button class="priority-filter-btn active" data-priority="high" onclick="filterByPriority('high')">
+                                        High
+                                    </button>
                                 <button class="priority-filter-btn" data-priority="strategic" onclick="filterByPriority('strategic')">
                                     Strategic
                                 </button>

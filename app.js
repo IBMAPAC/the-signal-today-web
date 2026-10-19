@@ -1084,7 +1084,9 @@ const STORAGE_KEYS = {
     ARTICLE_RATINGS: 'signal_article_ratings',   // Per-article 👍/👎 feedback
     SOURCE_SCORE_DRIFT: 'signal_score_drift',     // Accumulated score drift per source
     SECTION_STATE: 'signal_section_state',        // Persisted section open/close states
-    LINKEDIN_POST: 'signal_linkedin_post_cache'   // Cached LinkedIn post (tone + text)
+    LINKEDIN_POST: 'signal_linkedin_post_cache',  // Cached LinkedIn post (tone + text)
+    DISMISSED_ACTIONS: 'signal_dismissed_actions', // Dismissed ESCALATE items (48h TTL)
+    SIGNAL_FEED_FILTERS: 'signal_feed_filters'   // Persisted Signal Feed filter state
 };
 
 // Utility: Escape HTML entities to prevent XSS
@@ -1203,7 +1205,10 @@ class SignalApp {
                 try {
                     const savedStates = JSON.parse(localStorage.getItem(STORAGE_KEYS.SECTION_STATE) || '{}');
                     if (!savedStates.hasOwnProperty('action-required')) {
-                        savedStates['action-required'] = true; // open by default
+                        savedStates['action-required'] = true;    // open by default
+                    }
+                    if (!savedStates.hasOwnProperty('executive-summary')) {
+                        savedStates['executive-summary'] = true;  // open by default on first visit
                     }
                     Object.entries(savedStates).forEach(([id, isOpen]) => {
                         const content = document.getElementById(`${id}-content`);
@@ -1770,7 +1775,8 @@ class SignalApp {
                             renderExecutiveSummary(true);
                             renderMarketInsights(true);
                             renderDeepReads(true);
-                            renderClientRisk(); // Fix A: re-render after tier-3 threat scores are populated
+                            // Client Watch strip re-renders with Signal Feed (embedded inside it)
+                            renderSignalFeed(); // re-render after tier-3 threat scores are populated
                         }
 
                         // Run agent suite after all AI enrichment is complete
@@ -3719,11 +3725,10 @@ ${articleList}`;
 
     renderDailyTab(forceRefresh = false) {
         // ── Render immediately from scored articles (no AI wait) ──────────────
-        // Action Required, Signal Feed, Client Watch and Client Risk all derive
-        // from locally-scored articles and render in <1s.
+        // Action Required and Signal Feed derive from locally-scored articles
+        // and render in <1s. Client Watch strip is embedded inside Signal Feed.
         renderActionRequired();
         renderSignalFeed();
-        renderClientRisk();
 
         // ── AI-enriched sections ──────────────────────────────────────────────
         // renderTodaysSignals fires an AI call that enriches the signal feed
@@ -7938,11 +7943,11 @@ async function renderExecutiveSummary(forceRefresh = false) {
         try {
             const cached = localStorage.getItem(STORAGE_KEY_EXEC_SUMMARY);
             if (cached) {
-                const { insights, timestamp, articleCount } = JSON.parse(cached);
+                const { insights, timestamp, articleCount, trends = [] } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
                 if (age < CACHE_DURATIONS.DAILY_DIGEST && insights && insights.length > 0) {
                     trackCacheAccess('executive-summary', true); // Cache HIT
-                    list.innerHTML = insights.map(renderExecutiveInsight).join('');
+                    list.innerHTML = insights.map(i => renderExecutiveInsight(i, trends)).join('');
                     content.querySelector('.executive-summary-intro')?.classList.add('hidden');
                     
                     // PHASE 3.2: Update timestamp for cached content
@@ -7971,7 +7976,7 @@ async function renderExecutiveSummary(forceRefresh = false) {
         try {
             const cached = localStorage.getItem(STORAGE_KEY_EXEC_SUMMARY);
             if (cached) {
-                const { insights, timestamp, articleCount } = JSON.parse(cached);
+                const { insights, timestamp, articleCount, trends = [] } = JSON.parse(cached);
                 const age = Date.now() - timestamp;
                 
                 // Count new articles since last generation
@@ -7983,7 +7988,7 @@ async function renderExecutiveSummary(forceRefresh = false) {
                 // If cache is still valid AND fewer than 5 new articles, use cache
                 if (age < CACHE_DURATIONS.DAILY_DIGEST && newArticles.length < 5) {
                     console.log(`Daily Digest: Only ${newArticles.length} new articles, using cache`);
-                    list.innerHTML = insights.map(renderExecutiveInsight).join('');
+                    list.innerHTML = insights.map(i => renderExecutiveInsight(i, trends)).join('');
                     content.querySelector('.executive-summary-intro')?.classList.add('hidden');
                     
                     // PHASE 3.2 & 3.3: Update timestamp and show "no new insights" indicator
@@ -8018,9 +8023,10 @@ async function renderExecutiveSummary(forceRefresh = false) {
     if (!apiKey) {
         // Without API: Generate keyword-based insights
         const insights = generateKeywordBasedInsights(topArticles, weeklyTrends);
-        list.innerHTML = insights.map(renderExecutiveInsight).join('');
+        const fallbackBanner = `<div class="brief-fallback-banner">ℹ️ Keyword-based analysis active — add an API key in ⚙️ Settings for full AI synthesis</div>`;
+        list.innerHTML = fallbackBanner + insights.map(i => renderExecutiveInsight(i, weeklyTrends)).join('');
         content.querySelector('.executive-summary-intro')?.classList.add('hidden');
-        cacheExecutiveSummary(insights, todayArticles.length);
+        cacheExecutiveSummary(insights, todayArticles.length, weeklyTrends);
         return;
     }
     
@@ -8093,6 +8099,7 @@ RULES:
     try {
         // COST OPTIMIZATION: Use unified API helper with token tracking
         const { text } = await callAI('SYNTHESIS', prompt, 1000, apiKey);
+        // weeklyTrends is in scope — used for trend tags when caching below
 
         // Clean response: strip markdown fences
         let cleanedText = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
@@ -8135,8 +8142,8 @@ RULES:
                 }).filter(Boolean)
             }));
             
-            cacheExecutiveSummary(insights, todayArticles.length);
-            list.innerHTML = insights.map(renderExecutiveInsight).join('');
+            cacheExecutiveSummary(insights, todayArticles.length, weeklyTrends);
+            list.innerHTML = insights.map(i => renderExecutiveInsight(i, weeklyTrends)).join('');
             content.querySelector('.executive-summary-intro')?.classList.add('hidden');
             
             // PHASE 3.2: Update timestamp
@@ -8148,9 +8155,9 @@ RULES:
         console.error('Executive summary error:', error);
         // Fallback to keyword-based
         const insights = generateKeywordBasedInsights(topArticles, weeklyTrends);
-        list.innerHTML = insights.map(renderExecutiveInsight).join('');
+        list.innerHTML = insights.map(i => renderExecutiveInsight(i, weeklyTrends)).join('');
         content.querySelector('.executive-summary-intro')?.classList.add('hidden');
-        cacheExecutiveSummary(insights, todayArticles.length);
+        cacheExecutiveSummary(insights, todayArticles.length, weeklyTrends);
     }
 }
 
@@ -8386,45 +8393,63 @@ function generateKeywordBasedInsights(articles, trends) {
     return insights.slice(0, 3);
 }
 
-function renderExecutiveInsight(insight) {
+function renderExecutiveInsight(insight, trends = []) {
+    // Derive visual type from conversationDoor (AI path) or signalType (keyword fallback)
+    const doorToType = {
+        'Conv 1': 'opportunity', 'Conv 2': 'opportunity',
+        'Conv 3': 'risk',        'Conv 4': 'opportunity',
+        'Conv 5': 'opportunity', 'Conv L': 'competitive'
+    };
+    const door = (insight.conversationDoor || '').split(' ')[0] + ' ' + (insight.conversationDoor || '').split(' ')[1];
+    const derivedType = doorToType[door.trim()] || insight.signalType || 'general';
+
     const typeEmoji = {
         'risk': '🔴',
         'opportunity': '🟢',
         'competitive': '⚔️',
         'regulatory': '🛡️',
         'general': '📌'
-    }[insight.signalType] || '📌';
-    
-    const typeClass = insight.signalType || 'general';
-    
+    }[derivedType] || '📌';
+
     const sourcesHtml = (insight.sources || []).map(s =>
         `<a href="${s.url || '#'}" target="_blank" class="exec-source-link">${escapeHtml(s.title)}</a> <span class="exec-source-name">(${escapeHtml(s.source || 'Source')})</span>`
     ).join('<br>');
-    
+
     const convDoorBadge = insight.conversationDoor ? `<span class="insight-badge">${escapeHtml(insight.conversationDoor)}</span>` : '';
 
+    // Trend tag: match any trend theme keyword against insight headline + synthesis
+    const insightText = `${insight.headline} ${insight.synthesis || ''}`.toLowerCase();
+    const matchedTrend = (trends || []).find(t =>
+        t.theme.toLowerCase().split('/').some(word => insightText.includes(word.toLowerCase()))
+    );
+    const trendTag = matchedTrend
+        ? `<span class="insight-trend-tag">↑ ${escapeHtml(matchedTrend.theme)} · ${escapeHtml(matchedTrend.change)}</span>`
+        : '';
+
     return `
-        <div class="executive-insight ${typeClass}">
+        <div class="executive-insight ${derivedType}">
             <div class="executive-insight-header">
                 <span class="executive-insight-type">${typeEmoji}</span>
                 <span class="executive-insight-headline">${escapeHtml(insight.headline)}</span>
             </div>
-            ${convDoorBadge ? `<div class="executive-insight-badges">${convDoorBadge}</div>` : ''}
+            ${(convDoorBadge || trendTag) ? `<div class="executive-insight-badges">${convDoorBadge}${trendTag}</div>` : ''}
             <div class="executive-insight-synthesis">${escapeHtml(insight.synthesis)}</div>
+            ${sourcesHtml ? `
             <div class="executive-insight-sources">
                 <span class="executive-sources-label">Sources:</span>
                 ${sourcesHtml}
-            </div>
+            </div>` : ''}
         </div>
     `;
 }
 
-function cacheExecutiveSummary(insights, articleCount = 0) {
+function cacheExecutiveSummary(insights, articleCount = 0, trends = []) {
     try {
         localStorage.setItem(STORAGE_KEY_EXEC_SUMMARY, JSON.stringify({
             insights,
             timestamp: Date.now(),
-            articleCount
+            articleCount,
+            trends
         }));
     } catch (e) {
         console.log('Exec summary cache write error:', e);
@@ -8596,7 +8621,8 @@ async function renderTodaysSignals(forceRefresh = false) {
     // Without API key: render basic signals with article context
     if (!apiKey) {
         if (introEl) introEl.textContent = `${rawSignals.length} signals detected. Add API key for AI synthesis.`;
-        list.innerHTML = rawSignals.slice(0, 5).map(signal => renderBasicSignal(signal)).join('');
+        const sfFallbackBanner = `<div class="brief-fallback-banner">ℹ️ Keyword-based signals — add an API key in ⚙️ Settings for AI-synthesised IBM angles and talking points</div>`;
+        list.innerHTML = sfFallbackBanner + rawSignals.slice(0, 5).map(signal => renderBasicSignal(signal)).join('');
         // Cache basic signals too
         cacheSignals(rawSignals.slice(0, 5).map(s => ({
             headline: s.headline,
@@ -8969,7 +8995,7 @@ function renderActionRequired() {
     };
     
     const criticalSignals = allSignals
-        .filter(({ signal }) => signal.actionType === 'ESCALATE')
+        .filter(({ signal }) => signal.actionType === 'ESCALATE' && !isDismissed(signal.headline))
         .sort(sortByContext);
     
     const highSignals = allSignals
@@ -8979,8 +9005,24 @@ function renderActionRequired() {
     const watchSignals = allSignals
         .filter(({ signal }) => signal.actionType === 'MONITOR' || !signal.actionType)
         .sort(sortByContext);
+
+    // Read HIGH urgency counter-positioning from Agents cache
+    let highCounterItems = [];
+    try {
+        if (typeof AGENT_STORAGE_KEYS !== 'undefined') {
+            const cpRaw = localStorage.getItem(AGENT_STORAGE_KEYS.COUNTER_POSITIONING);
+            if (cpRaw) {
+                const { items, timestamp } = JSON.parse(cpRaw);
+                const age = Date.now() - timestamp;
+                const CP_TTL = 6 * 60 * 60 * 1000; // 6h — matches agent TTL
+                if (age < CP_TTL) {
+                    highCounterItems = (items || []).filter(i => i.urgency === 'HIGH');
+                }
+            }
+        }
+    } catch (e) { /* non-fatal — agents may not be loaded */ }
     
-    const totalCount = criticalSignals.length + highSignals.length + watchSignals.length;
+    const totalCount = criticalSignals.length + highSignals.length + watchSignals.length + highCounterItems.length;
     
     if (totalCount === 0) {
         section.classList.add('hidden');
@@ -9037,9 +9079,32 @@ function renderActionRequired() {
                 ${signal.talkingPoint ? `<div class="action-required-talking-point"><strong>💬</strong> "${escapeHtml(signal.talkingPoint)}"</div>` : ''}
                 <div class="action-required-ibm"><strong>IBM:</strong> ${escapeHtml(signal.ibmAngle || '')}</div>
                 ${sourcesHtml ? `<div class="action-required-sources">${sourcesHtml}</div>` : ''}
+                ${style.class === 'action-escalate' ? `
+                <div class="action-required-dismiss">
+                    <button class="btn btn-sm btn-ghost action-dismiss-btn"
+                        onclick="dismissActionItem('${escapeHtml(signal.headline.substring(0, 40))}')">
+                        ✓ Done / Dismiss
+                    </button>
+                </div>` : ''}
             </div>
         `;
     };
+
+    // Helper: render a counter-positioning item injected from Agents
+    const renderCounterItem = (item) => `
+        <div class="action-required-item action-counter">
+            <div class="action-required-header">
+                <span class="action-required-badge action-counter">⚔️ COUNTER</span>
+                <span class="action-market-tag">${escapeHtml(item.competitor || 'Competitor')}</span>
+                ${(item.affectedMarkets || []).map(m => `<span class="action-market-tag">${escapeHtml(m)}</span>`).join('')}
+            </div>
+            <div class="action-required-headline">${escapeHtml(item.headline || '')}</div>
+            ${item.ibmCounter ? `<div class="action-required-context">${escapeHtml(item.ibmCounter)}</div>` : ''}
+            ${item.talkingPoint ? `<div class="action-required-talking-point"><strong>💬</strong> "${escapeHtml(item.talkingPoint)}"</div>` : ''}
+            ${item.conversationDoor ? `<div class="action-required-ibm"><strong>Door:</strong> ${escapeHtml(item.conversationDoor)}</div>` : ''}
+            ${item.url ? `<div class="action-required-sources"><a class="action-source-link" href="${escapeHtml(item.url)}" target="_blank">${escapeHtml(item.source || 'Source')}</a></div>` : ''}
+        </div>
+    `;
     
     // Build HTML with collapsible sections
     let html = '';
@@ -9062,19 +9127,21 @@ function renderActionRequired() {
         `;
     }
     
-    // HIGH Section (BRIEF_ATL + POSITION) - Collapsed by default
-    if (highSignals.length > 0) {
+    // HIGH Section (BRIEF_ATL + POSITION + HIGH Counter-Positioning) - Collapsed by default
+    if (highSignals.length > 0 || highCounterItems.length > 0) {
+        const highCount = highSignals.length + highCounterItems.length;
         html += `
             <div class="action-priority-section high">
                 <div class="action-priority-header" onclick="toggleActionSection('high')">
                     <span class="action-priority-icon">⚡</span>
                     <span class="action-priority-title">HIGH</span>
                     <span class="action-priority-subtitle">Brief team / Develop positioning</span>
-                    <span class="action-priority-count">${highSignals.length}</span>
+                    <span class="action-priority-count">${highCount}</span>
                     <span class="action-priority-toggle">▶</span>
                 </div>
                 <div class="action-priority-content collapsed">
                     ${highSignals.map(renderSignalItem).join('')}
+                    ${highCounterItems.map(renderCounterItem).join('')}
                 </div>
             </div>
         `;
@@ -9099,6 +9166,7 @@ function renderActionRequired() {
     }
     
     list.innerHTML = html;
+    updateSectionTimestamp('action-required', Date.now(), false);
 }
 
 // Toggle action section expand/collapse
@@ -9118,6 +9186,35 @@ function toggleActionSection(sectionType) {
         content.classList.add('collapsed');
         toggle.textContent = '▶';
     }
+}
+
+// ==========================================
+// DISMISS: Action Required items (ESCALATE only)
+// ==========================================
+function isDismissed(headline) {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEYS.DISMISSED_ACTIONS) || '{}';
+        const dismissed = JSON.parse(raw);
+        const hash = headline.substring(0, 40);
+        const expiry = dismissed[hash];
+        if (expiry && Date.now() < expiry) return true;
+        if (expiry) {
+            // Prune expired entry
+            delete dismissed[hash];
+            localStorage.setItem(STORAGE_KEYS.DISMISSED_ACTIONS, JSON.stringify(dismissed));
+        }
+    } catch (e) { /* non-fatal */ }
+    return false;
+}
+
+function dismissActionItem(headlineHash) {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEYS.DISMISSED_ACTIONS) || '{}';
+        const dismissed = JSON.parse(raw);
+        dismissed[headlineHash] = Date.now() + 48 * 60 * 60 * 1000; // 48h TTL
+        localStorage.setItem(STORAGE_KEYS.DISMISSED_ACTIONS, JSON.stringify(dismissed));
+    } catch (e) { /* non-fatal */ }
+    renderActionRequired(); // re-render immediately to remove dismissed item
 }
 
 // ==========================================
@@ -9157,12 +9254,14 @@ function copyActionRequired() {
 // ==========================================
 
 // Global filter state for Signal Feed
-let signalFeedFilters = {
-    market: 'ALL',
-    client: 'ALL',
-    signalType: 'ALL',
-    priority: 'all'      // all, high, strategic, tactical
-};
+let signalFeedFilters = (() => {
+    const defaults = { market: 'ALL', client: 'ALL', signalType: 'ALL', priority: 'high' };
+    try {
+        const saved = localStorage.getItem('signal_feed_filters');
+        if (saved) return { ...defaults, ...JSON.parse(saved) };
+    } catch (e) {}
+    return defaults;
+})();
 
 // Store enriched articles for filtering
 let signalFeedArticles = [];
@@ -9419,7 +9518,7 @@ function renderSignalFeed() {
         { key: 'competitive', label: 'Competitive', emoji: '⚔️', description: 'Competitor moves and market dynamics' },
         { key: 'regulatory', label: 'Regulatory', emoji: '🛡️', description: 'Policy, compliance, and governance' },
         { key: 'opportunity', label: 'Opportunity', emoji: '💰', description: 'Growth and positioning opportunities' },
-        { key: 'information', label: 'Information', emoji: '📰', description: 'Industry news and updates' }
+        { key: 'information', label: 'Background', emoji: '📰', description: 'Monitor only — low immediate relevance' }
     ];
     
     // Group articles using intelligence-based categorization
@@ -9484,7 +9583,14 @@ function renderSignalFeed() {
         });
     });
     
-    // Render grouped view — synthesised signals at top, categories collapsed by default
+    // Sync filter button active states to current filter values (handles restored state)
+    document.querySelectorAll('.priority-filter-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.priority === signalFeedFilters.priority));
+    document.querySelectorAll('.market-tab').forEach(b =>
+        b.classList.toggle('active', b.dataset.market === signalFeedFilters.market));
+
+    // Render: Client Watch strip + synthesised signals + grouped categories
+    const clientWatchHtml = renderClientWatchStrip();
     const synthesisedHtml = renderSynthesisedSignalsBlock();
     const categoriesHtml = categories.map(cat => {
         const articles = grouped[cat.key];
@@ -9497,11 +9603,10 @@ function renderSignalFeed() {
         return `
             <div class="signal-category" data-category="${cat.key}">
                 <div class="signal-category-header" onclick="toggleSignalCategory('${cat.key}')">
-                    <span class="signal-category-emoji">${cat.emoji}</span>
-                    <span class="signal-category-label">${cat.label} · ${articles.length}</span>
-                    <span class="signal-category-count">${articles.length}</span>
-                    <span class="signal-category-chevron">▶</span>
-                </div>
+                        <span class="signal-category-emoji">${cat.emoji}</span>
+                        <span class="signal-category-label">${cat.label} · ${articles.length}</span>
+                        <span class="signal-category-chevron">▶</span>
+                    </div>
                 <div class="signal-category-body collapsed">
                     <div class="signal-category-items">
                         ${previewArticles.map(article => renderSignalFeedItem(article)).join('')}
@@ -9520,7 +9625,7 @@ function renderSignalFeed() {
             </div>
         `;
     }).join('');
-    list.innerHTML = synthesisedHtml + categoriesHtml;
+    list.innerHTML = clientWatchHtml + synthesisedHtml + categoriesHtml;
     updateSectionTimestamp('signal-feed', Date.now(), false);
 }
 
@@ -9729,6 +9834,7 @@ function renderSignalFeedItem(article) {
             ` : ''}
         </div>
     `;
+}
 
 /**
  * Render intelligence badges for an article
@@ -9766,6 +9872,7 @@ function renderIntelligenceBadges(intelligence) {
     }
     
     return `<div class="intelligence-badges">${badges.join('')}</div>`;
+}
 
 /**
  * Update intelligence stats display in header
@@ -9796,8 +9903,8 @@ async function updateIntelligenceStats() {
     }
     
     // Format cost
-    const costFormatted = stats.totalCost < 0.01 
-        ? '<$0.01' 
+    const costFormatted = stats.totalCost < 0.01
+        ? '<$0.01'
         : `$${stats.totalCost.toFixed(2)}`;
     
     // Build stats HTML
@@ -9822,8 +9929,6 @@ async function updateIntelligenceStats() {
     
     statsContainer.innerHTML = statsHtml;
     statsContainer.classList.remove('hidden');
-}
-}
 }
 
 function toggleSignalFeedItem(btn) {
@@ -9924,6 +10029,7 @@ function filterByClient(clientName) {
         chip.classList.toggle('active', chip.dataset.client === clientName);
     });
     
+    try { localStorage.setItem(STORAGE_KEYS.SIGNAL_FEED_FILTERS, JSON.stringify(signalFeedFilters)); } catch(e) {}
     renderSignalFeed();
 }
 
@@ -9943,6 +10049,7 @@ function filterByPriority(priority) {
         }
     });
     
+    try { localStorage.setItem(STORAGE_KEYS.SIGNAL_FEED_FILTERS, JSON.stringify(signalFeedFilters)); } catch(e) {}
     renderSignalFeed();
 }
 
@@ -9967,6 +10074,7 @@ function switchMarket(market) {
         tab.classList.toggle('active', tab.dataset.market === market);
     });
     
+    try { localStorage.setItem(STORAGE_KEYS.SIGNAL_FEED_FILTERS, JSON.stringify(signalFeedFilters)); } catch(e) {}
     renderSignalFeed();
 }
 
@@ -10099,10 +10207,10 @@ const deepReadAnalysisCache = new Map();
 // DEEP READS RENDERING (AI-powered with caching)
 // Purpose: "Internalize for strategic conversations"
 // Long-form thinking for CxO/board-level discourse
-// 
+//
 // REFRESH RULE: Deep Reads are refreshed when:
 // 1. User clicks Refresh button (forceRefresh = true)
-// 2. Cache is older than 24 hours (strategic content has longer shelf life)
+// 2. Cache is older than 72 hours (strategic content has longer shelf life)
 // 3. Source articles come from weeklyArticles (7-14 day lookback)
 // ==========================================
 
@@ -10155,7 +10263,12 @@ async function renderDeepReads(forceRefresh = false) {
         else if (article.category === 'Cloud & Infrastructure') score += 15;
         
         // 2. Source Credibility (0-25 points)
-        const premiumSources = ['a16z', 'Benedict Evans', 'Stratechery', 'MIT Technology Review', 'Constellation Research'];
+        const premiumSources = [
+            // Global analyst / thought leadership
+            'a16z', 'Benedict Evans', 'Stratechery', 'MIT Technology Review', 'Constellation Research',
+            // APAC regional premium sources
+            'Nikkei Asia', 'South China Morning Post', 'e27', 'DealStreetAsia', 'Tech in Asia'
+        ];
         const goodSources = ['TechCrunch', 'The Verge', 'Ars Technica', 'The Information'];
         
         if (premiumSources.some(s => article.source?.includes(s))) score += 25;
@@ -10176,8 +10289,8 @@ async function renderDeepReads(forceRefresh = false) {
         else if (ageInDays <= 7) score += 10;
         else if (ageInDays <= 14) score += 5;
         
-        // 5. Relevance Score (0-10 points)
-        score += Math.min((article.relevanceScore || 0) / 10, 10);
+        // 5. Relevance Score (0-10 points)  — relevanceScore is 0–1, multiply by 10 to get 0–10 pts
+        score += Math.min((article.relevanceScore || 0) * 10, 10);
         
         return Math.round(score);
     }
@@ -10299,7 +10412,8 @@ async function renderDeepReads(forceRefresh = false) {
             timeHorizon: 'TBD'
         }));
         cacheDeepReads(basicInsights, candidates.slice(0, 3));
-        list.innerHTML = candidates.slice(0, 3).map(article => renderBasicDeepRead(article)).join('');
+        const drFallbackBanner = `<div class="brief-fallback-banner">ℹ️ Showing article titles only — add an API key in ⚙️ Settings for strategic thesis, CxO questions &amp; leadership implications</div>`;
+        list.innerHTML = drFallbackBanner + candidates.slice(0, 3).map(article => renderBasicDeepRead(article)).join('');
         return;
     }
     
@@ -10340,8 +10454,8 @@ Return ONLY a valid JSON array (exactly 3 articles). Do not include any text bef
     "strategicThesis": "Big idea in one powerful sentence capturing the core innovation and its market impact",
     "technicalBreakthrough": "Key technical specs/metrics that enable the breakthrough (e.g., '15x token efficiency, 1M context window, 12B active parameters')",
     "problemSolved": "What constraint or limitation does this overcome? (e.g., 'Eliminates goal drift in multi-agent workflows by maintaining full state in 1M token context')",
-    "leadershipImplication": "What this means for CTOs/CIOs making investment decisions",
-    "cxoQuestion": "Provocative question for CxO discussion (thought-provoking, not sales-y)",
+    "leadershipImplication": "What this means for a CTO/CIO in APAC — reference specific regional dynamics where relevant (e.g., MAS/APRA regulation, sovereign AI mandates, data residency requirements, or industries dominant in APAC: banking, telco, government)",
+    "cxoQuestion": "Conversation-opening question specifically grounded in an APAC context — reference a regional regulatory pressure, industry dynamic, or market reality to make it non-generic (e.g., 'Given MAS new AI governance guidelines...' or 'With the ACCC current posture on cloud concentration...')",
     "timeHorizon": "6 months" | "12 months" | "2-3 years"
   }
 ]
@@ -10493,12 +10607,16 @@ function renderSynthesizedDeepRead(insight, article) {
                 <span class="deep-read-item-time">${escapeHtml(insight.timeHorizon)} horizon</span>
             </div>
             <div class="deep-read-item-title">${escapeHtml(insight.title)}</div>
+            ${insight.cxoQuestion ? `
+            <div class="deep-read-cxo-question">
+                <span class="deep-read-cxo-label">🎯 CxO Question</span>
+                <blockquote class="deep-read-cxo-text">"${escapeHtml(insight.cxoQuestion)}"</blockquote>
+            </div>` : ''}
             <div class="deep-read-strategic">
                 <div class="deep-read-thesis"><strong>💡 Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
                 ${insight.technicalBreakthrough ? `<div class="deep-read-technical"><strong>🔬 Technical Breakthrough:</strong> ${escapeHtml(insight.technicalBreakthrough)}</div>` : ''}
                 ${insight.problemSolved ? `<div class="deep-read-problem"><strong>⚡ Problem Solved:</strong> ${escapeHtml(insight.problemSolved)}</div>` : ''}
                 <div class="deep-read-implication"><strong>📊 Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication || '')}</div>
-                <div class="deep-read-question"><strong>🎯 CxO Question:</strong> "${escapeHtml(insight.cxoQuestion || '')}"</div>
             </div>
             <div class="deep-read-item-action">
                 <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); app.deepReadArticle('${article.id || ''}', this)">🔄 Regenerate Analysis</button>
@@ -10518,13 +10636,17 @@ function renderCachedDeepRead(insight, articleData) {
                 <span class="deep-read-item-time">${escapeHtml(insight.timeHorizon || 'TBD')} horizon</span>
             </div>
             <div class="deep-read-item-title">${escapeHtml(insight.title || article.title || '')}</div>
+            ${insight.cxoQuestion ? `
+            <div class="deep-read-cxo-question">
+                <span class="deep-read-cxo-label">🎯 CxO Question</span>
+                <blockquote class="deep-read-cxo-text">"${escapeHtml(insight.cxoQuestion)}"</blockquote>
+            </div>` : ''}
             ${insight.strategicThesis ? `
             <div class="deep-read-strategic">
                 <div class="deep-read-thesis"><strong>💡 Strategic Thesis:</strong> ${escapeHtml(insight.strategicThesis)}</div>
                 ${insight.technicalBreakthrough ? `<div class="deep-read-technical"><strong>🔬 Technical Breakthrough:</strong> ${escapeHtml(insight.technicalBreakthrough)}</div>` : ''}
                 ${insight.problemSolved ? `<div class="deep-read-problem"><strong>⚡ Problem Solved:</strong> ${escapeHtml(insight.problemSolved)}</div>` : ''}
                 <div class="deep-read-implication"><strong>📊 Leadership Implication:</strong> ${escapeHtml(insight.leadershipImplication || '')}</div>
-                <div class="deep-read-question"><strong>🎯 CxO Question:</strong> "${escapeHtml(insight.cxoQuestion || '')}"</div>
             </div>
             ` : `<div class="deep-read-item-summary">${escapeHtml(insight.summary || article.summary || '')}</div>`}
             <div class="deep-read-item-action">
@@ -10651,20 +10773,24 @@ function updateWeekContextWidget() {
 }
 
 // ==========================================
-// CLIENT RISK SCORES — Sprint 5
+// CLIENT RISK SCORES + CLIENT WATCH STRIP
+// (Client Risk section removed; Client Watch is embedded in Signal Feed)
 // ==========================================
 function calculateClientRiskScores() {
     const scores = {};
     const now = Date.now();
     const ONE_DAY = 86400000;
-    // Fix B: use app.articles only — dailyArticles is a subset of articles so
-    // combining both causes every article to be counted twice per client.
+    // Use app.articles only — dailyArticles is a subset so combining both
+    // causes every article to be counted twice per client.
     const allArticles = app?.articles || [];
     const seen = new Set();
 
     (app?.clients || []).forEach(client => {
-        const name = typeof client === 'string' ? client : client.name;
+        const clientObj = typeof client === 'object' ? client : null;
+        const name = clientObj ? clientObj.name : client;
         if (!name) return;
+        const tier = clientObj?.tier || 3;
+
         const matched = allArticles.filter(a => {
             if (seen.has(a.id + name)) return false;
             const clients = a.matchedClients || [];
@@ -10676,23 +10802,28 @@ function calculateClientRiskScores() {
             return isMatch;
         });
         if (matched.length === 0) return;
+
         let weightedSum = 0, totalWeight = 0;
+        let topArticle = null, topThreat = -1;
         matched.forEach(a => {
             const threat = a.intelligence?.threatLevel || 0;
             const age = (now - new Date(a.publishedDate || a.date || 0).getTime()) / ONE_DAY;
             const weight = age < 1 ? 3 : age < 2 ? 2 : 1;
             weightedSum += threat * weight;
             totalWeight += weight;
+            // Track highest-threat article for tooltip display
+            if (threat > topThreat) { topThreat = threat; topArticle = a; }
         });
         const rawScore = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 0;
-        // Fix C: floor score at 1 for clients with matched articles but no threat signal yet
-        // (tier-3 may not have run; client still has coverage worth showing as stable)
+        // Floor at 1 for clients with matched articles but no threat signal yet
         const score = rawScore > 0 ? rawScore : 1;
         const counts = {};
         matched.forEach(a => { const t = a.signalType || 'background'; counts[t] = (counts[t]||0)+1; });
         const dominant = Object.entries(counts).sort((x,y)=>y[1]-x[1])[0]?.[0] || 'background';
         scores[name] = {
             score,
+            tier,
+            topArticle,
             level: score >= 81 ? 'critical' : score >= 61 ? 'elevated' : score >= 31 ? 'watch' : 'stable',
             emoji: score >= 81 ? '🔴' : score >= 61 ? '🟠' : score >= 31 ? '🟡' : '🟢',
             signalCount: matched.length,
@@ -10702,32 +10833,44 @@ function calculateClientRiskScores() {
     return scores;
 }
 
-function renderClientRisk() {
-    const section = document.getElementById('client-risk-section');
-    const list = document.getElementById('client-risk-list');
-    const countEl = document.getElementById('client-risk-count');
-    if (!section || !list) return;
-
+// Client Watch strip — compact horizontal strip embedded at top of Signal Feed
+function renderClientWatchStrip() {
     const scores = calculateClientRiskScores();
-    const sorted = Object.entries(scores)
-        .sort((a, b) => b[1].score - a[1].score)
-        .slice(0, 10);
 
-    if (sorted.length === 0) { section.classList.add('hidden'); return; }
-    section.classList.remove('hidden');
-    if (countEl) countEl.textContent = sorted.length;
+    // Sort: Tier 1 > Tier 2 > Tier 3, then by score within tier
+    const all = Object.entries(scores).sort((a, b) => {
+        const tA = a[1].tier || 3;
+        const tB = b[1].tier || 3;
+        if (tA !== tB) return tA - tB;
+        return b[1].score - a[1].score;
+    });
 
-    list.innerHTML = sorted.map(([name, data]) => `
-        <div class="client-risk-row">
-            <span class="client-risk-level">${data.emoji}</span>
-            <span class="client-risk-name">${escapeHtml(name)}</span>
-            <span class="client-risk-type">${data.dominantType}</span>
-            <span class="client-risk-count">${data.signalCount} signal${data.signalCount !== 1 ? 's' : ''}</span>
-            <button class="btn btn-sm btn-secondary" onclick="app.openMeetingBrief('${escapeHtml(name)}')">📋 Brief</button>
-        </div>
-    `).join('');
-    updateSectionTimestamp('client-risk', Date.now(), false);
+    // Show Tier 1 + Tier 2 by default; include Tier 3 only if fewer than 3 results
+    let top = all.filter(([, d]) => (d.tier || 3) <= 2).slice(0, 6);
+    if (top.length < 3) top = all.slice(0, 6);
+
+    if (top.length === 0) return '';
+
+    const items = top.map(([name, data]) => {
+        const titleTip = data.topArticle?.title ? ` title="${escapeHtml(data.topArticle.title)}"` : '';
+        return `
+            <div class="client-watch-chip"${titleTip}>
+                <span class="client-watch-emoji">${data.emoji}</span>
+                <span class="client-watch-name">${escapeHtml(name)}</span>
+                <span class="client-watch-signals">${data.signalCount}</span>
+                <button class="btn btn-xs client-watch-brief-btn"
+                    onclick="event.stopPropagation(); app.openMeetingBrief('${escapeHtml(name)}')">Brief</button>
+            </div>`;
+    }).join('');
+
+    return `<div class="client-watch-strip">
+        <span class="client-watch-label">⚠️ Client Watch</span>
+        ${items}
+    </div>`;
 }
+
+// Stub — section removed; function kept to prevent errors from any cached references
+function renderClientRisk() { /* Client Watch is now embedded in Signal Feed */ }
 
 // Initialize app
 const app = new SignalApp();
@@ -11012,6 +11155,7 @@ window.enableSource = function(url) { app.enableSource(url); };
 window.removeDisabledSource = function(url) { app.removeDisabledSource(url); };
 window.enableAllSources = function() { app.enableAllSources(); };
 window.copyStarter = function(i) { app.copyStarter(i); };
+window.dismissActionItem = dismissActionItem;
 
 // New globals from UX enhancement sprints
 window.openWeekContextEditor = openWeekContextEditor;
