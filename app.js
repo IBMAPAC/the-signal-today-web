@@ -1187,6 +1187,9 @@ class SignalApp {
                 if (this.digest) console.log('SignalDB: restored digest from IDB');
             }
 
+            // Check for pre-built signals from GitHub Actions background ingestion
+            await this.loadPrebuiltSignals();
+
             this.updateUI();
             this.bindEvents();
             this.updateDate();
@@ -1229,6 +1232,50 @@ class SignalApp {
             // Ensure buttons still work even if init fails
             this.bindEvents();
         }
+    }
+
+    // ==========================================
+    // Pre-built Background Signals (GitHub Actions)
+    // ==========================================
+
+    async loadPrebuiltSignals() {
+        try {
+            const res = await fetch('./data/latest-signals.json', { cache: 'no-cache' });
+            if (!res.ok) return false;
+            const data = await res.json();
+            if (!data || !Array.isArray(data.articles) || data.articles.length === 0) return false;
+
+            const lastRefresh = localStorage.getItem(STORAGE_KEYS.LAST_REFRESH);
+            const lastRefreshTime = lastRefresh ? new Date(lastRefresh).getTime() : 0;
+            const prebuiltTime = data.lastUpdated ? new Date(data.lastUpdated).getTime() : 0;
+
+            // Use prebuilt signals if no articles exist, or if prebuilt is newer than local by >30 mins
+            const shouldLoad = this.articles.length === 0 || (prebuiltTime > lastRefreshTime && (Date.now() - lastRefreshTime > 30 * 60 * 1000));
+            if (!shouldLoad) return false;
+
+            console.log(`⚡ Loaded ${data.articles.length} pre-built signals from background ingestion (${data.lastUpdated})`);
+            
+            const scored = await this.scoreArticles(data.articles);
+            const relevant = scored
+                .filter(a => a.relevanceScore >= 0.1)
+                .sort((a, b) => b.relevanceScore - a.relevanceScore)
+                .slice(0, 200);
+
+            if (relevant.length > 0) {
+                this.articles = relevant;
+                await this.db.saveArticles(relevant);
+                if (data.lastUpdated) {
+                    localStorage.setItem(STORAGE_KEYS.LAST_REFRESH, data.lastUpdated);
+                }
+                this.categorizeArticles();
+                if (!this.digest) this.digest = this.createBasicDigest();
+                this.saveToStorage();
+                return true;
+            }
+        } catch (e) {
+            console.warn('Pre-built signals check skipped or failed:', e);
+        }
+        return false;
     }
 
     // ==========================================
